@@ -1,11 +1,11 @@
-use std::{net::SocketAddr, time::Duration};
+use std::net::SocketAddr;
 
 use async_trait::async_trait;
 
 use bytes::Bytes;
-use tokio::{net::UdpSocket, time::timeout};
+use tokio::net::UdpSocket;
 
-use super::DnsResolver;
+use super::{DnsRequestCtx, DnsResolver};
 
 /// Resolver that forwards the incoming request to a defined upstream server.
 pub struct ForwardResolver {
@@ -22,12 +22,12 @@ impl ForwardResolver {
 
 #[async_trait]
 impl DnsResolver for ForwardResolver {
-    async fn resolve(&self, query: &[u8]) -> anyhow::Result<Bytes> {
-        self.socket.send(query).await?;
+    async fn resolve(&self, ctx: &DnsRequestCtx) -> anyhow::Result<Bytes> {
+        self.socket.send(ctx.raw).await?;
 
         let mut buf = vec![0u8; 1232];
 
-        let n = timeout(Duration::from_secs(2), self.socket.recv(&mut buf)).await??;
+        let n = self.socket.recv(&mut buf).await?;
         buf.truncate(n);
 
         Ok(Bytes::from(buf))

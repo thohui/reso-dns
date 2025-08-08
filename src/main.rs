@@ -1,7 +1,10 @@
+use middleware::TestMiddleware;
 use resolver::forwarder::ForwardResolver;
 use server::DnsServer;
 use std::net::SocketAddr;
 
+mod blocklist;
+mod cache;
 mod dns;
 mod middleware;
 mod resolver;
@@ -12,6 +15,7 @@ async fn main() -> anyhow::Result<()> {
     let resolver = ForwardResolver::new(SocketAddr::from(([1, 1, 1, 1], 53))).await?;
 
     let server = DnsServer::new("0.0.0.0:5300".parse()?, resolver);
+    server.add_middleware(TestMiddleware);
 
     server.run().await?;
 

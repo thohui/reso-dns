@@ -9,9 +9,9 @@ use crate::dns::{reader::DnsMessageReader, writer::DnsMessageWriter};
 /// Represent a DNS message (packet)
 #[derive(Debug, Clone, PartialEq)]
 pub struct DnsMessage {
-    id: u16,
+    pub id: u16,
     /// Flags
-    flags: DnsFlags,
+    pub flags: DnsFlags,
     /// Questions in the DNS message
     questions: Vec<DnsQuestion>,
     /// Answers in the DNS message
@@ -45,8 +45,8 @@ impl DnsMessage {
         }
     }
 
-    pub fn decode(data: Vec<u8>) -> anyhow::Result<Self> {
-        let mut reader = DnsMessageReader::new(&data);
+    pub fn decode(data: &[u8]) -> anyhow::Result<Self> {
+        let mut reader = DnsMessageReader::new(data);
 
         let id = reader.read_u16()?;
         let flags = DnsFlags::try_from(reader.read_u16()?)?;
@@ -325,11 +325,11 @@ impl TryFrom<u8> for DnsOpcode {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DnsQuestion {
     /// The domain name being queried
-    qname: String,
+    pub qname: String,
     /// The type of the query (e.g., A, AAAA, CNAME)
-    qtype: RecordType,
+    pub qtype: RecordType,
     /// The class of the query (e.g., IN for Internet)
-    qclass: ClassType,
+    pub qclass: ClassType,
 }
 
 impl DnsQuestion {
@@ -363,7 +363,7 @@ impl DnsQuestion {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 #[repr(u16)]
 pub enum RecordType {
     /// IPv4
@@ -411,16 +411,27 @@ impl TryFrom<u16> for RecordType {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 #[repr(u16)]
 pub enum ClassType {
-    In = 1, // Internet
+    /// Internet
+    IN = 1,
+    /// Chaosnet
+    CH = 3,
+    /// Hesoid (MIT Athena)
+    HS = 4,
+    /// Any
+    ANY = 255,
 }
 
 impl From<u16> for ClassType {
+    // todo: refactor this to tryfrom.
     fn from(value: u16) -> Self {
         match value {
-            1 => ClassType::In,
+            1 => ClassType::IN,
+            3 => ClassType::CH,
+            4 => ClassType::HS,
+            255 => ClassType::ANY,
             _ => panic!("Unknown class type: {}", value),
         }
     }
@@ -642,18 +653,18 @@ mod tests {
             .add_question(DnsQuestion {
                 qname: "example.com".to_string(),
                 qtype: RecordType::A,
-                qclass: ClassType::In,
+                qclass: ClassType::IN,
             })
             .build();
 
         let bytes = packet.encode().unwrap();
-        let decoded_message = DnsMessage::decode(bytes.to_vec()).unwrap();
+        let decoded_message = DnsMessage::decode(&bytes).unwrap();
 
         assert_eq!(decoded_message.id, 12345);
         assert_eq!(decoded_message.questions.len(), 1);
         assert_eq!(decoded_message.questions[0].qname, "example.com");
         assert_eq!(decoded_message.questions[0].qtype, RecordType::A);
-        assert_eq!(decoded_message.questions[0].qclass, ClassType::In);
+        assert_eq!(decoded_message.questions[0].qclass, ClassType::IN);
         assert!(decoded_message.flags.qr);
         assert_eq!(decoded_message.flags.opcode, DnsOpcode::Query);
     }
@@ -663,7 +674,7 @@ mod tests {
             .add_question(DnsQuestion::new(
                 "com.".to_string(),
                 RecordType::NS,
-                ClassType::In,
+                ClassType::IN,
             ))
             .build();
 

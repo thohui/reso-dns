@@ -1,16 +1,22 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
+use arc_swap::ArcSwap;
 use bytes::Bytes;
 use tokio::{net::UdpSocket, time::timeout};
 
-use crate::{middleware::DnsMiddleware, resolver::DnsResolver};
+use crate::{
+    dns::message::{self, DnsMessage},
+    middleware::DnsMiddleware,
+    resolver::{DnsRequestCtx, DnsResolver},
+};
 
+/// DNS Server
 pub struct DnsServer<R> {
     bind_addr: SocketAddr,
     resolver: Arc<R>,
     recv_size: usize,
     timeout: Duration,
-    middlewares: Arc<Vec<Box<dyn DnsMiddleware>>>,
+    middlewares: ArcSwap<Vec<Arc<dyn DnsMiddleware>>>,
 }
 
 impl<R: DnsResolver + Send + Sync + 'static> DnsServer<R> {
@@ -20,8 +26,18 @@ impl<R: DnsResolver + Send + Sync + 'static> DnsServer<R> {
             resolver: Arc::new(resolver),
             recv_size: 1232, // edns safe
             timeout: Duration::from_secs(2),
-            middlewares: Arc::new(Vec::new()),
+            middlewares: ArcSwap::new(Vec::new().into()),
         }
+    }
+    pub fn add_middleware<M>(&self, mw: M)
+    where
+        M: DnsMiddleware + 'static,
+    {
+        let cur = self.middlewares.load();
+        let mut v = Vec::with_capacity(cur.len() + 1);
+        v.extend(cur.iter().cloned());
+        v.push(Arc::new(mw));
+        self.middlewares.store(Arc::new(v));
     }
 
     pub async fn run(self) -> anyhow::Result<()> {
@@ -31,19 +47,24 @@ impl<R: DnsResolver + Send + Sync + 'static> DnsServer<R> {
             let mut query = vec![0u8; self.recv_size];
             let sock = socket.clone();
             let (len, client) = sock.recv_from(&mut query).await?;
+
+            query.truncate(len);
+
             let resolver = self.resolver.clone();
 
             let duration = self.timeout;
 
-            let middlewares = self.middlewares.clone();
+            let guard = self.middlewares.load();
+            let middlewares = guard.clone();
 
             tokio::spawn(async move {
-                if let Ok(Some(resp)) = run_middlewares(middlewares, &query).await {
+                let ctx = DnsRequestCtx::new(&query);
+                if let Ok(Some(resp)) = run_middlewares(middlewares, &ctx).await {
                     let _ = sock.send_to(&resp, client).await;
                     return;
                 }
 
-                match timeout(duration, resolver.resolve(&query[0..len])).await {
+                match timeout(duration, resolver.resolve(&ctx)).await {
                     Ok(Ok(resp)) => {
                         let _ = sock.send_to(&resp, client).await;
                     }
@@ -57,12 +78,12 @@ impl<R: DnsResolver + Send + Sync + 'static> DnsServer<R> {
     }
 }
 
-async fn run_middlewares(
-    middlewares: Arc<Vec<Box<dyn DnsMiddleware>>>,
-    packet: &[u8],
+pub async fn run_middlewares(
+    mws: std::sync::Arc<Vec<Arc<dyn DnsMiddleware>>>,
+    ctx: &DnsRequestCtx<'_>,
 ) -> anyhow::Result<Option<Bytes>> {
-    for middleware in middlewares.iter() {
-        if let Some(resp) = middleware.on_query(packet).await? {
+    for m in mws.iter() {
+        if let Some(resp) = m.on_query(ctx).await? {
             return Ok(Some(resp));
         }
     }
