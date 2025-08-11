@@ -5,16 +5,12 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use tokio::{net::UdpSocket, time::timeout};
 
-use crate::{
-    cache::service::{CacheKey, DnsResponseBytes},
-    dns::message::DnsMessage,
-};
+use crate::dns::message::DnsMessage;
 
 use super::{DnsRequestCtx, DnsResolver};
 
 /// Resolver that forwards the incoming request to a defined upstream server.
 pub struct ForwardResolver {
-    // socket: UdpSocket,
     upstream: SocketAddr,
 }
 

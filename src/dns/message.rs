@@ -422,7 +422,7 @@ pub enum ClassType {
     /// Hesoid (MIT Athena)
     HS = 4,
     /// Any
-    ANY = 255,
+    Any = 255,
 }
 
 impl From<u16> for ClassType {
@@ -432,7 +432,7 @@ impl From<u16> for ClassType {
             1 => ClassType::IN,
             3 => ClassType::CH,
             4 => ClassType::HS,
-            255 => ClassType::ANY,
+            255 => ClassType::Any,
             _ => panic!("Unknown class type: {}", value),
         }
     }

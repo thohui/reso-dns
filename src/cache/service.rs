@@ -1,8 +1,8 @@
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
-use lru_cache::LruCache;
+use moka::future::Cache;
 use std::{hash::Hash, sync::Arc, time::Duration};
-use tokio::{sync::Mutex, time::Instant};
+use tokio::time::Instant;
 
 use crate::dns::{
     self,
@@ -56,24 +56,22 @@ impl DnsResponseBytes {
     }
 }
 pub struct CacheService {
-    cache: Mutex<LruCache<CacheKey, CacheEntry>>,
+    cache: Cache<CacheKey, CacheEntry>,
 }
 
 impl CacheService {
     pub fn new() -> Self {
         Self {
-            cache: Mutex::new(LruCache::new(8192)),
+            cache: Cache::new(8192),
         }
     }
     pub async fn lookup(&self, key: &CacheKey) -> Option<DnsResponseBytes> {
-        let mut c = self.cache.lock().await;
-
-        if let Some(entry) = c.get_mut(key) {
+        if let Some(entry) = self.cache.get(key).await {
             if entry.expires_at > Instant::now() {
                 let resp = &entry.raw_response;
                 return Some(resp.clone());
             } else {
-                c.remove(key);
+                self.cache.remove(key).await;
             }
         }
         None
@@ -123,7 +121,7 @@ impl CacheService {
             raw_response: DnsResponseBytes::new(resp_bytes),
         };
 
-        self.cache.lock().await.insert(key, entry);
+        self.cache.insert(key, entry).await;
         Ok(())
     }
 }

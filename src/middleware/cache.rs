@@ -13,6 +13,7 @@ impl DnsMiddleware for CacheMiddleware {
         let message = ctx.message()?;
         let cache_key = CacheKey::from_message(message)?;
         if let Some(cached_response) = ctx.cache_service().lookup(&cache_key).await {
+            tracing::debug!("cache hit {:?}", cache_key);
             return Ok(Some(cached_response.into_custom_response(message.id)));
         }
         Ok(None)

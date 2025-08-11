@@ -6,7 +6,6 @@ use tokio::{net::UdpSocket, time::timeout};
 
 use crate::{
     cache::service::CacheService,
-    dns::message::{self, DnsMessage},
     middleware::DnsMiddleware,
     resolver::{DnsRequestCtx, DnsResolver},
 };
