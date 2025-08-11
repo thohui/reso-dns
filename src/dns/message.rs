@@ -5,11 +5,14 @@ use std::{
 
 use bytes::Bytes;
 
+use anyhow::anyhow;
+
 use crate::dns::{reader::DnsMessageReader, writer::DnsMessageWriter};
 
 /// Represent a DNS message (packet)
 #[derive(Debug, Clone, PartialEq)]
 pub struct DnsMessage {
+    /// Transaction id
     pub id: u16,
     /// Flags
     pub flags: DnsFlags,
@@ -228,6 +231,12 @@ impl DnsMessage {
     pub fn edns(&self) -> &Option<Edns> {
         &self.edns
     }
+
+    pub fn rcode(&self) -> DnsResponseCode {
+        let low = self.flags.rcode_low as u16;
+        let high = self.edns.as_ref().map(|e| e.extended_rcode).unwrap_or(0) as u16;
+        DnsResponseCode::from((high << 4) | low)
+    }
 }
 
 #[derive(Debug, Copy, Clone, Default, PartialEq)]
@@ -250,6 +259,9 @@ pub struct DnsFlags {
     pub ad: bool,
     /// Checking Disabled, indicates that the server is not performing DNSSEC validation
     pub cd: bool,
+
+    // Lower part of the response code.
+    pub rcode_low: u8,
 }
 
 impl TryFrom<u16> for DnsFlags {
@@ -257,7 +269,7 @@ impl TryFrom<u16> for DnsFlags {
     fn try_from(bytes: u16) -> Result<Self, Self::Error> {
         Ok(Self {
             qr: (bytes >> 15) & 0x1 != 0,
-            opcode: DnsOpcode::try_from(((bytes >> 11) & 0xF) as u8)?,
+            opcode: DnsOpcode::from(((bytes >> 11) & 0xF) as u8),
             aa: (bytes >> 10) & 0x1 != 0,
             tc: (bytes >> 9) & 0x1 != 0,
             rd: (bytes >> 8) & 0x1 != 0,
@@ -265,30 +277,35 @@ impl TryFrom<u16> for DnsFlags {
             z: (bytes >> 6) & 0x1 != 0,
             ad: (bytes >> 5) & 0x1 != 0,
             cd: (bytes & 0x1) != 0,
+            rcode_low: (bytes & 0x0f) as u8,
         })
     }
 }
 
 impl DnsFlags {
     pub fn write(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
+        let opcode: u8 = self.opcode.into();
         writer.write_u16(
             ((self.qr as u16) << 15)
-                | ((self.opcode as u16) << 11)
+                | ((opcode as u16) << 11)
                 | ((self.aa as u16) << 10)
                 | ((self.tc as u16) << 9)
                 | ((self.rd as u16) << 8)
                 | ((self.ra as u16) << 7)
                 | ((self.z as u16) << 6)
                 | ((self.ad as u16) << 5)
-                | (self.cd as u16),
+                | (self.cd as u16) << 4
+                | self.rcode_low as u16, // todo: add edns support for this. should probably move this inside the encode fn.
         )?;
         Ok(())
     }
 }
 
-#[derive(Debug)]
-pub enum ResponseCode {
+#[derive(Debug, Copy, Clone, Default, PartialEq)]
+#[repr(u16)]
+pub enum DnsResponseCode {
     /// No error, the request was successful
+    #[default]
     NoError = 0,
     /// Format error, the request was malformed
     FormatError = 1,
@@ -296,9 +313,36 @@ pub enum ResponseCode {
     ServerFailure = 2,
     /// Non-existent domain, the requested domain does not exist
     NxDomain = 3,
+    /// Unknown
+    Unknown(u16),
+}
+
+impl From<u16> for DnsResponseCode {
+    fn from(value: u16) -> Self {
+        match value {
+            0 => DnsResponseCode::NoError,
+            1 => DnsResponseCode::FormatError,
+            2 => DnsResponseCode::ServerFailure,
+            3 => DnsResponseCode::NxDomain,
+            v => DnsResponseCode::Unknown(v),
+        }
+    }
+}
+
+impl From<DnsResponseCode> for u16 {
+    fn from(value: DnsResponseCode) -> u16 {
+        match value {
+            DnsResponseCode::NoError => 0,
+            DnsResponseCode::FormatError => 1,
+            DnsResponseCode::ServerFailure => 2,
+            DnsResponseCode::NxDomain => 3,
+            DnsResponseCode::Unknown(v) => v,
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, Default, PartialEq)]
+#[repr(u8)]
 pub enum DnsOpcode {
     /// Standard query
     #[default]
@@ -307,17 +351,28 @@ pub enum DnsOpcode {
     IQuery = 1,
     /// Server status request, obsolete
     Status = 2,
+    /// Unknown
+    Unknown(u8),
 }
 
-impl TryFrom<u8> for DnsOpcode {
-    type Error = anyhow::Error;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+impl From<u8> for DnsOpcode {
+    fn from(value: u8) -> Self {
         match value {
-            0 => Ok(DnsOpcode::Query),
-            1 => Ok(DnsOpcode::IQuery),
-            2 => Ok(DnsOpcode::Status),
-            _ => Err(anyhow::format_err!("unknown dns opcode {}", value)),
+            0 => DnsOpcode::Query,
+            1 => DnsOpcode::IQuery,
+            2 => DnsOpcode::Status,
+            v => DnsOpcode::Unknown(v),
+        }
+    }
+}
+
+impl From<DnsOpcode> for u8 {
+    fn from(value: DnsOpcode) -> Self {
+        match value {
+            DnsOpcode::Query => 0,
+            DnsOpcode::IQuery => 1,
+            DnsOpcode::Status => 2,
+            DnsOpcode::Unknown(v) => v,
         }
     }
 }
@@ -587,7 +642,7 @@ impl DnsRecord {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Edns {
     /// From OPT.CLASS (not a DNS class): max UDP payload size sender can handle
     pub udp_payload_size: u16,
@@ -651,6 +706,7 @@ mod tests {
                 z: false,
                 ad: false,
                 cd: false,
+                rcode_low: 0,
             })
             .add_question(DnsQuestion {
                 qname: Arc::<str>::from("example.com"),

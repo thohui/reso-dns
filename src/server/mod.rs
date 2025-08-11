@@ -5,6 +5,7 @@ use bytes::Bytes;
 use tokio::{net::UdpSocket, time::timeout};
 
 use crate::{
+    blocklist::{matcher::TrieMatcher, service::BlocklistService},
     cache::service::CacheService,
     middleware::DnsMiddleware,
     resolver::{DnsRequestCtx, DnsResolver},
@@ -18,6 +19,7 @@ pub struct DnsServer<R> {
     timeout: Duration,
     middlewares: ArcSwap<Vec<Arc<dyn DnsMiddleware>>>,
     cache_service: Arc<CacheService>,
+    blocklist_service: Arc<BlocklistService<TrieMatcher>>,
 }
 
 impl<R: DnsResolver + Send + Sync + 'static> DnsServer<R> {
@@ -28,6 +30,7 @@ impl<R: DnsResolver + Send + Sync + 'static> DnsServer<R> {
             recv_size: 1232, // edns safe
             timeout: Duration::from_secs(2),
             middlewares: ArcSwap::new(Vec::new().into()),
+            blocklist_service: Arc::new(BlocklistService::new(TrieMatcher::new())),
             cache_service,
         }
     }

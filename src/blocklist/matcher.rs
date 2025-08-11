@@ -21,6 +21,14 @@ pub struct TrieMatcher {
     root: Node,
 }
 
+impl TrieMatcher {
+    pub fn new() -> Self {
+        TrieMatcher {
+            root: Node::default(),
+        }
+    }
+}
+
 impl Matcher for TrieMatcher {
     fn is_blocked(&self, name: &str) -> bool {
         let labels = normalize_to_rev_labels(name).unwrap_or_default();

@@ -1,4 +1,6 @@
-use super::message::{DnsFlags, DnsMessage, DnsOpcode, DnsQuestion, DnsRecord};
+use super::message::{
+    DnsFlags, DnsMessage, DnsOpcode, DnsQuestion, DnsRecord, DnsResponseCode, Edns,
+};
 
 /// Builder
 pub struct DnsMessageBuilder {
@@ -25,6 +27,7 @@ impl DnsMessageBuilder {
                 z: false,
                 ad: false,
                 cd: false,
+                rcode_low: 0,
             },
             questions: Vec::new(),
             answers: Vec::new(),
@@ -66,6 +69,13 @@ impl DnsMessageBuilder {
     /// Add an additional record to the DNS packet.
     pub fn add_additional_record(mut self, record: DnsRecord) -> Self {
         self.additional_records.push(record);
+        self
+    }
+
+    pub fn with_response(mut self, response_code: DnsResponseCode) -> Self {
+        // todo: add edns support.
+        let value: u16 = response_code.into();
+        self.flags.rcode_low = (value & 0x0F) as u8;
         self
     }
 
