@@ -1,7 +1,8 @@
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::{
+    net::{Ipv4Addr, Ipv6Addr},
+    sync::Arc,
+};
 
-use anyhow::anyhow;
-use bitflags::bitflags;
 use bytes::Bytes;
 
 use crate::dns::{reader::DnsMessageReader, writer::DnsMessageWriter};
@@ -325,7 +326,7 @@ impl TryFrom<u8> for DnsOpcode {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DnsQuestion {
     /// The domain name being queried
-    pub qname: String,
+    pub qname: Arc<str>,
     /// The type of the query (e.g., A, AAAA, CNAME)
     pub qtype: RecordType,
     /// The class of the query (e.g., IN for Internet)
@@ -333,7 +334,7 @@ pub struct DnsQuestion {
 }
 
 impl DnsQuestion {
-    pub fn new(qname: String, qtype: RecordType, qclass: ClassType) -> Self {
+    pub fn new(qname: Arc<str>, qtype: RecordType, qclass: ClassType) -> Self {
         Self {
             qname,
             qtype,
@@ -343,7 +344,7 @@ impl DnsQuestion {
 
     /// Create a new DNS question from a reader.
     pub fn read(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
-        let qname = reader.read_qname()?;
+        let qname: Arc<str> = reader.read_qname()?.into();
         let qtype = RecordType::try_from(reader.read_u16()?)?;
         let qclass = ClassType::from(reader.read_u16()?);
 
@@ -442,8 +443,8 @@ pub enum DnsRecordData {
     Raw(Vec<u8>),
     Ipv4(std::net::Ipv4Addr),
     Ipv6(std::net::Ipv6Addr),
-    Text(String),
-    DomainName(String),
+    Text(Arc<str>),
+    DomainName(Arc<str>),
 }
 
 impl DnsRecordData {
@@ -484,15 +485,15 @@ impl DnsRecordData {
             DnsRecordData::Raw(_) => None,
             DnsRecordData::Ipv4(addr) => Some(addr.to_string()),
             DnsRecordData::Ipv6(addr) => Some(addr.to_string()),
-            DnsRecordData::Text(text) => Some(text.clone()),
-            DnsRecordData::DomainName(name) => Some(name.clone()),
+            DnsRecordData::Text(text) => Some(text.to_string()),
+            DnsRecordData::DomainName(name) => Some(name.to_string()),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DnsRecord {
-    pub name: String,
+    pub name: String, // TODO: make this Arc<str>?
     pub record_type: RecordType,
     pub class: ClassType,
     pub ttl: u32,
@@ -511,7 +512,7 @@ impl DnsRecord {
         let data = match r#type {
             RecordType::CNAME | RecordType::PTR | RecordType::NS => {
                 let domain_name = reader.read_qname()?;
-                DnsRecordData::DomainName(domain_name)
+                DnsRecordData::DomainName(domain_name.into())
             }
             RecordType::A => {
                 let raw_data = reader.read_bytes(4)?;
@@ -535,7 +536,8 @@ impl DnsRecord {
             RecordType::TXT => {
                 let text_length = reader.read_u8()? as usize;
                 let text = reader.read_bytes(text_length)?;
-                DnsRecordData::Text(String::from_utf8(text.to_vec()).unwrap())
+                let utf_str = String::from_utf8(text.to_vec())?;
+                DnsRecordData::Text(utf_str.into())
             }
             _ => {
                 let raw_data = reader.read_bytes(data_length)?;
@@ -651,7 +653,7 @@ mod tests {
                 cd: false,
             })
             .add_question(DnsQuestion {
-                qname: "example.com".to_string(),
+                qname: Arc::<str>::from("example.com"),
                 qtype: RecordType::A,
                 qclass: ClassType::IN,
             })
@@ -662,7 +664,7 @@ mod tests {
 
         assert_eq!(decoded_message.id, 12345);
         assert_eq!(decoded_message.questions.len(), 1);
-        assert_eq!(decoded_message.questions[0].qname, "example.com");
+        assert_eq!(&*decoded_message.questions[0].qname, "example.com");
         assert_eq!(decoded_message.questions[0].qtype, RecordType::A);
         assert_eq!(decoded_message.questions[0].qclass, ClassType::IN);
         assert!(decoded_message.flags.qr);
@@ -672,7 +674,7 @@ mod tests {
     fn test_ns_query_encoding() {
         let packet = DnsMessageBuilder::new()
             .add_question(DnsQuestion::new(
-                "com.".to_string(),
+                "com.".into(),
                 RecordType::NS,
                 ClassType::IN,
             ))

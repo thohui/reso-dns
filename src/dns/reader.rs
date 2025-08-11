@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use bytes::{Buf, Bytes};
+use anyhow::{bail, ensure};
 
 /// A reader for DNS messages that allows reading various components
 pub struct DnsMessageReader<'a> {
@@ -20,18 +20,42 @@ impl<'a> DnsMessageReader<'a> {
 
     /// Seek the a position inside the buffer.
     pub fn seek(&mut self, pos: usize) -> anyhow::Result<()> {
-        if pos > self.buffer.len() {
-            return Err(anyhow::anyhow!("seek out of bounds"));
-        }
+        let len = self.buffer.len();
+        ensure!(pos <= len, "seek out of bounds: pos={} len={}", pos, len);
         self.position = pos;
+        Ok(())
+    }
+
+    #[inline]
+    fn need(&self, need: usize, what: &str) -> anyhow::Result<()> {
+        let rem = self.remaining();
+        ensure!(
+            need <= rem,
+            "buffer underflow at pos {} while reading {}: need {} bytes, have {}",
+            self.position,
+            what,
+            need,
+            rem
+        );
+        Ok(())
+    }
+
+    #[inline]
+    fn need_at(&self, upto_exclusive: usize, what: &str) -> anyhow::Result<()> {
+        ensure!(
+            upto_exclusive <= self.buffer.len(),
+            "buffer underflow while reading {}: need bytes up to {}, len {} (pos {})",
+            what,
+            upto_exclusive,
+            self.buffer.len(),
+            self.position
+        );
         Ok(())
     }
 
     /// Read a single byte from the DNS message.
     pub fn read_u8(&mut self) -> anyhow::Result<u8> {
-        if self.position >= self.buffer.len() {
-            return Err(anyhow::anyhow!("Buffer underflow while reading u8"));
-        }
+        self.need(std::mem::size_of::<u8>(), "u8")?;
         let byte = self.buffer[self.position];
         self.position += 1;
         Ok(byte)
@@ -39,9 +63,7 @@ impl<'a> DnsMessageReader<'a> {
 
     /// Read a u16 from the DNS message.
     pub fn read_u16(&mut self) -> anyhow::Result<u16> {
-        if self.position + 2 > self.buffer.len() {
-            return Err(anyhow::anyhow!("Buffer underflow while reading u16"));
-        }
+        self.need(std::mem::size_of::<u16>(), "u16")?;
 
         let bytes = &self.buffer[self.position..self.position + 2];
         let word = u16::from_be_bytes([bytes[0], bytes[1]]);
@@ -53,9 +75,8 @@ impl<'a> DnsMessageReader<'a> {
 
     /// Read a u32 from the DNS message.
     pub fn read_u32(&mut self) -> anyhow::Result<u32> {
-        if self.position + 4 > self.buffer.len() {
-            return Err(anyhow::anyhow!("Buffer underflow while reading u32"));
-        }
+        self.need(std::mem::size_of::<u32>(), "u32")?;
+
         let data = &self.buffer[self.position..self.position + 4];
         let qword = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
 
@@ -72,12 +93,16 @@ impl<'a> DnsMessageReader<'a> {
 
         loop {
             if pos >= self.buffer.len() {
-                return Err(anyhow::anyhow!("Out of bounds while reading qname"));
+                bail!(
+                    "qname of out bounds at pos {} (buf len {})",
+                    pos,
+                    self.buffer.len()
+                )
             }
 
             // Check for loops
             if !seen.insert(pos) {
-                return Err(anyhow::anyhow!("DNS compression pointer loop detected"));
+                bail!("qname compression pointer loop detected at pos {}", pos);
             }
 
             let length = self.buffer[pos];
@@ -85,19 +110,20 @@ impl<'a> DnsMessageReader<'a> {
             // Check if it's a pointer (two most significant bits are 1)
             if length & 0xC0 == 0xC0 {
                 // Must have two bytes for pointer
-                if pos + 1 >= self.buffer.len() {
-                    return Err(anyhow::anyhow!("Pointer points outside buffer"));
-                }
+                self.need_at(pos + 2, "compression pointer")?;
 
                 let b2 = self.buffer[pos + 1];
                 let offset = (((length as usize) & 0x3F) << 8) | (b2 as usize);
 
                 if offset >= self.buffer.len() {
-                    return Err(anyhow::anyhow!("Pointer offset out of bounds"));
+                    bail!(
+                        "compression pointer offset {} out of bounds (buf len {})",
+                        offset,
+                        self.buffer.len()
+                    );
                 }
 
                 if !jumped {
-                    // Move the reader position past the pointer
                     self.position = pos + 2;
                 }
 
@@ -115,12 +141,16 @@ impl<'a> DnsMessageReader<'a> {
                 pos += 1;
 
                 if pos + label_len > self.buffer.len() {
-                    return Err(anyhow::anyhow!("Label length goes past buffer"));
+                    bail!(
+                        "label overruns buffer at pos {}: need {} bytes, have {}",
+                        pos,
+                        label_len,
+                        self.buffer.len().saturating_sub(pos)
+                    );
                 }
 
                 let label_bytes = &self.buffer[pos..pos + label_len];
 
-                // Use from_utf8_lossy to avoid UTF-8 panic
                 let label_str = String::from_utf8_lossy(label_bytes);
 
                 name.push_str(&label_str);
@@ -143,20 +173,20 @@ impl<'a> DnsMessageReader<'a> {
 
     /// Read a specified number of bytes from the DNS message.
     pub fn read_bytes(&mut self, length: usize) -> anyhow::Result<&'a [u8]> {
-        if self.position + length > self.buffer.len() {
-            return Err(anyhow::anyhow!("Buffer underflow while reading bytes"));
-        }
+        self.need(length, "raw bytes")?;
         let data = &self.buffer[self.position..self.position + length];
         self.position += length;
         Ok(data)
     }
 
-    /// Return the current position in the buffer.
+    #[inline]
+    /// Current reading position in the buffer.
     pub fn position(&self) -> usize {
         self.position
     }
 
-    /// Return the remaining bytes in the buffer.
+    #[inline]
+    /// Remaing amount of readable bytes.
     pub fn remaining(&self) -> usize {
         self.buffer.len() - self.position
     }

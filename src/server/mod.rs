@@ -5,6 +5,7 @@ use bytes::Bytes;
 use tokio::{net::UdpSocket, time::timeout};
 
 use crate::{
+    cache::service::CacheService,
     dns::message::{self, DnsMessage},
     middleware::DnsMiddleware,
     resolver::{DnsRequestCtx, DnsResolver},
@@ -17,16 +18,18 @@ pub struct DnsServer<R> {
     recv_size: usize,
     timeout: Duration,
     middlewares: ArcSwap<Vec<Arc<dyn DnsMiddleware>>>,
+    cache_service: Arc<CacheService>,
 }
 
 impl<R: DnsResolver + Send + Sync + 'static> DnsServer<R> {
-    pub fn new(bind_addr: SocketAddr, resolver: R) -> Self {
+    pub fn new(bind_addr: SocketAddr, resolver: R, cache_service: Arc<CacheService>) -> Self {
         Self {
             bind_addr,
             resolver: Arc::new(resolver),
             recv_size: 1232, // edns safe
             timeout: Duration::from_secs(2),
             middlewares: ArcSwap::new(Vec::new().into()),
+            cache_service,
         }
     }
     pub fn add_middleware<M>(&self, mw: M)
@@ -57,8 +60,10 @@ impl<R: DnsResolver + Send + Sync + 'static> DnsServer<R> {
             let guard = self.middlewares.load();
             let middlewares = guard.clone();
 
+            let cache = self.cache_service.clone();
+
             tokio::spawn(async move {
-                let ctx = DnsRequestCtx::new(&query);
+                let ctx = DnsRequestCtx::new(&query, cache);
                 if let Ok(Some(resp)) = run_middlewares(middlewares, &ctx).await {
                     let _ = sock.send_to(&resp, client).await;
                     return;

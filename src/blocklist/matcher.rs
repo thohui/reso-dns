@@ -54,7 +54,7 @@ impl Matcher for TrieMatcher {
         let mut root = Node::default();
 
         for pattern in patterns {
-            let labels = normalize_to_rev_labels(&pattern)?;
+            let labels = normalize_to_rev_labels(pattern)?;
             if labels.is_empty() {
                 continue;
             }
