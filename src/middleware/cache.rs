@@ -1,14 +1,7 @@
 use async_trait::async_trait;
 use bytes::Bytes;
 
-use crate::{
-    cache::service::CacheKey,
-    dns::{
-        builder::DnsMessageBuilder,
-        message::{DnsMessage, DnsRecord, DnsResponseCode},
-    },
-    resolver::DnsRequestCtx,
-};
+use crate::{ cache::service::CacheKey, resolver::DnsRequestCtx};
 
 use super::DnsMiddleware;
 
@@ -20,7 +13,7 @@ impl DnsMiddleware for CacheMiddleware {
         let message = ctx.message()?;
 
         let cache_key = CacheKey::from_message(message)?;
-        if let Some(cached_response) = ctx.cache_service().lookup(&cache_key).await {
+        if let Some(cached_response) = ctx.services().cache.lookup(&cache_key).await {
             tracing::debug!("cache hit {:?}", cache_key);
             return Ok(Some(cached_response.into_custom_response(message.id)));
         }

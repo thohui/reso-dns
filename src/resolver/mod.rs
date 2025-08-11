@@ -6,22 +6,22 @@ use once_cell::sync::OnceCell;
 use async_trait::async_trait;
 use bytes::Bytes;
 
-use crate::{cache::service::CacheService, dns::message::DnsMessage};
+use crate::{dns::message::DnsMessage, services::Services};
 
 pub mod forwarder;
 
 pub struct DnsRequestCtx<'a> {
     raw: &'a [u8],
     message: OnceCell<DnsMessage>,
-    cache_service: Arc<CacheService>,
+    services: Arc<Services>,
 }
 
 impl<'a> DnsRequestCtx<'a> {
-    pub fn new(raw: &'a [u8], cache_service: Arc<CacheService>) -> Self {
+    pub fn new(raw: &'a [u8], services: Arc<Services>) -> Self {
         Self {
             raw,
             message: OnceCell::new(),
-            cache_service,
+            services,
         }
     }
 
@@ -34,8 +34,8 @@ impl<'a> DnsRequestCtx<'a> {
         self.raw
     }
 
-    pub fn cache_service(&self) -> Arc<CacheService> {
-        self.cache_service.clone()
+    pub fn services(&self) -> &Services {
+        &self.services
     }
 }
 

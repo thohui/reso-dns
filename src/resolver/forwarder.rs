@@ -34,7 +34,7 @@ impl DnsResolver for ForwardResolver {
         let resp_bytes = Bytes::from(buf);
 
         let resp_bytes_cache = resp_bytes.clone();
-        let cache = ctx.cache_service().clone();
+        let cache = ctx.services.cache.clone();
         let query_msg_owned = ctx.message()?.clone();
         let resp_bytes_for_cache = resp_bytes.clone();
 

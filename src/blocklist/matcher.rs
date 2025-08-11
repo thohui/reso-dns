@@ -1,36 +1,25 @@
 use std::collections::HashMap;
 
-/// Blocklist matcher
-pub trait Matcher: Send + Sync {
-    /// Check if a domain is blocked.
-    fn is_blocked(&self, name: &str) -> bool;
-    /// Load the pattenrs into the matcher.
-    fn load<'a, I>(patterns: I) -> anyhow::Result<Self>
-    where
-        I: IntoIterator<Item = &'a str>,
-        Self: Sized;
-}
-
 #[derive(Default)]
 struct Node {
     blocked: bool,
     children: HashMap<String, Node>,
 }
 // Trie implementation of a blocklist matcher.
-pub struct TrieMatcher {
+pub struct BlocklistMatcher {
     root: Node,
 }
 
-impl TrieMatcher {
+impl BlocklistMatcher {
     pub fn new() -> Self {
-        TrieMatcher {
+        BlocklistMatcher {
             root: Node::default(),
         }
     }
 }
 
-impl Matcher for TrieMatcher {
-    fn is_blocked(&self, name: &str) -> bool {
+impl BlocklistMatcher {
+    pub fn is_blocked(&self, name: &str) -> bool {
         let labels = normalize_to_rev_labels(name).unwrap_or_default();
 
         let mut node = &self.root;
@@ -54,7 +43,7 @@ impl Matcher for TrieMatcher {
         node.blocked
     }
 
-    fn load<'a, I>(patterns: I) -> anyhow::Result<Self>
+    pub fn load<'a, I>(patterns: I) -> anyhow::Result<Self>
     where
         I: IntoIterator<Item = &'a str>,
         Self: Sized,
@@ -115,7 +104,7 @@ mod tests {
     #[test]
     pub fn test_blocked_patterns() {
         let patterns: Vec<&str> = vec!["google.com".into(), "yahoo.com".into(), "*.bla.com".into()];
-        let matcher = TrieMatcher::load(patterns).unwrap();
+        let matcher = BlocklistMatcher::load(patterns).unwrap();
         assert!(matcher.is_blocked("google.com".into()));
         assert!(matcher.is_blocked("yahoo.com"));
         assert!(matcher.is_blocked("a.bla.com"));

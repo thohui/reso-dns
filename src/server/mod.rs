@@ -5,10 +5,11 @@ use bytes::Bytes;
 use tokio::{net::UdpSocket, time::timeout};
 
 use crate::{
-    blocklist::{matcher::TrieMatcher, service::BlocklistService},
+    blocklist::{matcher::BlocklistMatcher, service::BlocklistService},
     cache::service::CacheService,
     middleware::DnsMiddleware,
     resolver::{DnsRequestCtx, DnsResolver},
+    services::Services,
 };
 
 /// DNS Server
@@ -18,20 +19,18 @@ pub struct DnsServer<R> {
     recv_size: usize,
     timeout: Duration,
     middlewares: ArcSwap<Vec<Arc<dyn DnsMiddleware>>>,
-    cache_service: Arc<CacheService>,
-    blocklist_service: Arc<BlocklistService<TrieMatcher>>,
+    services: Arc<Services>,
 }
 
 impl<R: DnsResolver + Send + Sync + 'static> DnsServer<R> {
-    pub fn new(bind_addr: SocketAddr, resolver: R, cache_service: Arc<CacheService>) -> Self {
+    pub fn new(bind_addr: SocketAddr, resolver: R, services: Arc<Services>) -> Self {
         Self {
             bind_addr,
             resolver: Arc::new(resolver),
             recv_size: 1232, // edns safe
             timeout: Duration::from_secs(2),
             middlewares: ArcSwap::new(Vec::new().into()),
-            blocklist_service: Arc::new(BlocklistService::new(TrieMatcher::new())),
-            cache_service,
+            services,
         }
     }
     pub fn add_middleware<M>(&self, mw: M)
@@ -61,11 +60,10 @@ impl<R: DnsResolver + Send + Sync + 'static> DnsServer<R> {
 
             let guard = self.middlewares.load();
             let middlewares = guard.clone();
-
-            let cache = self.cache_service.clone();
+            let services = self.services.clone();
 
             tokio::spawn(async move {
-                let ctx = DnsRequestCtx::new(&query, cache);
+                let ctx = DnsRequestCtx::new(&query, services);
                 if let Ok(Some(resp)) = run_middlewares(middlewares, &ctx).await {
                     let _ = sock.send_to(&resp, client).await;
                     return;

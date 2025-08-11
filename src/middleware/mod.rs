@@ -3,6 +3,7 @@ use bytes::Bytes;
 
 use crate::resolver::DnsRequestCtx;
 
+pub mod blocklist;
 pub mod cache;
 
 #[async_trait]
