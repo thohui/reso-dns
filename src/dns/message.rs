@@ -493,7 +493,7 @@ impl DnsRecordData {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DnsRecord {
-    pub name: String, // TODO: make this Arc<str>?
+    pub name: Arc<str>,
     pub record_type: RecordType,
     pub class: ClassType,
     pub ttl: u32,
@@ -503,7 +503,7 @@ pub struct DnsRecord {
 impl DnsRecord {
     /// Create a new DNS record.
     pub fn read(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
-        let name = reader.read_qname()?;
+        let name = reader.read_qname()?.into();
         let r#type = RecordType::try_from(reader.read_u16()?)?;
         let class = ClassType::from(reader.read_u16()?);
         let ttl = reader.read_u32()?;
