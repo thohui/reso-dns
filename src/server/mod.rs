@@ -7,9 +7,9 @@ use tokio::{net::UdpSocket, time::timeout};
 use crate::{
     blocklist::{matcher::BlocklistMatcher, service::BlocklistService},
     cache::service::CacheService,
+    global::Global,
     middleware::DnsMiddleware,
     resolver::{DnsRequestCtx, DnsResolver},
-    services::Services,
 };
 
 /// DNS Server
@@ -19,18 +19,18 @@ pub struct DnsServer<R> {
     recv_size: usize,
     timeout: Duration,
     middlewares: ArcSwap<Vec<Arc<dyn DnsMiddleware>>>,
-    services: Arc<Services>,
+    global: Arc<Global>,
 }
 
 impl<R: DnsResolver + Send + Sync + 'static> DnsServer<R> {
-    pub fn new(bind_addr: SocketAddr, resolver: R, services: Arc<Services>) -> Self {
+    pub fn new(bind_addr: SocketAddr, resolver: R, global: Arc<Global>) -> Self {
         Self {
             bind_addr,
             resolver: Arc::new(resolver),
             recv_size: 1232, // edns safe
             timeout: Duration::from_secs(2),
             middlewares: ArcSwap::new(Vec::new().into()),
-            services,
+            global,
         }
     }
     pub fn add_middleware<M>(&self, mw: M)
@@ -60,10 +60,10 @@ impl<R: DnsResolver + Send + Sync + 'static> DnsServer<R> {
 
             let guard = self.middlewares.load();
             let middlewares = guard.clone();
-            let services = self.services.clone();
+            let global = self.global.clone();
 
             tokio::spawn(async move {
-                let ctx = DnsRequestCtx::new(&query, services);
+                let ctx = DnsRequestCtx::new(&query, global);
                 if let Ok(Some(resp)) = run_middlewares(middlewares, &ctx).await {
                     let _ = sock.send_to(&resp, client).await;
                     return;

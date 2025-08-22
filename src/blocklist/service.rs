@@ -1,38 +1,42 @@
 use arc_swap::ArcSwap;
 use tokio::sync::Mutex;
+use turso::Connection;
 
-use super::matcher::BlocklistMatcher;
+use crate::database::DatabaseOperations;
+
+use super::{matcher::BlocklistMatcher, model::BlockedDomain};
 
 pub struct BlocklistService {
-    entries: Mutex<Vec<String>>, // todo: replace this with a persistent store at some point, should be fine for now. we shouldnt have to keep track of this, only lazily update it in the store.
     matcher: ArcSwap<BlocklistMatcher>,
+    connection: Connection,
 }
 
 impl BlocklistService {
-    pub fn new() -> Self {
+    pub fn new(connection: Connection) -> Self {
         Self {
             matcher: ArcSwap::new(BlocklistMatcher::new().into()),
-            entries: Mutex::new(Vec::new()),
+            connection,
         }
     }
 
     pub async fn add_domain(&self, domain: &str) -> anyhow::Result<()> {
-        let mut entries = self.entries.lock().await;
-        entries.push(domain.into());
-        let entries: Vec<&str> = entries.iter().map(|s| s.as_str()).collect();
-        let updated_matcher = BlocklistMatcher::load(entries)?;
-        self.matcher.swap(updated_matcher.into());
+        BlockedDomain::new(domain.to_string())
+            .create(&self.connection)
+            .await?;
+        self.reload_matcher().await?;
         Ok(())
     }
 
     pub async fn remove_domain(&self, domain: String) -> anyhow::Result<()> {
-        let mut entries = self.entries.lock().await;
-        if let Some(pos) = entries.iter().position(|x| *x == domain) {
-            entries.remove(pos);
-            let entries: Vec<&str> = entries.iter().map(|s| s.as_str()).collect();
-            let updated_matcher = BlocklistMatcher::load(entries)?;
-            self.matcher.swap(updated_matcher.into());
-        }
+        BlockedDomain::delete(&self.connection, &domain).await?;
+        self.reload_matcher().await?;
+        Ok(())
+    }
+
+    async fn reload_matcher(&self) -> anyhow::Result<()> {
+        let domains = BlockedDomain::all(&self.connection).await?;
+        let updated_matcher = BlocklistMatcher::load(domains.iter().map(|d| d.domain()))?;
+        self.matcher.swap(updated_matcher.into());
         Ok(())
     }
 

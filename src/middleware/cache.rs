@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use bytes::Bytes;
 
-use crate::{ cache::service::CacheKey, resolver::DnsRequestCtx};
+use crate::{cache::service::CacheKey, resolver::DnsRequestCtx};
 
 use super::DnsMiddleware;
 

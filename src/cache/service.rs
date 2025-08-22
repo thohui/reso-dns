@@ -43,10 +43,12 @@ struct CacheEntry {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct DnsResponseBytes(Bytes);
+
 impl DnsResponseBytes {
     pub fn new(bytes: Bytes) -> Self {
         Self(bytes)
     }
+
     pub fn into_custom_response(self, transaction_id: u16) -> Bytes {
         let mut bytes = BytesMut::from(&self.0[0..]);
         // replace the transaction id in the cached response.
