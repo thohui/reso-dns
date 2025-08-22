@@ -1,0 +1,12 @@
+[package]
+name = "reso-blocklist"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+idna.workspace = true
+
+[lib]
+name = "reso_blocklist"
+path = "src/lib.rs"

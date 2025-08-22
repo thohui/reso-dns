@@ -1,0 +1,11 @@
+[package]
+name = "reso-cache"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.99"
+bytes = "1.10.1"
+moka = {version = "0.12.10", features = ["future"]}
+reso-dns = {workspace = true}
+tokio = {version = "1.47.1", features = ["full"]}

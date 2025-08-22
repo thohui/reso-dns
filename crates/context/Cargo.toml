@@ -1,0 +1,18 @@
+[package]
+name = "reso-context"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+reso-dns.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+once_cell.workspace = true
+tokio.workspace = true
+parking_lot.workspace = true
+
+
+[lib]
+name = "reso_context"
+path = "src/lib.rs"

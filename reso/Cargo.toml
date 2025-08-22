@@ -1,0 +1,27 @@
+[package]
+name = "reso"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+arc-swap.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+idna.workspace = true
+moka.workspace = true
+once_cell.workspace = true
+parking_lot.workspace = true
+reso-blocklist.workspace = true
+reso-cache.workspace = true
+reso-context.workspace = true
+reso-database.workspace = true
+reso-dns.workspace = true
+reso-resolver.workspace = true
+reso-server.workspace = true
+serde.workspace = true
+tokio.workspace = true
+toml.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+turso.workspace = true
