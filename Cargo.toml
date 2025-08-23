@@ -1,8 +1,5 @@
 [workspace]
-members = [
-  "crates/*",  
-  "reso",      
-]
+members = ["crates/*", "reso"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -17,17 +14,17 @@ parking_lot = "0.12.4"
 serde = { version = "1.0.219", features = ["derive"] }
 tokio = { version = "1.45.1", features = ["full", "macros"] }
 toml = "0.9.5"
-tracing = "0.1.41"
-tracing-subscriber = "0.3.19"
+tracing = { version = "0.1.41", features = ["std"] }
+tracing-subscriber = { version = "0.3.19", features = ["fmt", "serde", "json"] }
 turso = "0.1.4"
 idna = "1.1.0"
 bitflags = "2.9.3"
 futures = "0.3.31"
 
-reso-dns      = { path = "crates/dns" }
-reso-server   = { path = "crates/server" }
+reso-dns = { path = "crates/dns" }
+reso-server = { path = "crates/server" }
 reso-resolver = { path = "crates/resolver" }
 reso-database = { path = "crates/database" }
-reso-cache 	= { path = "crates/cache" }
+reso-cache = { path = "crates/cache" }
 reso-blocklist = { path = "crates/blocklist" }
 reso-context = { path = "crates/context" }

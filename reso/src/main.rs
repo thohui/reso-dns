@@ -1,13 +1,13 @@
 use std::{env, net::SocketAddr, sync::Arc};
 
 use blocklist::service::BlocklistService;
-use config::{DEFAULT_CONFIG_PATH, ResolverConfig};
+use config::{DEFAULT_CONFIG_PATH, LogLevel, ResolverConfig};
 use local::Local;
 use middleware::{blocklist::BlocklistMiddleware, cache::CacheMiddleware};
 use moka::future::FutureExt;
 use reso_cache::MessageCache;
 use reso_dns::DnsMessage;
-use tracing::Level;
+use tracing::{Level, level_filters::LevelFilter};
 
 mod blocklist;
 mod config;
@@ -17,12 +17,13 @@ mod middleware;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_max_level(Level::DEBUG)
-        .init();
-
     let dns_config_path = env::var("RESO_DNS_CONFIG").unwrap_or(DEFAULT_CONFIG_PATH.to_string());
     let config = config::decode_from_path(&dns_config_path)?;
+
+    let level_filter: LevelFilter = config.server.log_level.into();
+    tracing_subscriber::fmt()
+        .with_max_level(level_filter)
+        .init();
 
     let connection = reso_database::connect(&config.database.path).await?;
 
@@ -64,8 +65,8 @@ async fn main() -> anyhow::Result<()> {
         .boxed()
     }));
 
-    server.add_middleware(CacheMiddleware);
     server.add_middleware(BlocklistMiddleware);
+    server.add_middleware(CacheMiddleware);
 
     server.run().await?;
     Ok(())

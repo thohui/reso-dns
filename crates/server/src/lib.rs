@@ -77,6 +77,8 @@ impl<
         let socket = Arc::new(UdpSocket::bind(self.bind_addr).await?);
         let mut buffer = BytesMut::with_capacity(self.recv_size);
 
+        tracing::info!("DNS server listening on {}", self.bind_addr);
+
         loop {
             let sock = socket.clone();
 

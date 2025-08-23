@@ -6,7 +6,7 @@ use std::{
 
 use async_trait::async_trait;
 
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::Bytes;
 use reso_context::DnsRequestCtx;
 use tokio::{net::UdpSocket, time::timeout};
 
