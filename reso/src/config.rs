@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_CONFIG_PATH: &str = "config.toml";
@@ -17,9 +19,19 @@ pub struct DatabaseConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ResolverConfig {
+    Forwarder {
+        #[serde(default)]
+        upstreams: Vec<SocketAddr>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Config {
     pub server: ServerConfig,
     pub database: DatabaseConfig,
+    pub resolver: ResolverConfig,
 }
 
 pub fn decode_from_path(path: &str) -> anyhow::Result<Config> {

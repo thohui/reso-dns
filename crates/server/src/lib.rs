@@ -80,7 +80,7 @@ impl<
         loop {
             let sock = socket.clone();
 
-            // perf: we should not resize the buffer every time, but rather reuse it.
+            // TODO: we should not resize the buffer every time, but rather reuse it.
             buffer.resize(self.recv_size, 0);
             let (len, client) = sock.recv_from(&mut buffer[..]).await?;
             let raw = buffer.split_to(len).freeze();

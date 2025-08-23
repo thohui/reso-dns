@@ -1,6 +1,4 @@
-use super::message::{
-    DnsFlags, DnsMessage, DnsOpcode, DnsQuestion, DnsRecord, DnsResponseCode, Edns,
-};
+use super::message::{DnsFlags, DnsMessage, DnsOpcode, DnsQuestion, DnsRecord, DnsResponseCode};
 
 /// Builder
 #[derive(Debug, Clone, Default)]

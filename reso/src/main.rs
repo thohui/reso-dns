@@ -1,13 +1,13 @@
 use std::{env, net::SocketAddr, sync::Arc};
 
 use blocklist::service::BlocklistService;
-use config::DEFAULT_CONFIG_PATH;
+use config::{DEFAULT_CONFIG_PATH, ResolverConfig};
 use local::Local;
 use middleware::{blocklist::BlocklistMiddleware, cache::CacheMiddleware};
 use moka::future::FutureExt;
 use reso_cache::MessageCache;
 use reso_dns::DnsMessage;
-use tracing::{Level, instrument::WithSubscriber};
+use tracing::Level;
 
 mod blocklist;
 mod config;
@@ -35,9 +35,13 @@ async fn main() -> anyhow::Result<()> {
         BlocklistService::new(connection),
     ));
 
-    let resolver =
-        reso_resolver::forwarder::ForwardResolver::new(SocketAddr::from(([1, 1, 1, 1], 53)))
-            .await?;
+    let upstreams = if let ResolverConfig::Forwarder { upstreams } = config.resolver {
+        upstreams
+    } else {
+        return Err(anyhow::anyhow!("Unsupported resolver configuration"));
+    };
+
+    let resolver = reso_resolver::forwarder::ForwardResolver::new(upstreams).await?;
     let mut server =
         reso_server::DnsServer::<_, _, Local>::new(server_addr, resolver, global.clone());
 
