@@ -27,6 +27,12 @@ async fn main() -> anyhow::Result<()> {
 
     let connection = reso_database::connect(&config.database.path).await?;
 
+    // ideally, we should setup a migration system for this
+    let init_file = concat!("init.sql");
+    let sql = std::fs::read_to_string(init_file)
+        .map_err(|e| anyhow::anyhow!("Failed to read init file: {}", e))?;
+    connection.execute(sql.as_str(), ()).await?;
+
     let server_addr = format!("{}:{}", config.server.ip, config.server.port)
         .parse::<SocketAddr>()
         .expect("Invalid server address format");
@@ -36,6 +42,7 @@ async fn main() -> anyhow::Result<()> {
         BlocklistService::new(connection),
     ));
 
+    #[allow(irrefutable_let_patterns)]
     let upstreams = if let ResolverConfig::Forwarder { upstreams } = config.resolver {
         upstreams
     } else {
