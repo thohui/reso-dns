@@ -1,22 +1,30 @@
 /// Node in the trie structure, representing a blocklist entry.
 #[derive(Debug, Clone, Default)]
 struct Node {
+    label: Box<str>,
     wildcard: bool,
     blocked: bool,
-    children: Vec<(String, Node)>,
+    children: Vec<Node>,
 }
 
 impl Node {
+    fn new(label: &str) -> Self {
+        Self {
+            label: label.into(),
+            wildcard: false,
+            blocked: false,
+            children: Vec::new(),
+        }
+    }
     fn child_mut(&mut self, label: &str) -> &mut Node {
         match self
             .children
-            .binary_search_by(|(l, _)| l.as_str().cmp(label))
+            .binary_search_by(|l| l.label.as_ref().cmp(label))
         {
-            Ok(i) => &mut self.children[i].1,
+            Ok(i) => &mut self.children[i],
             Err(i) => {
-                self.children
-                    .insert(i, (label.to_string(), Node::default()));
-                &mut self.children[i].1
+                self.children.insert(i, Node::new(label));
+                &mut self.children[i]
             }
         }
     }
@@ -45,9 +53,9 @@ impl BlocklistMatcher {
 
             match node
                 .children
-                .binary_search_by(|(l, _)| l.as_str().cmp(&label))
+                .binary_search_by(|n| n.label.as_ref().cmp(&label))
             {
-                Ok(i) => node = &node.children[i].1,
+                Ok(i) => node = &node.children[i],
                 Err(_) => return false,
             }
         }
