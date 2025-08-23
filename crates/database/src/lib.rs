@@ -35,9 +35,5 @@ pub async fn connect(url: &str) -> anyhow::Result<Connection> {
         .await
         .map_err(|e| anyhow::anyhow!("Failed to connect to database: {}", e))?;
     let connection = db.connect()?;
-    let init_file = concat!("init.sql");
-    let sql = std::fs::read_to_string(init_file)
-        .map_err(|e| anyhow::anyhow!("Failed to read init file: {}", e))?;
-    connection.execute(sql.as_str(), ()).await?;
     Ok(connection)
 }

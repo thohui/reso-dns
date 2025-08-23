@@ -31,7 +31,7 @@ where
     G: Send + Sync + 'static,
     L: Send + Sync,
 {
-    async fn resolve<'a>(&self, ctx: &DnsRequestCtx<G, L>) -> anyhow::Result<Bytes> {
+    async fn resolve(&self, ctx: &DnsRequestCtx<G, L>) -> anyhow::Result<Bytes> {
         let start = self.upstreams.pick_start();
         for upstream in self.upstreams.iter_from(start) {
             match self.resolve_with_upstream(upstream, ctx).await {

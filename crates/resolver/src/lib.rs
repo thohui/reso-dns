@@ -5,7 +5,7 @@ use reso_context::DnsRequestCtx;
 
 #[async_trait]
 pub trait DnsResolver<G: Send + Sync, L> {
-    async fn resolve<'a>(&self, ctx: &DnsRequestCtx<G, L>) -> anyhow::Result<Bytes>;
+    async fn resolve(&self, ctx: &DnsRequestCtx<G, L>) -> anyhow::Result<Bytes>;
 }
 
 pub mod forwarder;
