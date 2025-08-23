@@ -6,6 +6,12 @@ pub struct DnsMessageWriter {
     max_len: usize,
 }
 
+impl Default for DnsMessageWriter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DnsMessageWriter {
     /// Create a new DNS message writer with a custom buffer capacity.
     pub fn new_with_max(max_len: usize) -> Self {

@@ -1,7 +1,6 @@
-use std::{net::SocketAddr, pin::Pin, sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwap;
-use bytes::Bytes;
 use futures::future::BoxFuture;
 use reso_context::{DnsMiddleware, DnsRequestCtx};
 use reso_resolver::DnsResolver;

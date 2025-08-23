@@ -3,6 +3,7 @@ use super::message::{
 };
 
 /// Builder
+#[derive(Debug, Clone, Default)]
 pub struct DnsMessageBuilder {
     id: u16,
     flags: DnsFlags,
@@ -16,7 +17,7 @@ impl DnsMessageBuilder {
     /// Create a new DNS message builder.
     pub fn new() -> Self {
         Self {
-            id: 0x1234,
+            id: 0,
             flags: DnsFlags {
                 qr: false,
                 opcode: DnsOpcode::Query,

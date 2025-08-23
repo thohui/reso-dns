@@ -5,7 +5,7 @@ use config::DEFAULT_CONFIG_PATH;
 use local::Local;
 use middleware::{blocklist::BlocklistMiddleware, cache::CacheMiddleware};
 use moka::future::FutureExt;
-use reso_cache::{CacheKey, MessageCache};
+use reso_cache::MessageCache;
 use reso_dns::DnsMessage;
 use tracing::Level;
 
@@ -46,7 +46,7 @@ async fn main() -> anyhow::Result<()> {
             if !ctx.local().cache_hit {
                 tracing::debug!("Cache miss for message ID: {}", ctx.message()?.id);
                 let message = ctx.message()?;
-                let resp_msg = DnsMessage::decode(resp).unwrap();
+                let resp_msg = DnsMessage::decode(resp)?;
                 let _ = ctx
                     .global()
                     .cache
