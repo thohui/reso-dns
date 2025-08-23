@@ -1,6 +1,7 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwap;
+use bytes::{Bytes, BytesMut};
 use futures::future::BoxFuture;
 use reso_context::{DnsMiddleware, DnsRequestCtx};
 use reso_resolver::DnsResolver;
@@ -51,14 +52,17 @@ impl<
         }
     }
 
+    /// Add a handler for successful request processing.
     pub fn add_success_handler(&mut self, handler: SuccessCallback<G, L>) {
         self.on_success = Some(handler);
     }
 
+    /// Add a handler for errors that occur during request processing.
     pub fn add_error_handler(&mut self, handler: ErrorCallback<G, L>) {
         self.on_error = Some(handler);
     }
 
+    /// Add a middleware to the DNS server.
     pub fn add_middleware<M>(&self, mw: M)
     where
         M: DnsMiddleware<G, L> + 'static,
@@ -70,15 +74,16 @@ impl<
         self.middlewares.store(Arc::new(v));
     }
 
+    /// Run the DNS server, listening for incoming requests.
     pub async fn run(self) -> anyhow::Result<()> {
         let socket = Arc::new(UdpSocket::bind(self.bind_addr).await?);
+        let mut buffer = BytesMut::with_capacity(self.recv_size);
 
         loop {
-            let mut query = vec![0u8; self.recv_size];
             let sock = socket.clone();
-            let (len, client) = sock.recv_from(&mut query).await?;
 
-            query.truncate(len);
+            buffer.resize(self.recv_size, 0);
+            let (len, client) = sock.recv_from(&mut buffer[..]).await?;
 
             let resolver = self.resolver.clone();
 
@@ -91,16 +96,15 @@ impl<
             let on_success = self.on_success.clone();
             let on_error = self.on_error.clone();
 
-            tokio::spawn(async move {
-                // Own the ctx inside this task; it’s NOT 'static and that’s fine.
-                let ctx = DnsRequestCtx::new(bytes::Bytes::from(query), global, L::default());
+            let raw = buffer.split_to(len).freeze();
 
-                // Pre-resolution middlewares
+            tokio::spawn(async move {
+                let ctx = DnsRequestCtx::new(raw, global, L::default());
+
                 if let Ok(Some(resp)) = reso_context::run_middlewares(middlewares, &ctx).await {
                     let _ = sock.send_to(&resp, client).await;
 
                     if let Some(cb) = &on_success {
-                        // borrow ctx & resp; the future borrows them and is awaited here
                         let _ = cb(&ctx, &resp).await;
                     }
                     return;
@@ -115,16 +119,13 @@ impl<
                         }
                     }
                     Ok(Err(e)) => {
-                        tracing::error!("resolver error: {e}");
                         if let Some(cb) = &on_error {
                             let _ = cb(&ctx, &e).await;
                         }
                     }
-                    Err(elapsed) => {
-                        tracing::error!("timeout error: {elapsed}");
+                    Err(err) => {
                         if let Some(cb) = &on_error {
-                            let err: anyhow::Error = elapsed.into();
-                            let _ = cb(&ctx, &err).await;
+                            let _ = cb(&ctx, &err.into()).await;
                         }
                     }
                 }
