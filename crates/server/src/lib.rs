@@ -1,11 +1,15 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwap;
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 use futures::future::BoxFuture;
 use reso_context::{DnsMiddleware, DnsRequestCtx};
 use reso_resolver::DnsResolver;
-use tokio::{net::UdpSocket, time::timeout};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{TcpListener, UdpSocket},
+    time::timeout,
+};
 
 type SuccessCallback<G, L> = Arc<
     dyn for<'a> Fn(&'a DnsRequestCtx<G, L>, &'a bytes::Bytes) -> BoxFuture<'a, anyhow::Result<()>>
@@ -74,62 +78,195 @@ impl<
 
     /// Run the DNS server, listening for incoming requests.
     pub async fn run(self) -> anyhow::Result<()> {
-        let socket = Arc::new(UdpSocket::bind(self.bind_addr).await?);
-        let mut buffer = BytesMut::with_capacity(self.recv_size);
+        tokio::try_join!(
+            run_udp(
+                self.bind_addr,
+                self.resolver.clone(),
+                self.middlewares.load().clone(),
+                self.global.clone(),
+                self.recv_size,
+                self.timeout,
+                self.on_success.clone(),
+                self.on_error.clone(),
+            ),
+            run_tcp(
+                self.bind_addr,
+                self.resolver,
+                self.middlewares.load().clone(),
+                self.global,
+                self.timeout,
+                self.on_success,
+                self.on_error
+            )
+        )?;
 
-        tracing::info!("DNS server listening on {}", self.bind_addr);
+        Ok(())
+    }
+}
 
-        loop {
-            let sock = socket.clone();
+/// Run the DNS server over UDP.
+#[allow(clippy::too_many_arguments)]
+async fn run_udp<L, G, R>(
+    bind_addr: SocketAddr,
+    resolver: Arc<R>,
+    middlewares: Arc<Vec<Arc<dyn DnsMiddleware<G, L> + 'static>>>,
+    global: Arc<G>,
+    recv_size: usize,
+    query_timeout: Duration,
+    on_success: Option<SuccessCallback<G, L>>,
+    on_error: Option<ErrorCallback<G, L>>,
+) -> anyhow::Result<()>
+where
+    L: Default + Send + Sync + 'static,
+    G: Send + Sync + 'static,
+    R: DnsResolver<G, L> + Send + Sync + 'static,
+{
+    let socket = Arc::new(UdpSocket::bind(bind_addr).await?);
+    let mut buffer = BytesMut::with_capacity(recv_size);
 
-            // TODO: we should not resize the buffer every time, but rather reuse it.
-            buffer.resize(self.recv_size, 0);
-            let (len, client) = sock.recv_from(&mut buffer[..]).await?;
-            let raw = buffer.split_to(len).freeze();
+    tracing::info!("UDP listening on {}", bind_addr);
 
-            let resolver = self.resolver.clone();
+    loop {
+        let sock = socket.clone();
 
-            let duration = self.timeout;
+        // TODO: we should not resize the buffer every time, but rather reuse it.
+        buffer.resize(recv_size, 0);
+        let (len, client) = sock.recv_from(&mut buffer[..]).await?;
+        let raw = buffer.split_to(len).freeze();
 
-            let guard = self.middlewares.load();
-            let middlewares = guard.clone();
-            let global = self.global.clone();
+        let resolver = resolver.clone();
 
-            let on_success = self.on_success.clone();
-            let on_error = self.on_error.clone();
+        let middlewares = middlewares.clone();
+        let global = global.clone();
 
-            tokio::spawn(async move {
-                let ctx = DnsRequestCtx::new(raw, global, L::default());
+        let on_success = on_success.clone();
+        let on_error = on_error.clone();
 
-                if let Ok(Some(resp)) = reso_context::run_middlewares(middlewares, &ctx).await {
+        tokio::spawn(async move {
+            let ctx = DnsRequestCtx::new(raw, global, L::default());
+
+            if let Ok(Some(resp)) = reso_context::run_middlewares(middlewares, &ctx).await {
+                let _ = sock.send_to(&resp, client).await;
+
+                if let Some(cb) = &on_success {
+                    let _ = cb(&ctx, &resp).await;
+                }
+                return;
+            }
+
+            match timeout(query_timeout, resolver.resolve(&ctx)).await {
+                Ok(Ok(resp)) => {
                     let _ = sock.send_to(&resp, client).await;
 
                     if let Some(cb) = &on_success {
                         let _ = cb(&ctx, &resp).await;
                     }
-                    return;
                 }
-
-                match timeout(duration, resolver.resolve(&ctx)).await {
-                    Ok(Ok(resp)) => {
-                        let _ = sock.send_to(&resp, client).await;
-
-                        if let Some(cb) = &on_success {
-                            let _ = cb(&ctx, &resp).await;
-                        }
-                    }
-                    Ok(Err(e)) => {
-                        if let Some(cb) = &on_error {
-                            let _ = cb(&ctx, &e).await;
-                        }
-                    }
-                    Err(err) => {
-                        if let Some(cb) = &on_error {
-                            let _ = cb(&ctx, &err.into()).await;
-                        }
+                Ok(Err(e)) => {
+                    if let Some(cb) = &on_error {
+                        let _ = cb(&ctx, &e).await;
                     }
                 }
-            });
-        }
+                Err(err) => {
+                    if let Some(cb) = &on_error {
+                        let _ = cb(&ctx, &err.into()).await;
+                    }
+                }
+            }
+        });
     }
+}
+
+/// Run the DNS server over TCP.
+#[allow(clippy::too_many_arguments)]
+async fn run_tcp<L, G, R>(
+    bind_addr: SocketAddr,
+    resolver: Arc<R>,
+    middlewares: Arc<Vec<Arc<dyn DnsMiddleware<G, L> + 'static>>>,
+    global: Arc<G>,
+    query_timeout: Duration,
+    on_success: Option<SuccessCallback<G, L>>,
+    on_error: Option<ErrorCallback<G, L>>,
+) -> anyhow::Result<()>
+where
+    L: Default + Send + Sync + 'static,
+    G: Send + Sync + 'static,
+    R: DnsResolver<G, L> + Send + Sync + 'static,
+{
+    let listener = TcpListener::bind(bind_addr).await?;
+    tracing::info!("TCP listening on {}", bind_addr);
+
+    loop {
+        let (mut stream, client) = listener.accept().await?;
+
+        let resolver = resolver.clone();
+        let middlewares = middlewares.clone();
+        let global = global.clone();
+        let on_success = on_success.clone();
+        let on_error = on_error.clone();
+
+        tokio::spawn(async move {
+            let mut len_buf = [0u8; 2];
+            if stream.read_exact(&mut len_buf).await.is_err() {
+                tracing::warn!("Failed to read length from client: {}", client);
+                return;
+            }
+
+            let buffer_length = u16::from_be_bytes(len_buf) as usize;
+            let mut buf = vec![0; buffer_length];
+            if let Err(e) = stream.read_exact(&mut buf).await {
+                tracing::warn!("Failed to read data from client {}: {}", client, e);
+                return;
+            }
+
+            let bytes = Bytes::from(buf);
+
+            let ctx = DnsRequestCtx::new(bytes, global, L::default());
+
+            if let Ok(Some(resp)) = reso_context::run_middlewares(middlewares, &ctx).await {
+                let _ = write_tcp_response(&mut stream, &resp).await;
+
+                if let Some(cb) = &on_success {
+                    let _ = cb(&ctx, &resp).await;
+                }
+                return;
+            }
+
+            match timeout(query_timeout, resolver.resolve(&ctx)).await {
+                Ok(Ok(resp)) => {
+                    let _ = write_tcp_response(&mut stream, &resp).await;
+
+                    if let Some(cb) = &on_success {
+                        let _ = cb(&ctx, &resp).await;
+                    }
+                }
+                Ok(Err(e)) => {
+                    if let Some(cb) = &on_error {
+                        let _ = cb(&ctx, &e).await;
+                    }
+                }
+                Err(err) => {
+                    if let Some(cb) = &on_error {
+                        let _ = cb(&ctx, &err.into()).await;
+                    }
+                }
+            }
+        });
+    }
+}
+
+/// Write a DNS friendly response to a TCP stream.
+async fn write_tcp_response(
+    stream: &mut tokio::net::TcpStream,
+    response: &Bytes,
+) -> anyhow::Result<()> {
+    let len = response.len() as u16;
+
+    let mut len_buf = [0u8; 2];
+    len_buf.copy_from_slice(&len.to_be_bytes());
+
+    stream.write_all(&len_buf).await?;
+    stream.write_all(response).await?;
+
+    Ok(())
 }

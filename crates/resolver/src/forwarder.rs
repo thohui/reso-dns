@@ -70,6 +70,7 @@ impl ForwardResolver {
     }
 }
 
+/// A collection of upstream DNS servers to forward requests to.
 struct Upstreams {
     upstreams: Arc<[SocketAddr]>,
     index: AtomicUsize,
