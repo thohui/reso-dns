@@ -1,10 +1,25 @@
-use std::collections::HashMap;
-
 /// Node in the trie structure, representing a blocklist entry.
 #[derive(Debug, Clone, Default)]
 struct Node {
+    wildcard: bool,
     blocked: bool,
-    children: HashMap<String, Node>,
+    children: Vec<(String, Node)>,
+}
+
+impl Node {
+    fn child_mut(&mut self, label: &str) -> &mut Node {
+        match self
+            .children
+            .binary_search_by(|(l, _)| l.as_str().cmp(label))
+        {
+            Ok(i) => &mut self.children[i].1,
+            Err(i) => {
+                self.children
+                    .insert(i, (label.to_string(), Node::default()));
+                &mut self.children[i].1
+            }
+        }
+    }
 }
 
 /// Trie implementation of a blocklist matcher.
@@ -14,49 +29,66 @@ pub struct BlocklistMatcher {
 }
 
 impl BlocklistMatcher {
+    /// Check if a given domain name is blocked.
     pub fn is_blocked(&self, name: &str) -> bool {
-        let labels = normalize_to_rev_labels(name).unwrap_or_default();
+        let labels = match normalize_to_rev_labels(name) {
+            Ok(labels) => labels,
+            Err(_) => return false,
+        };
 
         let mut node = &self.root;
-        for label in &labels {
-            if let Some(next) = node.children.get(label) {
-                if next.blocked {
-                    return true;
-                }
-                node = next;
-                continue;
+
+        for label in labels {
+            if node.wildcard {
+                return true;
             }
-            if let Some(wild) = node.children.get("*") {
-                if wild.blocked {
-                    return true;
-                }
-                node = wild;
-                continue;
+
+            match node
+                .children
+                .binary_search_by(|(l, _)| l.as_str().cmp(&label))
+            {
+                Ok(i) => node = &node.children[i].1,
+                Err(_) => return false,
             }
-            return false;
         }
+
         node.blocked
     }
 
+    /// Load blocklist patterns from an iterator of strings.
     pub fn load<'a, I>(patterns: I) -> anyhow::Result<Self>
     where
         I: IntoIterator<Item = &'a str>,
-        Self: Sized,
     {
         let mut root = Node::default();
 
-        for pattern in patterns {
-            let labels = normalize_to_rev_labels(pattern)?;
+        for pat in patterns {
+            let pat = pat.trim();
+            if pat.is_empty() {
+                continue;
+            }
+
+            let (is_wildcard, name) = if let Some(rest) = pat.strip_prefix("*.") {
+                (true, rest)
+            } else {
+                (false, pat)
+            };
+
+            let labels = normalize_to_rev_labels(name)?;
             if labels.is_empty() {
                 continue;
             }
 
             let mut node = &mut root;
-
             for label in labels {
-                node = node.children.entry(label).or_default();
+                node = node.child_mut(&label);
             }
-            node.blocked = true;
+
+            if is_wildcard {
+                node.wildcard = true;
+            } else {
+                node.blocked = true;
+            }
         }
 
         Ok(Self { root })
@@ -98,9 +130,9 @@ mod tests {
 
     #[test]
     pub fn test_blocked_patterns() {
-        let patterns: Vec<&str> = vec!["google.com".into(), "yahoo.com".into(), "*.bla.com".into()];
+        let patterns: Vec<&str> = vec!["google.com", "yahoo.com", "*.bla.com"];
         let matcher = BlocklistMatcher::load(patterns).unwrap();
-        assert!(matcher.is_blocked("google.com".into()));
+        assert!(matcher.is_blocked("google.com"));
         assert!(matcher.is_blocked("yahoo.com"));
         assert!(matcher.is_blocked("a.bla.com"));
     }
