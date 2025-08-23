@@ -1,7 +1,6 @@
 use arc_swap::ArcSwap;
 use reso_blocklist::BlocklistMatcher;
 use reso_database::DatabaseOperations;
-use tokio::sync::Mutex;
 use turso::Connection;
 
 use super::model::BlockedDomain;

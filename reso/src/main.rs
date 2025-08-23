@@ -7,7 +7,7 @@ use middleware::{blocklist::BlocklistMiddleware, cache::CacheMiddleware};
 use moka::future::FutureExt;
 use reso_cache::MessageCache;
 use reso_dns::DnsMessage;
-use tracing::Level;
+use tracing::{Level, instrument::WithSubscriber};
 
 mod blocklist;
 mod config;
@@ -21,7 +21,7 @@ async fn main() -> anyhow::Result<()> {
         .with_max_level(Level::DEBUG)
         .init();
 
-    let dns_config_path = env::var("DNS_CONFIG").unwrap_or(DEFAULT_CONFIG_PATH.to_string());
+    let dns_config_path = env::var("RESO_DNS_CONFIG").unwrap_or(DEFAULT_CONFIG_PATH.to_string());
     let config = config::decode_from_path(&dns_config_path)?;
 
     let connection = reso_database::connect(&config.database.path).await?;
