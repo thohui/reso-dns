@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwap;
-use bytes::{Bytes, BytesMut};
+use bytes::BytesMut;
 use futures::future::BoxFuture;
 use reso_context::{DnsMiddleware, DnsRequestCtx};
 use reso_resolver::DnsResolver;
@@ -10,15 +10,13 @@ use tokio::{net::UdpSocket, time::timeout};
 type SuccessCallback<G, L> = Arc<
     dyn for<'a> Fn(&'a DnsRequestCtx<G, L>, &'a bytes::Bytes) -> BoxFuture<'a, anyhow::Result<()>>
         + Send
-        + Sync
-        + 'static,
+        + Sync,
 >;
 
 type ErrorCallback<G, L> = Arc<
     dyn for<'a> Fn(&'a DnsRequestCtx<G, L>, &'a anyhow::Error) -> BoxFuture<'a, anyhow::Result<()>>
         + Send
-        + Sync
-        + 'static,
+        + Sync,
 >;
 
 /// DNS Server
@@ -82,8 +80,10 @@ impl<
         loop {
             let sock = socket.clone();
 
+            // perf: we should not resize the buffer every time, but rather reuse it.
             buffer.resize(self.recv_size, 0);
             let (len, client) = sock.recv_from(&mut buffer[..]).await?;
+            let raw = buffer.split_to(len).freeze();
 
             let resolver = self.resolver.clone();
 
@@ -95,8 +95,6 @@ impl<
 
             let on_success = self.on_success.clone();
             let on_error = self.on_error.clone();
-
-            let raw = buffer.split_to(len).freeze();
 
             tokio::spawn(async move {
                 let ctx = DnsRequestCtx::new(raw, global, L::default());
