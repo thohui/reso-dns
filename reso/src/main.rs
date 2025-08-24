@@ -1,13 +1,15 @@
 use std::{env, net::SocketAddr, sync::Arc};
 
 use blocklist::service::BlocklistService;
-use config::{DEFAULT_CONFIG_PATH, LogLevel, ResolverConfig};
+use config::{DEFAULT_CONFIG_PATH, ResolverConfig};
 use local::Local;
 use middleware::{blocklist::BlocklistMiddleware, cache::CacheMiddleware};
 use moka::future::FutureExt;
 use reso_cache::MessageCache;
 use reso_dns::DnsMessage;
-use tracing::{Level, level_filters::LevelFilter};
+use tracing::level_filters::LevelFilter;
+use tracing_appender::non_blocking;
+use tracing_subscriber::{Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 mod blocklist;
 mod config;
@@ -20,9 +22,15 @@ async fn main() -> anyhow::Result<()> {
     let dns_config_path = env::var("RESO_DNS_CONFIG").unwrap_or(DEFAULT_CONFIG_PATH.to_string());
     let config = config::decode_from_path(&dns_config_path)?;
 
-    let level_filter: LevelFilter = config.server.log_level.into();
-    tracing_subscriber::fmt()
-        .with_max_level(level_filter)
+    let (nb, _guard) = non_blocking(std::io::stdout());
+
+    tracing_subscriber::registry()
+        .with(
+            fmt::layer()
+                .with_writer(nb)
+                .with_target(false)
+                .with_filter(LevelFilter::from(config.server.log_level)),
+        )
         .init();
 
     let connection = reso_database::connect(&config.database.path).await?;
