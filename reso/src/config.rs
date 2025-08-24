@@ -81,7 +81,7 @@ pub fn decode_from_path(path: &str) -> anyhow::Result<Config> {
 }
 
 fn default_db_path() -> String {
-    "database.db".into()
+    "reso.db".into()
 }
 
 fn default_server_ip() -> String {
