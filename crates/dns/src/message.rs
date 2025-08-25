@@ -315,6 +315,18 @@ pub enum DnsResponseCode {
     Unknown(u16),
 }
 
+impl From<DnsResponseCode> for u8 {
+    fn from(value: DnsResponseCode) -> Self {
+        match value {
+            DnsResponseCode::NoError => 0,
+            DnsResponseCode::FormatError => 1,
+            DnsResponseCode::ServerFailure => 2,
+            DnsResponseCode::NxDomain => 3,
+            DnsResponseCode::Unknown(v) => (v & 0x0F) as u8, // only lower 4 bits
+        }
+    }
+}
+
 impl From<u16> for DnsResponseCode {
     fn from(value: u16) -> Self {
         match value {

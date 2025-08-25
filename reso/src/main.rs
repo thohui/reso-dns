@@ -80,6 +80,18 @@ async fn main() -> anyhow::Result<()> {
         .boxed()
     }));
 
+    server.add_error_handler(Arc::new(|ctx, err| {
+        async move {
+            tracing::error!(
+                "Error processing request: {}, error: {}",
+                ctx.message()?.id,
+                err
+            );
+            Ok(())
+        }
+        .boxed()
+    }));
+
     server.add_middleware(BlocklistMiddleware);
     server.add_middleware(CacheMiddleware);
 

@@ -4,10 +4,11 @@ use arc_swap::ArcSwap;
 use bytes::{Bytes, BytesMut};
 use futures::future::BoxFuture;
 use reso_context::{DnsMiddleware, DnsRequestCtx};
+use reso_dns::{DnsFlags, DnsMessage, DnsResponseCode, helpers};
 use reso_resolver::DnsResolver;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    net::{TcpListener, UdpSocket},
+    net::{TcpListener, TcpStream, UdpSocket},
     time::timeout,
 };
 
@@ -163,11 +164,31 @@ where
                     }
                 }
                 Ok(Err(e)) => {
+                    if let Ok(message) = ctx.message() {
+                        let res = write_udp_server_error_response(message, &sock, &client).await;
+                        if let Err(err) = res {
+                            tracing::warn!(
+                                "Failed to write error response to client {}: {}",
+                                client,
+                                err
+                            );
+                        }
+                    }
                     if let Some(cb) = &on_error {
                         let _ = cb(&ctx, &e).await;
                     }
                 }
                 Err(err) => {
+                    if let Ok(message) = ctx.message() {
+                        let res = write_udp_server_error_response(message, &sock, &client).await;
+                        if let Err(err) = res {
+                            tracing::warn!(
+                                "Failed to write error response to client {}: {}",
+                                client,
+                                err
+                            );
+                        }
+                    }
                     if let Some(cb) = &on_error {
                         let _ = cb(&ctx, &err.into()).await;
                     }
@@ -241,11 +262,31 @@ where
                     }
                 }
                 Ok(Err(e)) => {
+                    if let Ok(message) = ctx.message() {
+                        let res = write_tcp_server_error_response(message, &mut stream).await;
+                        if let Err(err) = res {
+                            tracing::warn!(
+                                "Failed to write error response to client {}: {}",
+                                client,
+                                err
+                            );
+                        }
+                    }
                     if let Some(cb) = &on_error {
                         let _ = cb(&ctx, &e).await;
                     }
                 }
                 Err(err) => {
+                    if let Ok(message) = ctx.message() {
+                        let res = write_tcp_server_error_response(message, &mut stream).await;
+                        if let Err(err) = res {
+                            tracing::warn!(
+                                "Failed to write error response to client {}: {}",
+                                client,
+                                err
+                            );
+                        }
+                    }
                     if let Some(cb) = &on_error {
                         let _ = cb(&ctx, &err.into()).await;
                     }
@@ -267,6 +308,55 @@ async fn write_tcp_response(
 
     stream.write_all(&len_buf).await?;
     stream.write_all(response).await?;
+
+    Ok(())
+}
+
+/// Write a DNS message indicating a server error over TCP.
+async fn write_tcp_server_error_response(
+    message: &DnsMessage,
+    stream: &mut TcpStream,
+) -> anyhow::Result<()> {
+    let bytes = DnsMessage::new(
+        message.id,
+        DnsFlags {
+            rcode_low: DnsResponseCode::ServerFailure.into(),
+            qr: true,
+            ..Default::default()
+        },
+        message.questions().to_vec(),
+        vec![],
+        vec![],
+        vec![],
+    )
+    .encode()?;
+
+    write_tcp_response(stream, &bytes).await?;
+
+    Ok(())
+}
+
+/// Write a DNS message indicating a server error over UDP.
+async fn write_udp_server_error_response(
+    message: &DnsMessage,
+    socket: &UdpSocket,
+    client: &SocketAddr,
+) -> anyhow::Result<()> {
+    let bytes = DnsMessage::new(
+        message.id,
+        DnsFlags {
+            rcode_low: DnsResponseCode::ServerFailure.into(),
+            qr: true,
+            ..Default::default()
+        },
+        message.questions().to_vec(),
+        vec![],
+        vec![],
+        vec![],
+    )
+    .encode()?;
+
+    socket.send_to(&bytes, client).await?;
 
     Ok(())
 }

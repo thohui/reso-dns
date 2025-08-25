@@ -1,4 +1,5 @@
 pub mod builder;
+pub mod helpers;
 pub mod message;
 pub mod reader;
 pub mod writer;

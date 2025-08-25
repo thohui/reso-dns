@@ -36,8 +36,7 @@ fn create_sinkhole_response(msg: &DnsMessage) -> DnsMessage {
     );
 
     response.flags.qr = true;
-    let response_code: u16 = DnsResponseCode::NxDomain.into();
-    response.flags.rcode_low = response_code as u8;
+    response.flags.rcode_low = DnsResponseCode::NxDomain.into();
 
     response
 }
