@@ -95,6 +95,8 @@ async fn main() -> anyhow::Result<()> {
     server.add_middleware(BlocklistMiddleware);
     server.add_middleware(CacheMiddleware);
 
+    global.blocklist.load_matcher().await?;
+
     server.run().await?;
     Ok(())
 }
