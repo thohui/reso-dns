@@ -24,13 +24,13 @@ impl ForwardResolver {
         Ok(Self {
             upstreams: Upstreams::new(
                 upstreams,
+                // TODO: make this configurable
                 Limits {
                     connect_timeout: Duration::from_secs(5),
-                    rw_timeout: Duration::from_secs(100),
-                    max_total: 100,
+                    max_total: 32,
                     max_idle: 1,
                     tcp_ttl: Duration::from_secs(30),
-                    udp_sockets: 100,
+                    udp_sockets: 8,
                 },
             )
             .await?,

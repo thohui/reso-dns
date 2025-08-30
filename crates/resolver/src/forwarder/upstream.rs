@@ -27,8 +27,6 @@ pub struct Limits {
     pub max_idle: usize,
     /// Connection timeout
     pub connect_timeout: Duration,
-    /// Read and write timeout
-    pub rw_timeout: Duration,
     /// TCP connection time-to-live
     pub tcp_ttl: Duration,
     /// Number of UDP sockets to create per upstream
