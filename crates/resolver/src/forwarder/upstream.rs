@@ -11,6 +11,7 @@ use anyhow::{Context, anyhow};
 
 use bytes::{Bytes, BytesMut};
 use crossbeam_queue::SegQueue;
+use reso_dns::helpers;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpStream, UdpSocket},
@@ -181,7 +182,9 @@ impl UdpConn {
             .await
             .context("send timeout")??;
 
-        let mut buf = vec![0u8; MAX_RECEIVE_BUFFER_SIZE];
+        let mut buf = self.buffer.lock().await;
+
+        buf.resize(512, 0); // start with 512 bytes
 
         // this loop is needed to ignore stale/foreign packets
         loop {
@@ -190,11 +193,11 @@ impl UdpConn {
                 .context("recv timeout")??;
 
             if n >= 12 {
-                let got_id = u16::from_be_bytes([buf[0], buf[1]]);
+                let got_id = helpers::extract_transaction_id(&buf[..]).unwrap_or_default();
                 let qr = (buf[2] & 0x80) != 0;
                 if qr && got_id == want_id {
                     buf.truncate(n);
-                    return Ok(Bytes::from(buf));
+                    return Ok(buf.split().freeze());
                 }
             }
         }
