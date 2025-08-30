@@ -19,10 +19,19 @@ mod middleware;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let dns_config_path = env::var("RESO_DNS_CONFIG").unwrap_or(DEFAULT_CONFIG_PATH.to_string());
-    let config = config::decode_from_path(&dns_config_path)?;
-
     let (nb, _guard) = non_blocking(std::io::stdout());
+
+    let dns_config_path = env::var("RESO_DNS_CONFIG").unwrap_or(DEFAULT_CONFIG_PATH.to_string());
+
+    let config = if let Ok(config) = config::decode_from_path(&dns_config_path) {
+        config
+    } else {
+        eprintln!(
+            "Failed to read config from {}, creating default config",
+            dns_config_path
+        );
+        config::create_default_config()?
+    };
 
     tracing_subscriber::registry()
         .with(

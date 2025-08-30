@@ -21,6 +21,11 @@ pub struct ForwardResolver {
 
 impl ForwardResolver {
     pub async fn new(upstreams: &[SocketAddr]) -> anyhow::Result<Self> {
+        if upstreams.is_empty() {
+            tracing::warn!(
+                "No upstreams configured for forward resolver, it will not be able to resolve any queries!"
+            );
+        }
         Ok(Self {
             upstreams: Upstreams::new(
                 upstreams,
