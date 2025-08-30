@@ -53,8 +53,8 @@ where
 
         let start = self.upstreams.pick_index().unwrap(); // safe: not empty
         let n = pools.len();
-        let deadline = ctx.deadline(); // single global deadline
 
+        let deadline = ctx.deadline(); // single global deadline
         let mut request_type = ctx.request_type();
 
         // try each upstream in round robin order
@@ -116,7 +116,6 @@ impl ForwardResolver {
         ctx: &DnsRequestCtx<G, L>,
         deadline: Instant,
     ) -> anyhow::Result<Bytes> {
-        // todo: add deadline to get_or_connect
         let mut conn = pool.get_or_connect(deadline).await?;
 
         let resp_bytes = conn.send_and_receive(ctx.raw(), deadline).await?;
