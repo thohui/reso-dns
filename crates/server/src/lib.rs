@@ -3,7 +3,7 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 use arc_swap::ArcSwap;
 use bytes::{Bytes, BytesMut};
 use futures::future::BoxFuture;
-use reso_context::{DnsMiddleware, DnsRequestCtx};
+use reso_context::{DnsMiddleware, DnsRequestCtx, RequestType};
 use reso_dns::{DnsFlags, DnsMessage, DnsResponseCode, helpers};
 use reso_resolver::DnsResolver;
 use tokio::{
@@ -47,7 +47,7 @@ impl<
             bind_addr,
             resolver: Arc::new(resolver),
             recv_size: 1232, // edns safe
-            timeout: Duration::from_secs(2),
+            timeout: Duration::from_secs(10),
             middlewares: ArcSwap::new(Vec::new().into()),
             global,
             on_success: None,
@@ -86,7 +86,6 @@ impl<
                 self.middlewares.load().clone(),
                 self.global.clone(),
                 self.recv_size,
-                self.timeout,
                 self.on_success.clone(),
                 self.on_error.clone(),
             ),
@@ -95,7 +94,6 @@ impl<
                 self.resolver,
                 self.middlewares.load().clone(),
                 self.global,
-                self.timeout,
                 self.on_success,
                 self.on_error
             )
@@ -113,7 +111,6 @@ async fn run_udp<L, G, R>(
     middlewares: Arc<Vec<Arc<dyn DnsMiddleware<G, L> + 'static>>>,
     global: Arc<G>,
     recv_size: usize,
-    query_timeout: Duration,
     on_success: Option<SuccessCallback<G, L>>,
     on_error: Option<ErrorCallback<G, L>>,
 ) -> anyhow::Result<()>
@@ -144,7 +141,13 @@ where
         let on_error = on_error.clone();
 
         tokio::spawn(async move {
-            let ctx = DnsRequestCtx::new(raw, global, L::default());
+            let ctx = DnsRequestCtx::new(
+                Duration::from_secs(5),
+                RequestType::UDP,
+                raw,
+                global,
+                L::default(),
+            );
 
             if let Ok(Some(resp)) = reso_context::run_middlewares(middlewares, &ctx).await {
                 let _ = sock.send_to(&resp, client).await;
@@ -155,15 +158,15 @@ where
                 return;
             }
 
-            match timeout(query_timeout, resolver.resolve(&ctx)).await {
-                Ok(Ok(resp)) => {
+            match resolver.resolve(&ctx).await {
+                Ok(resp) => {
                     let _ = sock.send_to(&resp, client).await;
 
                     if let Some(cb) = &on_success {
                         let _ = cb(&ctx, &resp).await;
                     }
                 }
-                Ok(Err(e)) => {
+                Err(e) => {
                     if let Ok(message) = ctx.message() {
                         let res = write_udp_server_error_response(message, &sock, &client).await;
                         if let Err(err) = res {
@@ -178,21 +181,6 @@ where
                         let _ = cb(&ctx, &e).await;
                     }
                 }
-                Err(err) => {
-                    if let Ok(message) = ctx.message() {
-                        let res = write_udp_server_error_response(message, &sock, &client).await;
-                        if let Err(err) = res {
-                            tracing::warn!(
-                                "Failed to write error response to client {}: {}",
-                                client,
-                                err
-                            );
-                        }
-                    }
-                    if let Some(cb) = &on_error {
-                        let _ = cb(&ctx, &err.into()).await;
-                    }
-                }
             }
         });
     }
@@ -205,7 +193,6 @@ async fn run_tcp<L, G, R>(
     resolver: Arc<R>,
     middlewares: Arc<Vec<Arc<dyn DnsMiddleware<G, L> + 'static>>>,
     global: Arc<G>,
-    query_timeout: Duration,
     on_success: Option<SuccessCallback<G, L>>,
     on_error: Option<ErrorCallback<G, L>>,
 ) -> anyhow::Result<()>
@@ -228,8 +215,8 @@ where
 
         tokio::spawn(async move {
             let mut len_buf = [0u8; 2];
-            if stream.read_exact(&mut len_buf).await.is_err() {
-                tracing::warn!("Failed to read length from client: {}", client);
+            if let Err(e) = stream.read_exact(&mut len_buf).await {
+                tracing::warn!("Failed to read length from client: {} {}", client, e);
                 return;
             }
 
@@ -242,7 +229,13 @@ where
 
             let bytes = Bytes::from(buf);
 
-            let ctx = DnsRequestCtx::new(bytes, global, L::default());
+            let ctx = DnsRequestCtx::new(
+                Duration::from_secs(5),
+                RequestType::TCP,
+                bytes,
+                global,
+                L::default(),
+            );
 
             if let Ok(Some(resp)) = reso_context::run_middlewares(middlewares, &ctx).await {
                 let _ = write_tcp_response(&mut stream, &resp).await;
@@ -253,15 +246,15 @@ where
                 return;
             }
 
-            match timeout(query_timeout, resolver.resolve(&ctx)).await {
-                Ok(Ok(resp)) => {
+            match resolver.resolve(&ctx).await {
+                Ok(resp) => {
                     let _ = write_tcp_response(&mut stream, &resp).await;
 
                     if let Some(cb) = &on_success {
                         let _ = cb(&ctx, &resp).await;
                     }
                 }
-                Ok(Err(e)) => {
+                Err(e) => {
                     if let Ok(message) = ctx.message() {
                         let res = write_tcp_server_error_response(message, &mut stream).await;
                         if let Err(err) = res {
@@ -274,21 +267,6 @@ where
                     }
                     if let Some(cb) = &on_error {
                         let _ = cb(&ctx, &e).await;
-                    }
-                }
-                Err(err) => {
-                    if let Ok(message) = ctx.message() {
-                        let res = write_tcp_server_error_response(message, &mut stream).await;
-                        if let Err(err) = res {
-                            tracing::warn!(
-                                "Failed to write error response to client {}: {}",
-                                client,
-                                err
-                            );
-                        }
-                    }
-                    if let Some(cb) = &on_error {
-                        let _ = cb(&ctx, &err.into()).await;
                     }
                 }
             }
@@ -324,7 +302,7 @@ async fn write_tcp_server_error_response(
             qr: true,
             ..Default::default()
         },
-        message.questions().to_vec(),
+        vec![],
         vec![],
         vec![],
         vec![],
@@ -349,7 +327,7 @@ async fn write_udp_server_error_response(
             qr: true,
             ..Default::default()
         },
-        message.questions().to_vec(),
+        vec![],
         vec![],
         vec![],
         vec![],

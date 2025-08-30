@@ -9,6 +9,7 @@ bitflags.workspace = true
 bytes.workspace = true
 idna.workspace = true
 tokio.workspace = true
+tracing.workspace = true
 
 [lib]
 name = "reso_dns"

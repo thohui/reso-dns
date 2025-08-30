@@ -6,7 +6,7 @@ use local::Local;
 use middleware::{blocklist::BlocklistMiddleware, cache::CacheMiddleware};
 use moka::future::FutureExt;
 use reso_cache::MessageCache;
-use reso_dns::DnsMessage;
+use reso_dns::{DnsMessage, helpers};
 use tracing::level_filters::LevelFilter;
 use tracing_appender::non_blocking;
 use tracing_subscriber::{Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
@@ -57,14 +57,13 @@ async fn main() -> anyhow::Result<()> {
         return Err(anyhow::anyhow!("Unsupported resolver configuration"));
     };
 
-    let resolver = reso_resolver::forwarder::ForwardResolver::new(upstreams).await?;
+    let resolver = reso_resolver::forwarder::ForwardResolver::new(&upstreams).await?;
     let mut server =
         reso_server::DnsServer::<_, _, Local>::new(server_addr, resolver, global.clone());
 
     server.add_success_handler(Arc::new(|ctx, resp| {
         async move {
             if !ctx.local().cache_hit {
-                tracing::debug!("Cache miss for message ID: {}", ctx.message()?.id);
                 let message = ctx.message()?;
                 let resp_msg = DnsMessage::decode(resp)?;
                 let _ = ctx
@@ -72,8 +71,6 @@ async fn main() -> anyhow::Result<()> {
                     .cache
                     .insert(message, resp.clone(), resp_msg)
                     .await;
-            } else {
-                tracing::debug!("Cache hit for message ID: {}", ctx.message()?.id);
             }
             Ok(())
         }
@@ -82,11 +79,8 @@ async fn main() -> anyhow::Result<()> {
 
     server.add_error_handler(Arc::new(|ctx, err| {
         async move {
-            tracing::error!(
-                "Error processing request: {}, error: {}",
-                ctx.message()?.id,
-                err
-            );
+            let id = helpers::extract_transaction_id(ctx.raw()).unwrap_or_default();
+            tracing::error!("Error processing request: {}, error: {}", id, err,);
             Ok(())
         }
         .boxed()

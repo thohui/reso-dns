@@ -15,7 +15,6 @@ impl DnsMiddleware<Global, Local> for BlocklistMiddleware {
 
         for question in questions {
             if ctx.global().blocklist.is_blocked(&question.qname) {
-                tracing::debug!("blocked {}", question.qname);
                 let bytes = create_sinkhole_response(message).encode()?;
                 return Ok(Some(bytes));
             }
