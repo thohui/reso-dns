@@ -167,7 +167,6 @@ impl UdpConn {
         })
     }
 
-    #[allow(clippy::await_holding_refcell_ref)]
     pub async fn send_and_receive(&self, query: &[u8], deadline: Instant) -> anyhow::Result<Bytes> {
         // check query size
         if query.len() > u16::MAX as usize {
