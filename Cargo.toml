@@ -28,3 +28,4 @@ reso-database = { path = "crates/database" }
 reso-cache = { path = "crates/cache" }
 reso-blocklist = { path = "crates/blocklist" }
 reso-context = { path = "crates/context" }
+reso-inflight = { path = "crates/inflight" }

@@ -20,6 +20,8 @@ tracing-subscriber.workspace = true
 turso.workspace = true
 reso-dns.workspace = true
 reso-context.workspace = true
+reso-cache.workspace = true
+reso-inflight.workspace = true
 crossbeam-queue = "0.3.12"
 
 [lib]

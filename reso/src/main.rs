@@ -66,7 +66,7 @@ async fn main() -> anyhow::Result<()> {
         return Err(anyhow::anyhow!("Unsupported resolver configuration"));
     };
 
-    let resolver = reso_resolver::forwarder::ForwardResolver::new(&upstreams).await?;
+    let resolver = Arc::new(reso_resolver::forwarder::ForwardResolver::new(&upstreams).await?);
     let mut server =
         reso_server::DnsServer::<_, _, Local>::new(server_addr, resolver, global.clone());
 
@@ -88,7 +88,7 @@ async fn main() -> anyhow::Result<()> {
 
     server.add_error_handler(Arc::new(|ctx, err| {
         async move {
-            let id = helpers::extract_transaction_id(ctx.raw()).unwrap_or_default();
+            let id = helpers::extract_transaction_id(&ctx.raw()).unwrap_or_default();
             tracing::error!("Error processing request: {}, error: {}", id, err,);
             Ok(())
         }

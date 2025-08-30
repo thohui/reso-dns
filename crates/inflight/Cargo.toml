@@ -1,0 +1,13 @@
+[package]
+name = "reso-inflight"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+reso-cache.workspace = true
+tokio.workspace = true
+futures.workspace = true
+tracing.workspace = true
+dashmap = "6.1.0"
+anyhow.workspace = true
+tokio-util = "0.7.16"

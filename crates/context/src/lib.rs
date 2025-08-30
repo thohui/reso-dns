@@ -68,8 +68,8 @@ impl<G, L> DnsRequestCtx<G, L> {
     }
 
     /// Raw request bytes
-    pub fn raw(&self) -> &[u8] {
-        &self.raw
+    pub fn raw(&self) -> Bytes {
+        self.raw.clone()
     }
 
     /// Global context
