@@ -111,8 +111,7 @@ impl ForwardResolver {
                 }
                 RequestType::UDP => {
                     // use a seeded slot so UDP & TCP progress similarly across upstreams
-                    let seed = start + off;
-                    match self.handle_udp(raw, &upstream.udp, seed, deadline).await {
+                    match self.handle_udp(raw, &upstream.udp, deadline).await {
                         Ok(resp) => {
                             match helpers::is_truncated(&resp) {
                                 Some(true) => {
@@ -165,11 +164,9 @@ impl ForwardResolver {
         &self,
         query: &[u8],
         pool: &UdpPool,
-        seed: usize,
         deadline: Instant,
     ) -> anyhow::Result<Bytes> {
-        pool.pick_seeded(seed)
-            .send_and_receive(query, deadline)
-            .await
+        let socket = pool.pick();
+        socket.send_and_receive(query, deadline).await
     }
 }

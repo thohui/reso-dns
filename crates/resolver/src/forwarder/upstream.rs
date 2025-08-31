@@ -93,8 +93,9 @@ const MAX_RECEIVE_BUFFER_SIZE: usize = 65_536;
 
 /// A pool of UDP connections to a specific upstream server.
 pub struct UdpPool {
-    /// Upstream address
+    /// Limits
     pub limits: Limits,
+    /// UDP sockets
     pub sockets: Vec<Arc<UdpConn>>,
     /// Round robin idx
     pub rr: AtomicUsize,
@@ -130,13 +131,17 @@ impl UdpPool {
 
     /// Pick a UDP connection in round-robin fashion.
     pub fn pick(&self) -> Arc<UdpConn> {
+        // try to find a free socket, starting from the rr index
+        // if none are free, just return the the one at the rr index
         let idx = self.pick_index();
-        Arc::clone(&self.sockets[idx])
-    }
-
-    pub fn pick_seeded(&self, seed: usize) -> Arc<UdpConn> {
         let n = self.sockets.len();
-        let idx = seed % n;
+        let idx = idx % n;
+        for i in 0..n {
+            let try_idx = (idx + i) % n;
+            if let Ok(_permit) = self.sockets[try_idx].guard.try_acquire() {
+                return Arc::clone(&self.sockets[try_idx]);
+            }
+        }
         Arc::clone(&self.sockets[idx])
     }
 }

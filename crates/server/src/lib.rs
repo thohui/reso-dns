@@ -4,12 +4,11 @@ use arc_swap::ArcSwap;
 use bytes::{Bytes, BytesMut};
 use futures::future::BoxFuture;
 use reso_context::{DnsMiddleware, DnsRequestCtx, RequestType};
-use reso_dns::{DnsFlags, DnsMessage, DnsResponseCode, helpers};
+use reso_dns::{DnsFlags, DnsMessage, DnsResponseCode};
 use reso_resolver::DnsResolver;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream, UdpSocket},
-    time::timeout,
 };
 
 type SuccessCallback<G, L> = Arc<
@@ -47,7 +46,7 @@ impl<
             bind_addr,
             resolver: Arc::new(resolver),
             recv_size: 1232, // edns safe
-            timeout: Duration::from_secs(10),
+            timeout: Duration::from_secs(5),
             middlewares: ArcSwap::new(Vec::new().into()),
             global,
             on_success: None,
@@ -86,6 +85,7 @@ impl<
                 self.middlewares.load().clone(),
                 self.global.clone(),
                 self.recv_size,
+                self.timeout,
                 self.on_success.clone(),
                 self.on_error.clone(),
             ),
@@ -94,6 +94,7 @@ impl<
                 self.resolver,
                 self.middlewares.load().clone(),
                 self.global,
+                self.timeout,
                 self.on_success,
                 self.on_error
             )
@@ -111,6 +112,7 @@ async fn run_udp<L, G, R>(
     middlewares: Arc<Vec<Arc<dyn DnsMiddleware<G, L> + 'static>>>,
     global: Arc<G>,
     recv_size: usize,
+    timeout: Duration,
     on_success: Option<SuccessCallback<G, L>>,
     on_error: Option<ErrorCallback<G, L>>,
 ) -> anyhow::Result<()>
@@ -141,13 +143,7 @@ where
         let on_error = on_error.clone();
 
         tokio::spawn(async move {
-            let ctx = DnsRequestCtx::new(
-                Duration::from_secs(5),
-                RequestType::UDP,
-                raw,
-                global,
-                L::default(),
-            );
+            let ctx = DnsRequestCtx::new(timeout, RequestType::UDP, raw, global, L::default());
 
             if let Ok(Some(resp)) = reso_context::run_middlewares(middlewares, &ctx).await {
                 let _ = sock.send_to(&resp, client).await;
@@ -193,6 +189,7 @@ async fn run_tcp<L, G, R>(
     resolver: Arc<R>,
     middlewares: Arc<Vec<Arc<dyn DnsMiddleware<G, L> + 'static>>>,
     global: Arc<G>,
+    timeout: Duration,
     on_success: Option<SuccessCallback<G, L>>,
     on_error: Option<ErrorCallback<G, L>>,
 ) -> anyhow::Result<()>
@@ -229,13 +226,7 @@ where
 
             let bytes = Bytes::from(buf);
 
-            let ctx = DnsRequestCtx::new(
-                Duration::from_secs(5),
-                RequestType::TCP,
-                bytes,
-                global,
-                L::default(),
-            );
+            let ctx = DnsRequestCtx::new(timeout, RequestType::TCP, bytes, global, L::default());
 
             if let Ok(Some(resp)) = reso_context::run_middlewares(middlewares, &ctx).await {
                 let _ = write_tcp_response(&mut stream, &resp).await;
