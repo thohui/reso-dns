@@ -5,6 +5,7 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 use base64::{Engine, engine::GeneralPurpose};
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
+use hyper::server::conn::http2;
 use hyper::{Method, Request, Response, body::Incoming, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
 use reso_context::{DnsMiddleware, DnsRequestCtx, RequestType};
@@ -20,6 +21,24 @@ type Req = Request<Incoming>;
 type Res = Response<Full<Bytes>>;
 
 pub static BASE64_ENGINE: GeneralPurpose = base64::engine::general_purpose::URL_SAFE_NO_PAD;
+
+#[derive(Clone)]
+// An Executor that uses the tokio runtime.
+pub struct TokioExecutor;
+
+// Implement the `hyper::rt::Executor` trait for `TokioExecutor` so that it can be used to spawn
+// tasks in the hyper runtime.
+// An Executor allows us to manage execution of tasks which can help us improve the efficiency and
+// scalability of the server.
+impl<F> hyper::rt::Executor<F> for TokioExecutor
+where
+    F: std::future::Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    fn execute(&self, fut: F) {
+        tokio::task::spawn(fut);
+    }
+}
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run_doh<L, G, R>(
@@ -51,7 +70,7 @@ where
         .with_single_cert(certs, key)
         .map_err(|e| error(e.to_string()))?;
 
-    server_config.alpn_protocols = vec![b"http/1.1".to_vec(), b"http/1.0".to_vec()];
+    server_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
 
     let tls_acceptor = TlsAcceptor::from(Arc::new(server_config));
 
@@ -68,6 +87,9 @@ where
                 continue;
             }
         };
+
+        // check if the negotiated protocol is http 2
+        let http2 = tls_stream.get_ref().1.alpn_protocol() == Some(b"h2");
 
         let io = TokioIo::new(tls_stream);
 
@@ -93,8 +115,19 @@ where
                 )
             });
 
-            if let Err(err) = http1::Builder::new().serve_connection(io, svc).await {
-                tracing::error!("Error serving DOH connection: {:?}", err);
+            if http2 {
+                // HTTP/2
+                if let Err(e) = http2::Builder::new(TokioExecutor)
+                    .serve_connection(io, svc)
+                    .await
+                {
+                    tracing::error!("h2 conn error: {e}");
+                }
+            } else {
+                // HTTP/1.1
+                if let Err(e) = http1::Builder::new().serve_connection(io, svc).await {
+                    tracing::error!("h1 conn error: {e}");
+                }
             }
         });
     }
@@ -126,7 +159,7 @@ where
         Method::GET => match extract_bytes_from_get(req).await {
             Ok(b) => b,
             Err(e) => {
-                tracing::error!("Failed to handle DOH GET request: {e:?}");
+                tracing::error!("failed to handle DOH GET request: {e:?}");
                 return Ok(Response::builder()
                     .status(400)
                     .body(Full::new(Bytes::new()))
