@@ -1,5 +1,6 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
+use anyhow::Context;
 use bytes::Bytes;
 use reso_context::{DnsMiddleware, DnsRequestCtx, RequestType};
 use reso_dns::{DnsFlags, DnsMessage, DnsResponseCode};
@@ -99,14 +100,9 @@ async fn write_tcp_response(
     stream: &mut tokio::net::TcpStream,
     response: &Bytes,
 ) -> anyhow::Result<()> {
-    let len = response.len() as u16;
-
-    let mut len_buf = [0u8; 2];
-    len_buf.copy_from_slice(&len.to_be_bytes());
-
-    stream.write_all(&len_buf).await?;
+    let len = u16::try_from(response.len()).context("DNS payload exceeds 65535 bytes")?;
+    stream.write_u16(len).await?;
     stream.write_all(response).await?;
-
     Ok(())
 }
 

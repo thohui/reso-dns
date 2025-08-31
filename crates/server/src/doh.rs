@@ -2,13 +2,15 @@ use std::{fs, io};
 
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
+use anyhow::Context;
 use base64::{Engine, engine::GeneralPurpose};
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 use http_body_util::{BodyExt, Full};
 use hyper::server::conn::http2;
 use hyper::{Method, Request, Response, body::Incoming, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
 use reso_context::{DnsMiddleware, DnsRequestCtx, RequestType};
+use reso_dns::{DnsFlags, DnsMessage, DnsResponseCode, helpers};
 use reso_resolver::DnsResolver;
 use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
@@ -203,6 +205,8 @@ where
         return Ok(resp);
     }
 
+    let tx_id = helpers::extract_transaction_id(&ctx.raw()).unwrap_or_default();
+
     match resolver.resolve(&ctx).await {
         Ok(b) => {
             let resp = Response::builder()
@@ -222,7 +226,7 @@ where
         Err(e) => {
             let resp = Response::builder()
                 .status(502)
-                .body(Full::new(Bytes::new()))
+                .body(Full::new(create_server_error_message(tx_id).unwrap()))
                 .unwrap();
 
             tokio::spawn(async move {
@@ -331,4 +335,29 @@ fn load_private_key(filename: &str) -> io::Result<PrivateKeyDer<'static>> {
 
 fn error(err: String) -> io::Error {
     io::Error::new(io::ErrorKind::Other, err)
+}
+
+/// Create a DNS server failure message with the given transaction ID.
+fn create_server_error_message(id: u16) -> anyhow::Result<Bytes> {
+    let payload = DnsMessage::new(
+        id,
+        DnsFlags {
+            rcode_low: DnsResponseCode::ServerFailure.into(),
+            qr: true,
+            ..Default::default()
+        },
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+    )
+    .encode()?;
+
+    let len = u16::try_from(payload.len()).context("DNS payload exceeds 65535 bytes")?;
+    let mut resp = BytesMut::with_capacity(2 + payload.len());
+
+    resp.put_u16(len);
+    resp.extend_from_slice(&payload);
+
+    Ok(resp.freeze())
 }
