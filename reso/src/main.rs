@@ -100,6 +100,9 @@ async fn main() -> anyhow::Result<()> {
 
     global.blocklist.load_matcher().await?;
 
-    server.run(config.server.doh).await?;
+    if let Err(e) = server.run(config.server.doh).await {
+        tracing::error!("Server error: {}", e);
+    }
+
     Ok(())
 }
