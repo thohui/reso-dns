@@ -2,3 +2,4 @@
 *.db
 *.db-wal
 config.toml
+*.pem

@@ -100,6 +100,6 @@ async fn main() -> anyhow::Result<()> {
 
     global.blocklist.load_matcher().await?;
 
-    server.run().await?;
+    server.run(config.server.doh).await?;
     Ok(())
 }

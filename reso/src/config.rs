@@ -1,3 +1,4 @@
+use reso_server::DohConfig;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tracing::{Level, level_filters::LevelFilter};
@@ -45,12 +46,18 @@ impl From<LogLevel> for LevelFilter {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ServerConfig {
+    /// IP address to listen on for DNS queries.
     #[serde(default = "default_server_ip")]
     pub ip: String,
+    /// Port to listen on for DNS queries.
     #[serde(default = "default_server_port")]
     pub port: u64,
+    /// Logging level for the server.
     #[serde(default = "default_log_level")]
     pub log_level: LogLevel,
+
+    /// DNS-over-HTTPS (DoH) TLS configuration.
+    pub doh: Option<DohConfig>,
 }
 
 impl Default for ServerConfig {
@@ -59,6 +66,7 @@ impl Default for ServerConfig {
             ip: default_server_ip(),
             port: default_server_port(),
             log_level: default_log_level(),
+            doh: None,
         }
     }
 }

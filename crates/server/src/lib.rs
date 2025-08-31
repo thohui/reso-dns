@@ -1,15 +1,19 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwap;
-use bytes::{Bytes, BytesMut};
-use futures::future::BoxFuture;
-use reso_context::{DnsMiddleware, DnsRequestCtx, RequestType};
-use reso_dns::{DnsFlags, DnsMessage, DnsResponseCode};
+use doh::run_doh;
+use futures::{FutureExt, future::BoxFuture};
+use reso_context::{DnsMiddleware, DnsRequestCtx};
 use reso_resolver::DnsResolver;
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::{TcpListener, TcpStream, UdpSocket},
-};
+use serde::{Deserialize, Serialize};
+use tcp::run_tcp;
+use udp::run_udp;
+
+mod doh;
+mod tcp;
+mod udp;
+
+pub use crate::udp::DohConfig;
 
 type SuccessCallback<G, L> = Arc<
     dyn for<'a> Fn(&'a DnsRequestCtx<G, L>, &'a bytes::Bytes) -> BoxFuture<'a, anyhow::Result<()>>
@@ -77,255 +81,82 @@ impl<
     }
 
     /// Run the DNS server, listening for incoming requests.
-    pub async fn run(self) -> anyhow::Result<()> {
-        tokio::try_join!(
-            run_udp(
-                self.bind_addr,
-                self.resolver.clone(),
-                self.middlewares.load().clone(),
-                self.global.clone(),
-                self.recv_size,
-                self.timeout,
-                self.on_success.clone(),
-                self.on_error.clone(),
-            ),
-            run_tcp(
+    pub async fn run(self, doh: Option<DohConfig>) -> anyhow::Result<()> {
+        let udp_future = run_udp(
+            self.bind_addr,
+            self.resolver.clone(),
+            self.middlewares.load().clone(),
+            self.global.clone(),
+            self.recv_size,
+            self.timeout,
+            self.on_success.clone(),
+            self.on_error.clone(),
+        )
+        .boxed();
+
+        let tcp_future = run_tcp(
+            self.bind_addr,
+            self.resolver.clone(),
+            self.middlewares.load().clone(),
+            self.global.clone(),
+            self.timeout,
+            self.on_success.clone(),
+            self.on_error.clone(),
+        )
+        .boxed();
+
+        let mut futures = vec![udp_future, tcp_future];
+
+        if let Some(doh) = doh {
+            let doh_future = run_doh(
+                doh,
                 self.bind_addr,
                 self.resolver,
                 self.middlewares.load().clone(),
                 self.global,
+                self.recv_size,
                 self.timeout,
                 self.on_success,
-                self.on_error
+                self.on_error,
             )
-        )?;
+            .boxed();
+            futures.push(doh_future);
+        }
+
+        futures::future::try_join_all(futures).await?;
+
+        // tokio::try_join!(
+        //     run_udp(
+        //         self.bind_addr,
+        //         self.resolver.clone(),
+        //         self.middlewares.load().clone(),
+        //         self.global.clone(),
+        //         self.recv_size,
+        //         self.timeout,
+        //         self.on_success.clone(),
+        //         self.on_error.clone(),
+        //     ),
+        //     run_tcp(
+        //         self.bind_addr,
+        //         self.resolver.clone(),
+        //         self.middlewares.load().clone(),
+        //         self.global.clone(),
+        //         self.timeout,
+        //         self.on_success.clone(),
+        //         self.on_error.clone()
+        //     ),
+        //     run_doh(
+        //         self.bind_addr,
+        //         self.resolver,
+        //         self.middlewares.load().clone(),
+        //         self.global,
+        //         self.recv_size,
+        //         self.timeout,
+        //         self.on_success,
+        //         self.on_error
+        //     )
+        // )?;
 
         Ok(())
     }
-}
-
-/// Run the DNS server over UDP.
-#[allow(clippy::too_many_arguments)]
-async fn run_udp<L, G, R>(
-    bind_addr: SocketAddr,
-    resolver: Arc<R>,
-    middlewares: Arc<Vec<Arc<dyn DnsMiddleware<G, L> + 'static>>>,
-    global: Arc<G>,
-    recv_size: usize,
-    timeout: Duration,
-    on_success: Option<SuccessCallback<G, L>>,
-    on_error: Option<ErrorCallback<G, L>>,
-) -> anyhow::Result<()>
-where
-    L: Default + Send + Sync + 'static,
-    G: Send + Sync + 'static,
-    R: DnsResolver<G, L> + Send + Sync + 'static,
-{
-    let socket = Arc::new(UdpSocket::bind(bind_addr).await?);
-    let mut buffer = BytesMut::with_capacity(recv_size);
-
-    tracing::info!("UDP listening on {}", bind_addr);
-
-    loop {
-        let sock = socket.clone();
-
-        // TODO: we should not resize the buffer every time, but rather reuse it.
-        buffer.resize(recv_size, 0);
-        let (len, client) = sock.recv_from(&mut buffer[..]).await?;
-        let raw = buffer.split_to(len).freeze();
-
-        let resolver = resolver.clone();
-
-        let middlewares = middlewares.clone();
-        let global = global.clone();
-
-        let on_success = on_success.clone();
-        let on_error = on_error.clone();
-
-        tokio::spawn(async move {
-            let ctx = DnsRequestCtx::new(timeout, RequestType::UDP, raw, global, L::default());
-
-            if let Ok(Some(resp)) = reso_context::run_middlewares(middlewares, &ctx).await {
-                let _ = sock.send_to(&resp, client).await;
-
-                if let Some(cb) = &on_success {
-                    let _ = cb(&ctx, &resp).await;
-                }
-                return;
-            }
-
-            match resolver.resolve(&ctx).await {
-                Ok(resp) => {
-                    let _ = sock.send_to(&resp, client).await;
-
-                    if let Some(cb) = &on_success {
-                        let _ = cb(&ctx, &resp).await;
-                    }
-                }
-                Err(e) => {
-                    if let Ok(message) = ctx.message() {
-                        let res = write_udp_server_error_response(message, &sock, &client).await;
-                        if let Err(err) = res {
-                            tracing::warn!(
-                                "Failed to write error response to client {}: {}",
-                                client,
-                                err
-                            );
-                        }
-                    }
-                    if let Some(cb) = &on_error {
-                        let _ = cb(&ctx, &e).await;
-                    }
-                }
-            }
-        });
-    }
-}
-
-/// Run the DNS server over TCP.
-#[allow(clippy::too_many_arguments)]
-async fn run_tcp<L, G, R>(
-    bind_addr: SocketAddr,
-    resolver: Arc<R>,
-    middlewares: Arc<Vec<Arc<dyn DnsMiddleware<G, L> + 'static>>>,
-    global: Arc<G>,
-    timeout: Duration,
-    on_success: Option<SuccessCallback<G, L>>,
-    on_error: Option<ErrorCallback<G, L>>,
-) -> anyhow::Result<()>
-where
-    L: Default + Send + Sync + 'static,
-    G: Send + Sync + 'static,
-    R: DnsResolver<G, L> + Send + Sync + 'static,
-{
-    let listener = TcpListener::bind(bind_addr).await?;
-    tracing::info!("TCP listening on {}", bind_addr);
-
-    loop {
-        let (mut stream, client) = listener.accept().await?;
-
-        let resolver = resolver.clone();
-        let middlewares = middlewares.clone();
-        let global = global.clone();
-        let on_success = on_success.clone();
-        let on_error = on_error.clone();
-
-        tokio::spawn(async move {
-            let mut len_buf = [0u8; 2];
-            if let Err(e) = stream.read_exact(&mut len_buf).await {
-                tracing::warn!("Failed to read length from client: {} {}", client, e);
-                return;
-            }
-
-            let buffer_length = u16::from_be_bytes(len_buf) as usize;
-            let mut buf = vec![0; buffer_length];
-            if let Err(e) = stream.read_exact(&mut buf).await {
-                tracing::warn!("Failed to read data from client {}: {}", client, e);
-                return;
-            }
-
-            let bytes = Bytes::from(buf);
-
-            let ctx = DnsRequestCtx::new(timeout, RequestType::TCP, bytes, global, L::default());
-
-            if let Ok(Some(resp)) = reso_context::run_middlewares(middlewares, &ctx).await {
-                let _ = write_tcp_response(&mut stream, &resp).await;
-
-                if let Some(cb) = &on_success {
-                    let _ = cb(&ctx, &resp).await;
-                }
-                return;
-            }
-
-            match resolver.resolve(&ctx).await {
-                Ok(resp) => {
-                    let _ = write_tcp_response(&mut stream, &resp).await;
-
-                    if let Some(cb) = &on_success {
-                        let _ = cb(&ctx, &resp).await;
-                    }
-                }
-                Err(e) => {
-                    if let Ok(message) = ctx.message() {
-                        let res = write_tcp_server_error_response(message, &mut stream).await;
-                        if let Err(err) = res {
-                            tracing::warn!(
-                                "Failed to write error response to client {}: {}",
-                                client,
-                                err
-                            );
-                        }
-                    }
-                    if let Some(cb) = &on_error {
-                        let _ = cb(&ctx, &e).await;
-                    }
-                }
-            }
-        });
-    }
-}
-
-/// Write a DNS friendly response to a TCP stream.
-async fn write_tcp_response(
-    stream: &mut tokio::net::TcpStream,
-    response: &Bytes,
-) -> anyhow::Result<()> {
-    let len = response.len() as u16;
-
-    let mut len_buf = [0u8; 2];
-    len_buf.copy_from_slice(&len.to_be_bytes());
-
-    stream.write_all(&len_buf).await?;
-    stream.write_all(response).await?;
-
-    Ok(())
-}
-
-/// Write a DNS message indicating a server error over TCP.
-async fn write_tcp_server_error_response(
-    message: &DnsMessage,
-    stream: &mut TcpStream,
-) -> anyhow::Result<()> {
-    let bytes = DnsMessage::new(
-        message.id,
-        DnsFlags {
-            rcode_low: DnsResponseCode::ServerFailure.into(),
-            qr: true,
-            ..Default::default()
-        },
-        vec![],
-        vec![],
-        vec![],
-        vec![],
-    )
-    .encode()?;
-
-    write_tcp_response(stream, &bytes).await?;
-
-    Ok(())
-}
-
-/// Write a DNS message indicating a server error over UDP.
-async fn write_udp_server_error_response(
-    message: &DnsMessage,
-    socket: &UdpSocket,
-    client: &SocketAddr,
-) -> anyhow::Result<()> {
-    let bytes = DnsMessage::new(
-        message.id,
-        DnsFlags {
-            rcode_low: DnsResponseCode::ServerFailure.into(),
-            qr: true,
-            ..Default::default()
-        },
-        vec![],
-        vec![],
-        vec![],
-        vec![],
-    )
-    .encode()?;
-
-    socket.send_to(&bytes, client).await?;
-
-    Ok(())
 }

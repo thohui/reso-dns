@@ -22,6 +22,16 @@ reso-context.workspace = true
 tracing-subscriber.workspace = true
 turso.workspace = true
 futures.workspace = true
+hyper = { version = "1.7.0", features = ["full"] }
+http-body-util = "0.1.3"
+hyper-util = { version = "0.1.16", features = ["full"] }
+tower = { version = "0.5.2", features = ["full"] }
+base64 = "0.22.1"
+url = "2.5.7"
+tokio-rustls = "0.26.2"
+rustls = "0.23.31"
+rustls-pemfile = "2.2.0"
+hyper-rustls = { version = "0.27.7", features = ["ring"] }
 
 [lib]
 name = "reso_server"
