@@ -51,7 +51,7 @@ impl DnsMessage {
         let mut reader = DnsMessageReader::new(data);
 
         let id = reader.read_u16()?;
-        let flags = DnsFlags::try_from(reader.read_u16()?)?;
+        let flags = DnsFlags::from(reader.read_u16()?);
 
         let number_of_questions = reader.read_u16()?; // QDCOUNT
         let number_of_answers = reader.read_u16()?; // ANCOUNT
@@ -262,10 +262,9 @@ pub struct DnsFlags {
     pub rcode_low: u8,
 }
 
-impl TryFrom<u16> for DnsFlags {
-    type Error = anyhow::Error;
-    fn try_from(bytes: u16) -> Result<Self, Self::Error> {
-        Ok(Self {
+impl From<u16> for DnsFlags {
+    fn from(bytes: u16) -> Self {
+        Self {
             qr: (bytes >> 15) & 0x1 != 0,
             opcode: DnsOpcode::from(((bytes >> 11) & 0xF) as u8),
             aa: (bytes >> 10) & 0x1 != 0,
@@ -276,7 +275,7 @@ impl TryFrom<u16> for DnsFlags {
             ad: (bytes >> 5) & 0x1 != 0,
             cd: (bytes & 0x1) != 0,
             rcode_low: (bytes & 0x0f) as u8,
-        })
+        }
     }
 }
 
