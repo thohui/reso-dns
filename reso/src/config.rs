@@ -1,6 +1,6 @@
 use reso_server::DohConfig;
 use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
+use std::{error::Error, net::SocketAddr, path::Display};
 use tracing::{Level, level_filters::LevelFilter};
 
 pub const DEFAULT_CONFIG_PATH: &str = "config.toml";
@@ -107,11 +107,38 @@ pub struct Config {
     pub resolver: ResolverConfig,
 }
 
-pub fn decode_from_path(path: &str) -> anyhow::Result<Config> {
-    let content = std::fs::read_to_string(path)?;
-    let config: Config = toml::from_str(&content)?;
+fn decode_from_path(path: &str) -> anyhow::Result<Config, ConfigError> {
+    let content = std::fs::read_to_string(path).map_err(|_| ConfigError::NotFound)?;
+    let config: Config =
+        toml::from_str(&content).map_err(|e| ConfigError::Decode(e.message().into()))?;
     Ok(config)
 }
+
+/// Load the config for the dns server.
+pub fn load_config(config_path: &str) -> anyhow::Result<Config> {
+    match decode_from_path(config_path) {
+        Ok(cfg) => Ok(cfg),
+        Err(ConfigError::NotFound) => create_default_config(),
+        Err(ConfigError::Decode(e)) => Err(ConfigError::Decode(e).into()),
+    }
+}
+
+#[derive(Debug)]
+pub enum ConfigError {
+    NotFound,
+    Decode(String),
+}
+
+impl std::fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotFound => f.write_str("config file not found"),
+            Self::Decode(e) => f.write_str(e),
+        }
+    }
+}
+
+impl Error for ConfigError {}
 
 pub fn create_default_config() -> anyhow::Result<Config> {
     let cfg = Config {

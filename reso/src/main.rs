@@ -1,7 +1,7 @@
 use std::{env, net::SocketAddr, sync::Arc};
 
 use blocklist::service::BlocklistService;
-use config::{DEFAULT_CONFIG_PATH, ResolverConfig};
+use config::{ConfigError, DEFAULT_CONFIG_PATH, ResolverConfig, load_config};
 use local::Local;
 use middleware::{blocklist::BlocklistMiddleware, cache::CacheMiddleware};
 use moka::future::FutureExt;
@@ -23,15 +23,7 @@ async fn main() -> anyhow::Result<()> {
 
     let dns_config_path = env::var("RESO_DNS_CONFIG").unwrap_or(DEFAULT_CONFIG_PATH.to_string());
 
-    let config = if let Ok(config) = config::decode_from_path(&dns_config_path) {
-        config
-    } else {
-        eprintln!(
-            "Failed to read config from {}, creating default config",
-            dns_config_path
-        );
-        config::create_default_config()?
-    };
+    let config = load_config(&dns_config_path)?;
 
     tracing_subscriber::registry()
         .with(
