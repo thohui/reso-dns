@@ -517,18 +517,15 @@ impl DnsRecordData {
             DnsRecordData::Raw(data) => writer.write_bytes(data),
             DnsRecordData::Ipv4(addr) => {
                 writer.write_u8(4)?;
-                writer.write_bytes(&addr.octets())?;
-                Ok(())
+                writer.write_bytes(&addr.octets())
             }
             DnsRecordData::Ipv6(addr) => {
                 writer.write_u8(16)?;
-                writer.write_bytes(&addr.octets())?;
-                Ok(())
+                writer.write_bytes(&addr.octets())
             }
             DnsRecordData::Text(text) => {
                 writer.write_u8(text.len() as u8)?;
-                writer.write_bytes(text.as_bytes())?;
-                Ok(())
+                writer.write_bytes(text.as_bytes())
             }
             DnsRecordData::DomainName(name) => writer.write_qname(name),
         }

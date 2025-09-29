@@ -1,7 +1,7 @@
 use std::{env, net::SocketAddr, sync::Arc};
 
 use blocklist::service::BlocklistService;
-use config::{ConfigError, DEFAULT_CONFIG_PATH, ResolverConfig, load_config};
+use config::{DEFAULT_CONFIG_PATH, ResolverConfig, load_config};
 use local::Local;
 use middleware::{blocklist::BlocklistMiddleware, cache::CacheMiddleware};
 use moka::future::FutureExt;

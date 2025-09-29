@@ -124,3 +124,9 @@ impl MessageCache {
         Ok(())
     }
 }
+
+impl Default for MessageCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}

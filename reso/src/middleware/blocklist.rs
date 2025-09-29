@@ -11,12 +11,11 @@ pub struct BlocklistMiddleware;
 impl DnsMiddleware<Global, Local> for BlocklistMiddleware {
     async fn on_query(&self, ctx: &DnsRequestCtx<Global, Local>) -> anyhow::Result<Option<Bytes>> {
         let message = ctx.message()?;
-        let questions = message.questions();
 
-        for question in questions {
+        if let Some(question) = message.questions().first() {
             if ctx.global().blocklist.is_blocked(&question.qname) {
-                let bytes = create_sinkhole_response(message).encode()?;
-                return Ok(Some(bytes));
+                let resp_bytes = create_sinkhole_response(message).encode()?;
+                return Ok(Some(resp_bytes));
             }
         }
 
