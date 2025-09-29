@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use bytes::Bytes;
 use reso_context::{DnsMiddleware, DnsRequestCtx};
-use reso_dns::{DnsMessage, DnsResponseCode};
+use reso_dns::{DnsFlags, DnsMessage, DnsMessageBuilder, DnsResponseCode};
 
 use crate::{global::Global, local::Local};
 
@@ -14,27 +14,16 @@ impl DnsMiddleware<Global, Local> for BlocklistMiddleware {
 
         if let Some(question) = message.questions().first() {
             if ctx.global().blocklist.is_blocked(&question.qname) {
-                let resp_bytes = create_sinkhole_response(message).encode()?;
+                let resp_bytes = DnsMessageBuilder::new()
+                    .with_id(message.id)
+                    .with_questions(message.questions().to_vec())
+                    .with_response(DnsResponseCode::NxDomain)
+                    .build()
+                    .encode()?;
                 return Ok(Some(resp_bytes));
             }
         }
 
         Ok(None)
     }
-}
-
-fn create_sinkhole_response(msg: &DnsMessage) -> DnsMessage {
-    let mut response = DnsMessage::new(
-        msg.id,
-        msg.flags,
-        msg.questions().to_vec(),
-        vec![],
-        vec![],
-        vec![],
-    );
-
-    response.flags.qr = true;
-    response.flags.rcode_low = DnsResponseCode::NxDomain.into();
-
-    response
 }

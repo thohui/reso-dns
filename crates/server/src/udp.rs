@@ -2,7 +2,7 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use bytes::BytesMut;
 use reso_context::{DnsMiddleware, DnsRequestCtx, RequestType};
-use reso_dns::{DnsFlags, DnsMessage, DnsResponseCode};
+use reso_dns::{DnsFlags, DnsMessage, DnsMessageBuilder, DnsResponseCode};
 use reso_resolver::DnsResolver;
 use serde::{Deserialize, Serialize};
 use tokio::net::UdpSocket;
@@ -103,19 +103,12 @@ async fn write_udp_server_error_response(
     socket: &UdpSocket,
     client: &SocketAddr,
 ) -> anyhow::Result<()> {
-    let bytes = DnsMessage::new(
-        message.id,
-        DnsFlags {
-            rcode_low: DnsResponseCode::ServerFailure.into(),
-            qr: true,
-            ..Default::default()
-        },
-        vec![],
-        vec![],
-        vec![],
-        vec![],
-    )
-    .encode()?;
+    let bytes = DnsMessageBuilder::new()
+        .with_id(message.id)
+        .with_questions(message.questions().to_vec())
+        .with_response(DnsResponseCode::ServerFailure)
+        .build()
+        .encode()?;
 
     socket.send_to(&bytes, client).await?;
 

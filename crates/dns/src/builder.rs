@@ -9,6 +9,7 @@ pub struct DnsMessageBuilder {
     answers: Vec<DnsRecord>,
     authority_records: Vec<DnsRecord>,
     additional_records: Vec<DnsRecord>,
+    response_code: Option<DnsResponseCode>,
 }
 
 impl DnsMessageBuilder {
@@ -32,12 +33,18 @@ impl DnsMessageBuilder {
             answers: Vec::new(),
             authority_records: Vec::new(),
             additional_records: Vec::new(),
+            response_code: None,
         }
     }
 
     /// Set the ID for the DNS packet.
     pub fn with_id(mut self, id: u16) -> Self {
         self.id = id;
+        self
+    }
+
+    pub fn with_questions(mut self, questions: Vec<DnsQuestion>) -> Self {
+        self.questions = questions;
         self
     }
 
@@ -72,16 +79,23 @@ impl DnsMessageBuilder {
     }
 
     pub fn with_response(mut self, response_code: DnsResponseCode) -> Self {
-        // todo: add edns support.
-        let value: u16 = response_code.into();
-        self.flags.rcode_low = (value & 0x0F) as u8;
+        self.response_code = Some(response_code);
         self
     }
 
     pub fn build(self) -> DnsMessage {
+        let flags = if let Some(rcode) = self.response_code {
+            let mut f = self.flags;
+            f.qr = true;
+            f.rcode_low = rcode.into();
+            f
+        } else {
+            self.flags
+        };
+
         DnsMessage::new(
             self.id,
-            self.flags,
+            flags,
             self.questions,
             self.answers,
             self.authority_records,

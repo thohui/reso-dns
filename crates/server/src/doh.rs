@@ -10,7 +10,7 @@ use hyper::server::conn::http2;
 use hyper::{Method, Request, Response, body::Incoming, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
 use reso_context::{DnsMiddleware, DnsRequestCtx, RequestType};
-use reso_dns::{DnsFlags, DnsMessage, DnsResponseCode, helpers};
+use reso_dns::{DnsFlags, DnsMessage, DnsMessageBuilder, DnsResponseCode, helpers};
 use reso_resolver::DnsResolver;
 use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
@@ -144,7 +144,7 @@ async fn handle_req<G, L, R>(
     middlewares: Arc<Vec<Arc<dyn DnsMiddleware<G, L> + 'static>>>,
     on_success: Option<SuccessCallback<G, L>>,
     on_error: Option<ErrorCallback<G, L>>,
-) -> hyper::Result<Res>
+) -> anyhow::Result<Res>
 where
     R: DnsResolver<G, L> + Send + Sync + 'static,
     G: Send + Sync + 'static,
@@ -153,8 +153,7 @@ where
     if req.uri().path() != "/dns-query" {
         return Ok(Response::builder()
             .status(404)
-            .body(Full::new(Bytes::new()))
-            .unwrap());
+            .body(Full::new(Bytes::new()))?);
     }
 
     let bytes = match *req.method() {
@@ -164,8 +163,7 @@ where
                 tracing::error!("failed to handle DOH GET request: {e:?}");
                 return Ok(Response::builder()
                     .status(400)
-                    .body(Full::new(Bytes::new()))
-                    .unwrap());
+                    .body(Full::new(Bytes::new()))?);
             }
         },
         Method::POST => match extract_bytes_from_post(req, max_size).await {
@@ -174,16 +172,14 @@ where
                 tracing::error!("failed to handle DOH POST request: {e:?}");
                 return Ok(Response::builder()
                     .status(400)
-                    .body(Full::new(Bytes::new()))
-                    .unwrap());
+                    .body(Full::new(Bytes::new()))?);
             }
         },
         _ => {
             tracing::error!("unsupported DOH method: {}", req.method());
             return Ok(Response::builder()
                 .status(405)
-                .body(Full::new(Bytes::new()))
-                .unwrap());
+                .body(Full::new(Bytes::new()))?);
         }
     };
 
@@ -193,8 +189,7 @@ where
         let resp = Response::builder()
             .status(200)
             .header("Content-Type", "application/dns-message")
-            .body(Full::new(bytes.clone()))
-            .unwrap();
+            .body(Full::new(bytes.clone()))?;
 
         tokio::spawn(async move {
             if let Some(on_success) = on_success {
@@ -205,15 +200,12 @@ where
         return Ok(resp);
     }
 
-    let tx_id = helpers::extract_transaction_id(&ctx.raw()).unwrap_or_default();
-
     match resolver.resolve(&ctx).await {
         Ok(b) => {
             let resp = Response::builder()
                 .status(200)
                 .header("Content-Type", "application/dns-message")
-                .body(Full::new(b.clone()))
-                .unwrap();
+                .body(Full::new(b.clone()))?;
 
             tokio::spawn(async move {
                 if let Some(on_success) = on_success {
@@ -224,11 +216,11 @@ where
             Ok(resp)
         }
         Err(e) => {
+            let message = ctx.message()?;
+            let resp_bytes = create_server_error_message(message)?;
             let resp = Response::builder()
                 .status(502)
-                .body(Full::new(create_server_error_message(tx_id).unwrap()))
-                .unwrap();
-
+                .body(Full::new(resp_bytes))?;
             tokio::spawn(async move {
                 if let Some(on_error) = on_error {
                     let _ = on_error(&ctx, &e).await;
@@ -338,20 +330,13 @@ fn error(err: String) -> io::Error {
 }
 
 /// Create a DNS server failure message with the given transaction ID.
-fn create_server_error_message(id: u16) -> anyhow::Result<Bytes> {
-    let payload = DnsMessage::new(
-        id,
-        DnsFlags {
-            rcode_low: DnsResponseCode::ServerFailure.into(),
-            qr: true,
-            ..Default::default()
-        },
-        vec![],
-        vec![],
-        vec![],
-        vec![],
-    )
-    .encode()?;
+fn create_server_error_message(message: &DnsMessage) -> anyhow::Result<Bytes> {
+    let payload = DnsMessageBuilder::new()
+        .with_id(message.id)
+        .with_questions(message.questions().to_vec())
+        .with_response(DnsResponseCode::ServerFailure)
+        .build()
+        .encode()?;
 
     let len = u16::try_from(payload.len()).context("DNS payload exceeds 65535 bytes")?;
     let mut resp = BytesMut::with_capacity(2 + payload.len());
