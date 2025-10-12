@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::{Context, anyhow};
 
-use bytes::{Bytes, BytesMut};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use crossbeam_queue::SegQueue;
 use reso_dns::helpers;
 use tokio::{
@@ -153,8 +153,6 @@ pub struct UdpConn {
     pub socket: UdpSocket,
     /// Guard to ensure only one query at a time per UDP socket
     pub guard: Arc<Semaphore>,
-    /// Reusable buffer for receiving data
-    pub buffer: Mutex<BytesMut>,
 }
 
 impl UdpConn {
@@ -167,7 +165,6 @@ impl UdpConn {
         let socket = UdpSocket::bind(bind_addr).await?;
         socket.connect(upstream_addr).await?;
         Ok(Self {
-            buffer: Mutex::new(BytesMut::with_capacity(MAX_RECEIVE_BUFFER_SIZE)),
             socket,
             guard: Arc::new(Semaphore::new(1)),
         })
@@ -183,15 +180,12 @@ impl UdpConn {
         // ensure only one query at a time
         let _permit = self.guard.clone().acquire_owned().await?;
 
-        timeout_at(deadline, self.socket.send(query))
+        tokio::time::timeout_at(deadline, self.socket.send(query))
             .await
             .context("send timeout")??;
 
-        let mut buf = self.buffer.lock().await;
+        let mut buf = BytesMut::with_capacity(MAX_RECEIVE_BUFFER_SIZE);
 
-        buf.resize(512, 0); // start with 512 bytes
-
-        // this loop is needed to ignore stale/foreign packets
         loop {
             let n = tokio::time::timeout_at(deadline, self.socket.recv(&mut buf))
                 .await

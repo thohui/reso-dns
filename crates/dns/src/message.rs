@@ -22,7 +22,6 @@ pub struct DnsMessage {
     authority_records: Vec<DnsRecord>,
     /// Additional records in the DNS message
     additional_records: Vec<DnsRecord>,
-
     /// EDNS
     edns: Option<Edns>,
 }

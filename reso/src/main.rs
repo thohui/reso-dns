@@ -1,12 +1,15 @@
-use std::{env, net::SocketAddr, sync::Arc};
+use std::{env, net::SocketAddr, rc::Rc, sync::Arc};
 
 use blocklist::service::BlocklistService;
 use config::{DEFAULT_CONFIG_PATH, ResolverConfig, load_config};
+use global::Global;
 use local::Local;
 use middleware::{blocklist::BlocklistMiddleware, cache::CacheMiddleware};
 use moka::future::FutureExt;
 use reso_cache::MessageCache;
 use reso_dns::{DnsMessage, helpers};
+use reso_resolver::forwarder::ForwardResolver;
+use reso_server::DnsServer;
 use tracing::level_filters::LevelFilter;
 use tracing_appender::non_blocking;
 use tracing_subscriber::{Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
@@ -46,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
         .parse::<SocketAddr>()
         .expect("Invalid server address format");
 
-    let global = Arc::new(global::Global::new(
+    let global = Arc::new(Global::new(
         MessageCache::new(),
         BlocklistService::new(connection),
     ));
@@ -58,9 +61,8 @@ async fn main() -> anyhow::Result<()> {
         return Err(anyhow::anyhow!("Unsupported resolver configuration"));
     };
 
-    let resolver = Arc::new(reso_resolver::forwarder::ForwardResolver::new(&upstreams).await?);
-    let mut server =
-        reso_server::DnsServer::<_, _, Local>::new(server_addr, resolver, global.clone());
+    let resolver = Arc::new(ForwardResolver::new(&upstreams).await?);
+    let mut server = DnsServer::<_, _, Local>::new(server_addr, resolver, global.clone());
 
     server.add_success_handler(Arc::new(|ctx, resp| {
         async move {

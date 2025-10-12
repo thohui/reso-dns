@@ -114,4 +114,9 @@ impl DnsMessageWriter {
     pub fn len(&self) -> usize {
         self.buf.len()
     }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }

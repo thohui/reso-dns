@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use bytes::Bytes;
 use reso_context::{DnsMiddleware, DnsRequestCtx};
-use reso_dns::{DnsFlags, DnsMessage, DnsMessageBuilder, DnsResponseCode};
+use reso_dns::{DnsMessageBuilder, DnsResponseCode};
 
 use crate::{global::Global, local::Local};
 
