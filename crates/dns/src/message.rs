@@ -271,7 +271,7 @@ impl From<u16> for DnsFlags {
             ra: (bytes >> 7) & 0x1 != 0,
             z: (bytes >> 6) & 0x1 != 0,
             ad: (bytes >> 5) & 0x1 != 0,
-            cd: (bytes & 0x1) != 0,
+            cd: (bytes >> 4) & 0x1 != 0,
             rcode_low: (bytes & 0x0f) as u8,
         }
     }
@@ -542,27 +542,16 @@ impl DnsRecordData {
                 retry,
                 expire,
                 minimum,
-            } => unimplemented!(),
-        }
-    }
-
-    #[allow(clippy::len_without_is_empty)]
-    pub fn len(&self) -> usize {
-        match self {
-            DnsRecordData::Raw(data) => data.len(),
-            DnsRecordData::Ipv4(_) => 4,  // 4 bytes for IPv4 address
-            DnsRecordData::Ipv6(_) => 16, // 16 bytes for IPv6 address
-            DnsRecordData::Text(text) => text.len() + 1, // +1 for the length byte
-            DnsRecordData::DomainName(name) => name.len() + 2, // +2 for the length byte and null terminator
-            DnsRecordData::Soa {
-                mname,
-                rname,
-                serial,
-                refresh,
-                retry,
-                expire,
-                minimum,
-            } => unimplemented!(),
+            } => {
+                writer.write_qname(mname)?;
+                writer.write_qname(rname)?;
+                writer.write_u32(*serial)?;
+                writer.write_u32(*refresh)?;
+                writer.write_u32(*retry)?;
+                writer.write_u32(*expire)?;
+                writer.write_u32(*minimum)?;
+                Ok(())
+            }
         }
     }
 
@@ -581,7 +570,7 @@ impl DnsRecordData {
                 retry,
                 expire,
                 minimum,
-            } => None,
+            } => todo!(),
         }
     }
 }
@@ -634,6 +623,15 @@ impl DnsRecord {
                 let utf_str = String::from_utf8(text.to_vec())?;
                 DnsRecordData::Text(utf_str.into())
             }
+            RecordType::SOA => DnsRecordData::Soa {
+                mname: reader.read_qname()?.into(),
+                rname: reader.read_qname()?.into(),
+                serial: reader.read_u32()?,
+                refresh: reader.read_u32()?,
+                retry: reader.read_u32()?,
+                expire: reader.read_u32()?,
+                minimum: reader.read_u32()?,
+            },
             _ => {
                 let raw_data = reader.read_bytes(data_length)?;
                 DnsRecordData::Raw(raw_data.into())
@@ -655,8 +653,20 @@ impl DnsRecord {
         writer.write_u16(self.record_type as u16)?;
         writer.write_u16(self.class as u16)?;
         writer.write_u32(self.ttl)?;
-        writer.write_u16(self.data.len() as u16)?;
+
+        let rdlen_pos = writer.position();
+
+        // Reserve rdlen so we can go back once we know the size.
+        writer.write_u16(0)?;
+
+        let before = writer.position();
         self.data.write(writer)?;
+        let after = writer.position();
+        let rdlen = (after - before) as u16;
+
+        // Write the rdlen.
+        writer.overwrite_bytes(rdlen_pos, &rdlen.to_be_bytes())?;
+
         Ok(())
     }
 

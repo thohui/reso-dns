@@ -105,6 +105,23 @@ impl DnsMessageWriter {
         Ok(())
     }
 
+    /// Overwrite bytes at a defined position.
+    pub fn overwrite_bytes(&mut self, position: usize, data: &[u8]) -> anyhow::Result<()> {
+        let end = position
+            .checked_add(data.len())
+            .ok_or_else(|| anyhow::anyhow!("overwrite overflow"))?;
+        anyhow::ensure!(
+            end <= self.buf.len(),
+            "overwrite_bytes OOB: pos={} len={} buf_len={}",
+            position,
+            data.len(),
+            self.buf.len()
+        );
+        self.buf[position..end].copy_from_slice(data);
+
+        Ok(())
+    }
+
     /// Get the underlying buffer.
     pub fn into_bytes(self) -> Bytes {
         self.buf.freeze()
@@ -118,5 +135,10 @@ impl DnsMessageWriter {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    #[inline]
+    pub fn position(&self) -> usize {
+        self.buf.len()
     }
 }
