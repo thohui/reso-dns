@@ -37,52 +37,61 @@ impl DnsMessageBuilder {
         }
     }
 
-    /// Set the ID for the DNS packet.
+    /// Set the ID for the DNS message.
     pub fn with_id(mut self, id: u16) -> Self {
         self.id = id;
         self
     }
 
+    /// Set the questions for the DNS message.
     pub fn with_questions(mut self, questions: Vec<DnsQuestion>) -> Self {
         self.questions = questions;
         self
     }
 
-    /// Set the flags for the DNS packet.
+    /// Set the flags for the DNS message.
     pub fn with_flags(mut self, flags: DnsFlags) -> Self {
         self.flags = flags;
         self
     }
 
-    /// Add a question to the DNS packet.
+    /// Add a question to the DNS message.
     pub fn add_question(mut self, question: DnsQuestion) -> Self {
         self.questions.push(question);
         self
     }
 
-    /// Add an answer to the DNS packet.
+    /// Set the answers for the DNS message.
+    pub fn with_answers(mut self, answers: Vec<DnsRecord>) -> Self {
+        self.answers = answers;
+        self
+    }
+
+    /// Add an answer to the DNS message.
     pub fn add_answer(mut self, answer: DnsRecord) -> Self {
         self.answers.push(answer);
         self
     }
 
-    /// Add an authority record to the DNS packet.
+    /// Add an authority record to the DNS message.
     pub fn add_authority_record(mut self, record: DnsRecord) -> Self {
         self.authority_records.push(record);
         self
     }
 
-    /// Add an additional record to the DNS packet.
+    /// Add an additional record to the DNS message.
     pub fn add_additional_record(mut self, record: DnsRecord) -> Self {
         self.additional_records.push(record);
         self
     }
 
+    /// Set the response for the DNS message.
     pub fn with_response(mut self, response_code: DnsResponseCode) -> Self {
         self.response_code = Some(response_code);
         self
     }
 
+    /// Build the DNS message.
     pub fn build(self) -> DnsMessage {
         let flags = if let Some(rcode) = self.response_code {
             let mut f = self.flags;

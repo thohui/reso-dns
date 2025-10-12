@@ -256,7 +256,6 @@ pub struct DnsFlags {
     pub ad: bool,
     /// Checking Disabled, indicates that the server is not performing DNSSEC validation
     pub cd: bool,
-
     // Lower part of the response code.
     pub rcode_low: u8,
 }
@@ -501,12 +500,28 @@ impl From<u16> for ClassType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DnsRecordData {
     Raw(Vec<u8>),
     Ipv4(std::net::Ipv4Addr),
     Ipv6(std::net::Ipv6Addr),
     Text(Arc<str>),
+    Soa {
+        /// Primary nameserver.
+        mname: Arc<str>,
+        /// Contact email
+        rname: Arc<str>,
+        /// Serial
+        serial: u32,
+        /// Refresh
+        refresh: u32,
+        /// Retry
+        retry: u32,
+        /// Expire
+        expire: u32,
+        /// Minimum
+        minimum: u32,
+    },
     DomainName(Arc<str>),
 }
 
@@ -514,19 +529,20 @@ impl DnsRecordData {
     pub fn write(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
         match self {
             DnsRecordData::Raw(data) => writer.write_bytes(data),
-            DnsRecordData::Ipv4(addr) => {
-                writer.write_u8(4)?;
-                writer.write_bytes(&addr.octets())
-            }
-            DnsRecordData::Ipv6(addr) => {
-                writer.write_u8(16)?;
-                writer.write_bytes(&addr.octets())
-            }
-            DnsRecordData::Text(text) => {
-                writer.write_u8(text.len() as u8)?;
-                writer.write_bytes(text.as_bytes())
-            }
+            DnsRecordData::Ipv4(addr) => writer.write_bytes(&addr.octets()),
+            DnsRecordData::Ipv6(addr) => writer.write_bytes(&addr.octets()),
+            DnsRecordData::Text(text) => writer.write_bytes(text.as_bytes()),
             DnsRecordData::DomainName(name) => writer.write_qname(name),
+
+            DnsRecordData::Soa {
+                mname,
+                rname,
+                serial,
+                refresh,
+                retry,
+                expire,
+                minimum,
+            } => unimplemented!(),
         }
     }
 
@@ -534,10 +550,19 @@ impl DnsRecordData {
     pub fn len(&self) -> usize {
         match self {
             DnsRecordData::Raw(data) => data.len(),
-            DnsRecordData::Ipv4(_) => 4 + 1, // 4 bytes for IPv4 address + 1 byte for length
-            DnsRecordData::Ipv6(_) => 16 + 1, // 16 bytes for IPv6 address + 1 byte for length
+            DnsRecordData::Ipv4(_) => 4,  // 4 bytes for IPv4 address
+            DnsRecordData::Ipv6(_) => 16, // 16 bytes for IPv6 address
             DnsRecordData::Text(text) => text.len() + 1, // +1 for the length byte
             DnsRecordData::DomainName(name) => name.len() + 2, // +2 for the length byte and null terminator
+            DnsRecordData::Soa {
+                mname,
+                rname,
+                serial,
+                refresh,
+                retry,
+                expire,
+                minimum,
+            } => unimplemented!(),
         }
     }
 
@@ -548,11 +573,20 @@ impl DnsRecordData {
             DnsRecordData::Ipv6(addr) => Some(addr.to_string()),
             DnsRecordData::Text(text) => Some(text.to_string()),
             DnsRecordData::DomainName(name) => Some(name.to_string()),
+            DnsRecordData::Soa {
+                mname,
+                rname,
+                serial,
+                refresh,
+                retry,
+                expire,
+                minimum,
+            } => None,
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DnsRecord {
     pub name: Arc<str>,
     pub record_type: RecordType,

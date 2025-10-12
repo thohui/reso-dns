@@ -1,16 +1,19 @@
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
+use itertools::Itertools;
 use moka::future::Cache;
-use reso_dns::{DnsMessage, message::EdnsOption};
+use reso_dns::{
+    DnsMessage, DnsRecord, DnsResponseCode,
+    message::{EdnsOption, RecordType},
+};
 use std::{hash::Hash, sync::Arc, time::Duration};
 use tokio::time::Instant;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct CacheKey {
     pub name: Arc<str>,
-    pub qtype: reso_dns::message::RecordType,
-    pub qclass: reso_dns::message::ClassType,
-    pub do_bit: bool, // edns bit
+    pub record_type: reso_dns::message::RecordType,
+    pub class_type: reso_dns::message::ClassType,
 }
 
 impl CacheKey {
@@ -18,13 +21,8 @@ impl CacheKey {
         if let Some(question) = message.questions().first() {
             Ok(CacheKey {
                 name: question.qname.clone(),
-                qclass: question.qclass,
-                qtype: question.qtype,
-                do_bit: message
-                    .edns()
-                    .as_ref()
-                    .map(|e| (e.z_flags & 0x8000) != 0)
-                    .unwrap_or(false),
+                class_type: question.qclass,
+                record_type: question.qtype,
             })
         } else {
             Err(anyhow!("no question in message"))
@@ -32,10 +30,19 @@ impl CacheKey {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-struct CacheEntry {
-    expires_at: Instant,
-    raw_response: DnsResponseBytes,
+#[derive(Clone, PartialEq, Debug)]
+pub struct NegativeEntry {
+    pub name: Arc<str>,
+    pub kind: DnsResponseCode,
+}
+
+/// Cached RRSet
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct RRSet {
+    pub name: Arc<str>,
+    pub record_type: RecordType,
+    pub records: Arc<[DnsRecord]>,
+    pub expires_at: Instant,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -55,7 +62,7 @@ impl DnsResponseBytes {
     }
 }
 pub struct MessageCache {
-    cache: Cache<CacheKey, CacheEntry>,
+    cache: Cache<CacheKey, RRSet>,
 }
 
 impl MessageCache {
@@ -64,11 +71,10 @@ impl MessageCache {
             cache: Cache::new(8192),
         }
     }
-    pub async fn lookup(&self, key: &CacheKey) -> Option<DnsResponseBytes> {
+    pub async fn lookup(&self, key: &CacheKey) -> Option<Arc<[DnsRecord]>> {
         if let Some(entry) = self.cache.get(key).await {
             if entry.expires_at > Instant::now() {
-                let resp = &entry.raw_response;
-                return Some(resp.clone());
+                return Some(entry.records);
             } else {
                 self.cache.remove(key).await;
             }
@@ -79,24 +85,10 @@ impl MessageCache {
     pub async fn insert(
         &self,
         query_msg: &DnsMessage,
-        resp_bytes: Bytes,
-        resp_msg: DnsMessage,
+        resp_msg: &DnsMessage,
     ) -> anyhow::Result<()> {
-        // dont cache truncated
-        if resp_msg.flags.tc {
-            return Ok(());
-        }
-
-        let ttl = resp_msg
-            .answers()
-            .iter()
-            .chain(resp_msg.authority_records())
-            .chain(resp_msg.additional_records())
-            .map(|r| r.ttl())
-            .min()
-            .unwrap_or(0);
-
-        if ttl == 0 {
+        // dont cache truncated or non responses.
+        if resp_msg.flags.tc || !resp_msg.flags.qr {
             return Ok(());
         }
 
@@ -110,17 +102,69 @@ impl MessageCache {
                     .any(|opt| matches!(opt, EdnsOption::Cookie(_)))
             })
             .unwrap_or(false);
+
         if has_cookie {
             return Ok(());
         }
 
-        let key = CacheKey::from_message(query_msg)?;
-        let entry = CacheEntry {
-            expires_at: Instant::now() + Duration::from_secs(ttl as u64),
-            raw_response: DnsResponseBytes::new(resp_bytes),
-        };
+        // TODO: negative caching.
+        // need to implement soa parsing first.
+        if resp_msg.rcode() == DnsResponseCode::NxDomain {
+            if let Some(question) = query_msg.questions().first() {
+                let key = CacheKey {
+                    name: question.qname.clone(),
+                    class_type: question.qclass,
+                    record_type: question.qtype,
+                };
+            }
+            return Ok(());
+        }
 
-        self.cache.insert(key, entry).await;
+        // Group the records by their record types.
+        let grouped_records: Vec<_> = resp_msg
+            .answers()
+            .iter()
+            .chunk_by(|r| (r.name.clone(), r.class, r.record_type))
+            .into_iter()
+            .map(|(key, group)| {
+                let records: Vec<_> = group.cloned().collect();
+                (key, records)
+            })
+            .collect();
+
+        for (key, records) in grouped_records {
+            // Skip EDNS
+            // TODO: we should probably support ENDS later on.
+            if key.2 == RecordType::OPT {
+                continue;
+            }
+
+            let ttl = records.iter().map(|r| r.ttl()).min().unwrap_or(0);
+
+            // Skip if ttl is negative
+            if ttl == 0 {
+                continue;
+            }
+
+            let cache_key = CacheKey {
+                name: key.0.clone(),
+                class_type: key.1,
+                record_type: key.2,
+            };
+
+            let expires_at = Instant::now() + Duration::from_secs(ttl.into());
+            let entry = RRSet {
+                name: key.0,
+                record_type: cache_key.record_type,
+                records: records.into(),
+                expires_at,
+            };
+
+            tracing::debug!("inserted {:?} to the cache", entry);
+
+            self.cache.insert(cache_key, entry).await;
+        }
+
         Ok(())
     }
 }

@@ -69,11 +69,7 @@ async fn main() -> anyhow::Result<()> {
             if !ctx.local().cache_hit {
                 let message = ctx.message()?;
                 let resp_msg = DnsMessage::decode(resp)?;
-                let _ = ctx
-                    .global()
-                    .cache
-                    .insert(message, resp.clone(), resp_msg)
-                    .await;
+                let _ = ctx.global().cache.insert(message, &resp_msg).await;
             }
             Ok(())
         }
