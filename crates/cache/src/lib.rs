@@ -30,13 +30,29 @@ impl CacheKey {
     }
 }
 
+/// Cache Result
 #[derive(Clone, PartialEq, Debug)]
-pub struct NegativeEntry {
-    pub name: Arc<str>,
-    pub kind: DnsResponseCode,
+pub enum CacheResult {
+    Positive(Vec<DnsRecord>),
+    Negative(NegativeEntry),
+    Miss,
 }
 
-/// Cached RRSet
+/// Negative entry
+#[derive(Clone, PartialEq, Debug)]
+pub struct NegativeEntry {
+    response_code: DnsResponseCode,
+    expires_at: Instant,
+}
+
+/// The entry stored in the cache.
+#[derive(Clone, PartialEq, Debug)]
+pub enum CacheEntry {
+    RRSet(RRSet),
+    Negative(NegativeEntry),
+}
+
+/// RRSet
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RRSet {
     pub name: Arc<str>,
@@ -62,7 +78,7 @@ impl DnsResponseBytes {
     }
 }
 pub struct MessageCache {
-    cache: Cache<CacheKey, RRSet>,
+    cache: Cache<CacheKey, CacheEntry>,
 }
 
 impl MessageCache {
@@ -71,15 +87,28 @@ impl MessageCache {
             cache: Cache::new(8192),
         }
     }
-    pub async fn lookup(&self, key: &CacheKey) -> Option<Arc<[DnsRecord]>> {
-        if let Some(entry) = self.cache.get(key).await {
-            if entry.expires_at > Instant::now() {
-                return Some(entry.records);
+    pub async fn lookup(&self, key: &CacheKey) -> CacheResult {
+        let now = Instant::now();
+        // TODO: add support for negative caching.
+        if let Some(CacheEntry::RRSet(entry)) = self.cache.get(key).await {
+            if entry.expires_at > now {
+                let remaining = entry.expires_at.saturating_duration_since(now).as_secs();
+                let updated_ttl = remaining.min(u32::MAX as u64) as u32;
+                let records_with_updated_ttl: Vec<DnsRecord> = entry
+                    .records
+                    .iter()
+                    .cloned()
+                    .map(|mut r| {
+                        r.ttl = updated_ttl;
+                        r
+                    })
+                    .collect();
+                return CacheResult::Positive(records_with_updated_ttl);
             } else {
                 self.cache.remove(key).await;
             }
         }
-        None
+        CacheResult::Miss
     }
 
     pub async fn insert(
@@ -111,11 +140,11 @@ impl MessageCache {
         // need to implement soa parsing first.
         if resp_msg.rcode() == DnsResponseCode::NxDomain {
             if let Some(question) = query_msg.questions().first() {
-                let key = CacheKey {
-                    name: question.qname.clone(),
-                    class_type: question.qclass,
-                    record_type: question.qtype,
-                };
+                // let key = CacheKey {
+                //     name: question.qname.clone(),
+                //     class_type: question.qclass,
+                //     record_type: question.qtype,
+                // };
             }
             return Ok(());
         }
@@ -162,7 +191,7 @@ impl MessageCache {
 
             tracing::debug!("inserted {:?} to the cache", entry);
 
-            self.cache.insert(cache_key, entry).await;
+            self.cache.insert(cache_key, CacheEntry::RRSet(entry)).await;
         }
 
         Ok(())

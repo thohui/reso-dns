@@ -125,38 +125,6 @@ impl<
 
         futures::future::try_join_all(futures).await?;
 
-        // tokio::try_join!(
-        //     run_udp(
-        //         self.bind_addr,
-        //         self.resolver.clone(),
-        //         self.middlewares.load().clone(),
-        //         self.global.clone(),
-        //         self.recv_size,
-        //         self.timeout,
-        //         self.on_success.clone(),
-        //         self.on_error.clone(),
-        //     ),
-        //     run_tcp(
-        //         self.bind_addr,
-        //         self.resolver.clone(),
-        //         self.middlewares.load().clone(),
-        //         self.global.clone(),
-        //         self.timeout,
-        //         self.on_success.clone(),
-        //         self.on_error.clone()
-        //     ),
-        //     run_doh(
-        //         self.bind_addr,
-        //         self.resolver,
-        //         self.middlewares.load().clone(),
-        //         self.global,
-        //         self.recv_size,
-        //         self.timeout,
-        //         self.on_success,
-        //         self.on_error
-        //     )
-        // )?;
-
         Ok(())
     }
 }
