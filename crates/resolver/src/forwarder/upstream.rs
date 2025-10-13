@@ -9,13 +9,13 @@ use std::{
 
 use anyhow::{Context, anyhow};
 
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Bytes, BytesMut};
 use crossbeam_queue::SegQueue;
 use reso_dns::helpers;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpStream, UdpSocket},
-    sync::{Mutex, OwnedSemaphorePermit, Semaphore},
+    sync::{OwnedSemaphorePermit, Semaphore},
     time::{Instant, timeout, timeout_at},
 };
 
@@ -23,9 +23,9 @@ use tokio::{
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
     /// Max total conns per upstream
-    pub max_total: usize,
+    pub max_tcp_connections: usize,
     /// Idle conns to keep per upstream
-    pub max_idle: usize,
+    pub max_idle_tcp_connections: usize,
     /// Connection timeout
     pub connect_timeout: Duration,
     /// TCP connection time-to-live
@@ -49,7 +49,7 @@ impl Upstreams {
             let tcp = TcpPool::new(addr, limits);
             tcp.clone().start_reaper(limits.tcp_ttl);
 
-            let udp = UdpPool::new(addr, limits, limits.udp_sockets).await?;
+            let udp = UdpPool::new(addr, limits.udp_sockets).await?;
 
             list.push(Arc::new(Upstream { addr, tcp, udp }));
         }
@@ -93,8 +93,6 @@ const MAX_RECEIVE_BUFFER_SIZE: usize = 65_536;
 
 /// A pool of UDP connections to a specific upstream server.
 pub struct UdpPool {
-    /// Limits
-    pub limits: Limits,
     /// UDP sockets
     pub sockets: Vec<Arc<UdpConn>>,
     /// Round robin idx
@@ -102,11 +100,7 @@ pub struct UdpPool {
 }
 
 impl UdpPool {
-    pub async fn new(
-        addr: SocketAddr,
-        limits: Limits,
-        n_sockets: usize,
-    ) -> anyhow::Result<Arc<Self>> {
+    pub async fn new(addr: SocketAddr, n_sockets: usize) -> anyhow::Result<Arc<Self>> {
         if n_sockets == 0 {
             anyhow::bail!("n_sockets must be > 0");
         }
@@ -116,7 +110,6 @@ impl UdpPool {
             sockets.push(Arc::new(s));
         }
         Ok(Self {
-            limits,
             sockets,
             rr: AtomicUsize::new(0),
         }
@@ -225,7 +218,7 @@ impl TcpPool {
             limits,
             idle: SegQueue::new(),
             idle_count: AtomicUsize::new(0),
-            connections: Arc::new(Semaphore::new(limits.max_total)),
+            connections: Arc::new(Semaphore::new(limits.max_tcp_connections)),
         })
     }
 
@@ -323,7 +316,8 @@ impl TcpPool {
 
     /// Attempt to put back a connection to the pool.
     pub fn put_back(&self, conn: TcpConn, healthy: bool) {
-        if healthy && self.idle_count.load(Ordering::Relaxed) < self.limits.max_idle {
+        if healthy && self.idle_count.load(Ordering::Relaxed) < self.limits.max_idle_tcp_connections
+        {
             self.idle.push(conn);
             self.idle_count.fetch_add(1, Ordering::Relaxed);
         }

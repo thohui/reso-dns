@@ -73,6 +73,12 @@ impl DnsMessageBuilder {
         self
     }
 
+    /// Set the authority records for the DNS message.
+    pub fn with_authority_records(mut self, records: Vec<DnsRecord>) -> Self {
+        self.authority_records = records;
+        self
+    }
+
     /// Add an authority record to the DNS message.
     pub fn add_authority_record(mut self, record: DnsRecord) -> Self {
         self.authority_records.push(record);

@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use bytes::Bytes;
-use reso_cache::{CacheKey, CacheResult};
+use reso_cache::{CacheKey, CacheResult, NegKind};
 use reso_context::{DnsMiddleware, DnsRequestCtx};
 use reso_dns::{DnsFlags, DnsMessageBuilder};
 
@@ -14,8 +14,34 @@ impl DnsMiddleware<Global, Local> for CacheMiddleware {
         let message = ctx.message()?;
         let cache_key = CacheKey::from_message(message)?;
         match ctx.global().cache.lookup(&cache_key).await {
-            CacheResult::Miss => Ok(None),
-            CacheResult::Negative(_) => Ok(None), // todo: implement
+            CacheResult::Negative(result) => {
+                tracing::debug!("negative cache hit for {:?} {:?}", cache_key, result);
+
+                let mut local = ctx.local_mut();
+                local.cache_hit = true;
+
+                // TODO: handle NODATA.
+                if result.kind == NegKind::NoData {
+                    return Ok(None);
+                }
+
+                let message = DnsMessageBuilder::new()
+                    .with_id(message.id)
+                    .with_flags(DnsFlags {
+                        qr: true,
+                        rd: message.flags.rd,
+                        cd: message.flags.cd,
+                        ..Default::default()
+                    })
+                    .with_response(reso_dns::DnsResponseCode::NxDomain)
+                    .with_questions(message.questions().to_vec())
+                    .with_authority_records(vec![result.soa_record])
+                    .build();
+
+                let bytes = message.encode()?;
+
+                Ok(Some(bytes))
+            }
             CacheResult::Positive(recs) => {
                 tracing::debug!("cache hit for {:?}", cache_key);
                 let mut local = ctx.local_mut();
@@ -35,6 +61,7 @@ impl DnsMiddleware<Global, Local> for CacheMiddleware {
                 let bytes = message.encode()?;
                 Ok(Some(bytes))
             }
+            CacheResult::Miss => Ok(None),
         }
     }
 }

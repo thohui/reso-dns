@@ -4,8 +4,8 @@ use anyhow::Context;
 
 use async_trait::async_trait;
 
-use bytes::Bytes;
-use reso_cache::{CacheKey, DnsResponseBytes};
+use bytes::{Bytes, BytesMut};
+use reso_cache::CacheKey;
 use reso_context::{DnsRequestCtx, RequestType};
 use reso_dns::helpers;
 use reso_inflight::Inflight;
@@ -37,10 +37,10 @@ impl ForwardResolver {
                     // TODO: make this configurable
                     Limits {
                         connect_timeout: Duration::from_secs(5),
-                        max_total: 32,
-                        max_idle: 1,
+                        max_tcp_connections: 100,
+                        max_idle_tcp_connections: 100,
                         tcp_ttl: Duration::from_secs(30),
-                        udp_sockets: 8,
+                        udp_sockets: 100,
                     },
                 )
                 .await?,
@@ -168,5 +168,22 @@ impl ForwardResolver {
     ) -> anyhow::Result<Bytes> {
         let socket = pool.pick();
         socket.send_and_receive(query, deadline).await
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+struct DnsResponseBytes(Bytes);
+
+impl DnsResponseBytes {
+    pub fn new(bytes: Bytes) -> Self {
+        Self(bytes)
+    }
+
+    pub fn into_custom_response(self, transaction_id: u16) -> Bytes {
+        let mut bytes = BytesMut::from(&self.0[0..]);
+        // overwrite the transaction id.
+        bytes[0] = (transaction_id >> 8) as u8;
+        bytes[1] = (transaction_id & 0xFF) as u8;
+        bytes.freeze()
     }
 }

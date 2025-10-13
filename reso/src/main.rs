@@ -6,7 +6,7 @@ use global::Global;
 use local::Local;
 use middleware::{blocklist::BlocklistMiddleware, cache::CacheMiddleware};
 use moka::future::FutureExt;
-use reso_cache::MessageCache;
+use reso_cache::DnsMessageCache;
 use reso_dns::{DnsMessage, helpers};
 use reso_resolver::forwarder::ForwardResolver;
 use reso_server::DnsServer;
@@ -50,7 +50,7 @@ async fn main() -> anyhow::Result<()> {
         .expect("Invalid server address format");
 
     let global = Arc::new(Global::new(
-        MessageCache::new(),
+        DnsMessageCache::new(),
         BlocklistService::new(connection),
     ));
 
