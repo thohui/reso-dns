@@ -213,7 +213,7 @@ impl DnsMessageCache {
             };
 
             let minimum = match soa_record.data {
-                DnsRecordData::Soa { minimum, .. } => minimum,
+                DnsRecordData::SOA { minimum, .. } => minimum,
                 _ => return,
             };
 

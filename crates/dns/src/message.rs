@@ -506,7 +506,8 @@ pub enum DnsRecordData {
     Ipv4(std::net::Ipv4Addr),
     Ipv6(std::net::Ipv6Addr),
     Text(Arc<str>),
-    Soa {
+
+    SOA {
         /// Primary nameserver.
         mname: Arc<str>,
         /// Contact email
@@ -522,6 +523,16 @@ pub enum DnsRecordData {
         /// Minimum
         minimum: u32,
     },
+    MX {
+        priority: u16,
+        host: Arc<str>,
+    },
+    SRV {
+        priority: u16,
+        weight: u16,
+        port: u16,
+        target: Arc<str>,
+    },
     DomainName(Arc<str>),
 }
 
@@ -534,7 +545,7 @@ impl DnsRecordData {
             DnsRecordData::Text(text) => writer.write_bytes(text.as_bytes()),
             DnsRecordData::DomainName(name) => writer.write_qname(name),
 
-            DnsRecordData::Soa {
+            DnsRecordData::SOA {
                 mname,
                 rname,
                 serial,
@@ -552,6 +563,23 @@ impl DnsRecordData {
                 writer.write_u32(*minimum)?;
                 Ok(())
             }
+            DnsRecordData::MX { priority, host } => {
+                writer.write_u16(*priority)?;
+                writer.write_qname(host)?;
+                Ok(())
+            }
+            DnsRecordData::SRV {
+                priority,
+                weight,
+                port,
+                target,
+            } => {
+                writer.write_u16(*priority)?;
+                writer.write_u16(*weight)?;
+                writer.write_u16(*port)?;
+                writer.write_qname(&target)?;
+                Ok(())
+            }
         }
     }
 
@@ -562,15 +590,9 @@ impl DnsRecordData {
             DnsRecordData::Ipv6(addr) => Some(addr.to_string()),
             DnsRecordData::Text(text) => Some(text.to_string()),
             DnsRecordData::DomainName(name) => Some(name.to_string()),
-            DnsRecordData::Soa {
-                mname,
-                rname,
-                serial,
-                refresh,
-                retry,
-                expire,
-                minimum,
-            } => todo!(),
+            DnsRecordData::SOA { .. } => None,
+            DnsRecordData::MX { .. } => None,
+            DnsRecordData::SRV { .. } => None,
         }
     }
 }
@@ -623,7 +645,7 @@ impl DnsRecord {
                 let utf_str = String::from_utf8(text.to_vec())?;
                 DnsRecordData::Text(utf_str.into())
             }
-            RecordType::SOA => DnsRecordData::Soa {
+            RecordType::SOA => DnsRecordData::SOA {
                 mname: reader.read_qname()?.into(),
                 rname: reader.read_qname()?.into(),
                 serial: reader.read_u32()?,
@@ -631,6 +653,16 @@ impl DnsRecord {
                 retry: reader.read_u32()?,
                 expire: reader.read_u32()?,
                 minimum: reader.read_u32()?,
+            },
+            RecordType::MX => DnsRecordData::MX {
+                priority: reader.read_u16()?,
+                host: reader.read_qname()?.into(),
+            },
+            RecordType::SRV => DnsRecordData::SRV {
+                priority: reader.read_u16()?,
+                weight: reader.read_u16()?,
+                port: reader.read_u16()?,
+                target: reader.read_qname()?.into(),
             },
             _ => {
                 let raw_data = reader.read_bytes(data_length)?;
