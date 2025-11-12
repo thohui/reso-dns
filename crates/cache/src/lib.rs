@@ -22,6 +22,7 @@ pub struct CacheKey {
     pub class_type: ClassType,
 }
 
+/// Cache key for negative entries.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 enum NegativeCacheKey {
     /// NoData cache key.
@@ -217,7 +218,7 @@ impl DnsMessageCache {
         // https://datatracker.ietf.org/doc/html/rfc2308
         if resp_msg.flags.aa {
             match resp_msg.rcode() {
-                DnsResponseCode::NoError => {
+                Ok(DnsResponseCode::NoError) => {
                     // Check for nodata
                     let is_no_data = resp_msg.answers().is_empty()
                         && resp_msg
@@ -275,7 +276,7 @@ impl DnsMessageCache {
                         self.negative_cache.insert(key, negative_entry).await;
                     }
                 }
-                DnsResponseCode::NxDomain => {
+                Ok(DnsResponseCode::NxDomain) => {
                     let Some(soa_record) = resp_msg
                         .authority_records()
                         .iter()

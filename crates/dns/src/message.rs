@@ -50,7 +50,7 @@ impl DnsMessage {
         let mut reader = DnsMessageReader::new(data);
 
         let id = reader.read_u16()?;
-        let flags = DnsFlags::from(reader.read_u16()?);
+        let flags = DnsFlags::try_from(reader.read_u16()?)?;
 
         let number_of_questions = reader.read_u16()?; // QDCOUNT
         let number_of_answers = reader.read_u16()?; // ANCOUNT
@@ -229,10 +229,10 @@ impl DnsMessage {
         &self.edns
     }
 
-    pub fn rcode(&self) -> DnsResponseCode {
+    pub fn rcode(&self) -> anyhow::Result<DnsResponseCode> {
         let low = self.flags.rcode_low as u16;
         let high = self.edns.as_ref().map(|e| e.extended_rcode).unwrap_or(0) as u16;
-        DnsResponseCode::from((high << 4) | low)
+        DnsResponseCode::try_from((high << 4) | low)
     }
 }
 
@@ -260,11 +260,13 @@ pub struct DnsFlags {
     pub rcode_low: u8,
 }
 
-impl From<u16> for DnsFlags {
-    fn from(bytes: u16) -> Self {
-        Self {
+impl TryFrom<u16> for DnsFlags {
+    type Error = anyhow::Error;
+
+    fn try_from(bytes: u16) -> Result<Self, Self::Error> {
+        Ok(Self {
             qr: (bytes >> 15) & 0x1 != 0,
-            opcode: DnsOpcode::from(((bytes >> 11) & 0xF) as u8),
+            opcode: DnsOpcode::try_from(((bytes >> 11) & 0xF) as u8)?,
             aa: (bytes >> 10) & 0x1 != 0,
             tc: (bytes >> 9) & 0x1 != 0,
             rd: (bytes >> 8) & 0x1 != 0,
@@ -273,7 +275,7 @@ impl From<u16> for DnsFlags {
             ad: (bytes >> 5) & 0x1 != 0,
             cd: (bytes >> 4) & 0x1 != 0,
             rcode_low: (bytes & 0x0f) as u8,
-        }
+        })
     }
 }
 
@@ -308,8 +310,6 @@ pub enum DnsResponseCode {
     ServerFailure = 2,
     /// Non-existent domain, the requested domain does not exist
     NxDomain = 3,
-    /// Unknown
-    Unknown(u16),
 }
 
 impl From<DnsResponseCode> for u8 {
@@ -319,19 +319,20 @@ impl From<DnsResponseCode> for u8 {
             DnsResponseCode::FormatError => 1,
             DnsResponseCode::ServerFailure => 2,
             DnsResponseCode::NxDomain => 3,
-            DnsResponseCode::Unknown(v) => (v & 0x0F) as u8, // only lower 4 bits
         }
     }
 }
 
-impl From<u16> for DnsResponseCode {
-    fn from(value: u16) -> Self {
+impl TryFrom<u16> for DnsResponseCode {
+    type Error = anyhow::Error;
+
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
         match value {
-            0 => DnsResponseCode::NoError,
-            1 => DnsResponseCode::FormatError,
-            2 => DnsResponseCode::ServerFailure,
-            3 => DnsResponseCode::NxDomain,
-            v => DnsResponseCode::Unknown(v),
+            0 => Ok(DnsResponseCode::NoError),
+            1 => Ok(DnsResponseCode::FormatError),
+            2 => Ok(DnsResponseCode::ServerFailure),
+            3 => Ok(DnsResponseCode::NxDomain),
+            _ => anyhow::bail!("unsupported dns response code {}", value),
         }
     }
 }
@@ -343,7 +344,6 @@ impl From<DnsResponseCode> for u16 {
             DnsResponseCode::FormatError => 1,
             DnsResponseCode::ServerFailure => 2,
             DnsResponseCode::NxDomain => 3,
-            DnsResponseCode::Unknown(v) => v,
         }
     }
 }
@@ -358,17 +358,17 @@ pub enum DnsOpcode {
     IQuery = 1,
     /// Server status request, obsolete
     Status = 2,
-    /// Unknown
-    Unknown(u8),
 }
 
-impl From<u8> for DnsOpcode {
-    fn from(value: u8) -> Self {
+impl TryFrom<u8> for DnsOpcode {
+    type Error = anyhow::Error;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0 => DnsOpcode::Query,
-            1 => DnsOpcode::IQuery,
-            2 => DnsOpcode::Status,
-            v => DnsOpcode::Unknown(v),
+            0 => Ok(DnsOpcode::Query),
+            1 => Ok(DnsOpcode::IQuery),
+            2 => Ok(DnsOpcode::Status),
+            _ => anyhow::bail!("unsupported opcode {}", value),
         }
     }
 }
@@ -379,7 +379,6 @@ impl From<DnsOpcode> for u8 {
             DnsOpcode::Query => 0,
             DnsOpcode::IQuery => 1,
             DnsOpcode::Status => 2,
-            DnsOpcode::Unknown(v) => v,
         }
     }
 }
