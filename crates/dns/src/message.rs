@@ -577,7 +577,7 @@ impl DnsRecordData {
                 writer.write_u16(*priority)?;
                 writer.write_u16(*weight)?;
                 writer.write_u16(*port)?;
-                writer.write_qname(&target)?;
+                writer.write_qname(target)?;
                 Ok(())
             }
         }

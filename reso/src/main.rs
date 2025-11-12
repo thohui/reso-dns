@@ -50,7 +50,7 @@ async fn main() -> anyhow::Result<()> {
         .expect("Invalid server address format");
 
     let global = Arc::new(Global::new(
-        DnsMessageCache::new(),
+        DnsMessageCache::new(50_000),
         BlocklistService::new(connection),
     ));
 

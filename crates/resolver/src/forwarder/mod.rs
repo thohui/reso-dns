@@ -58,7 +58,7 @@ where
     async fn resolve(&self, ctx: &DnsRequestCtx<G, L>) -> anyhow::Result<Bytes> {
         let qmsg = ctx.message()?;
         let cache_key =
-            CacheKey::from_message(qmsg).context("failed to create cache key from message")?;
+            CacheKey::try_from(qmsg).context("failed to create cache key from message")?;
 
         let raw = ctx.raw();
         let req_type = ctx.request_type();

@@ -8,9 +8,13 @@ use reso_dns::{
     DnsMessage, DnsRecord, DnsResponseCode,
     message::{ClassType, DnsRecordData, RecordType},
 };
-use std::{hash::Hash, sync::Arc};
-use tokio::{time::Duration, time::Instant};
+use std::{
+    hash::Hash,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
+/// Cache key for positive entries.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct CacheKey {
     pub name: Arc<str>,
@@ -19,38 +23,39 @@ pub struct CacheKey {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-struct NegativeCacheKey {
-    pub record_type: RecordType,
-    pub class_type: ClassType,
+enum NegativeCacheKey {
+    /// NoData cache key.
+    NoData {
+        name: Arc<str>,
+        qtype: RecordType,
+        class_type: ClassType,
+    },
+    /// NxDomain cache key.
+    NxDomain {
+        qname: Arc<str>,
+        class_type: ClassType,
+    },
 }
 
-impl CacheKey {
-    /// Construct a `CacheKey` from a `DnsMessage`
-    pub fn from_message(message: &reso_dns::message::DnsMessage) -> anyhow::Result<Self> {
-        if let Some(question) = message.questions().first() {
-            Ok(CacheKey {
-                name: question.qname.clone(),
-                class_type: question.qclass,
-                record_type: question.qtype,
+impl TryFrom<&reso_dns::message::DnsMessage> for CacheKey {
+    type Error = anyhow::Error;
+    fn try_from(message: &reso_dns::message::DnsMessage) -> Result<Self, Self::Error> {
+        message
+            .questions()
+            .first()
+            .map(|q| CacheKey {
+                name: q.qname.clone(),
+                class_type: q.qclass,
+                record_type: q.qtype,
             })
-        } else {
-            Err(anyhow!("no question in message"))
-        }
-    }
-
-    /// Convert a `CacheKey` into a `NegativeCacheKey`.
-    fn to_negative_cache_key(&self) -> NegativeCacheKey {
-        NegativeCacheKey {
-            class_type: self.class_type,
-            record_type: self.record_type,
-        }
+            .ok_or_else(|| anyhow!("no question in message"))
     }
 }
 
 /// Cache Result
 #[derive(Clone, PartialEq, Debug)]
 pub enum CacheResult {
-    Positive(Vec<DnsRecord>),
+    Positive(Arc<[DnsRecord]>),
     Negative(NegativeResult),
     Miss,
 }
@@ -98,14 +103,18 @@ pub struct DnsMessageCache {
 
 impl Default for DnsMessageCache {
     fn default() -> Self {
-        Self::new()
+        Self::new(50_000)
     }
 }
 
 impl DnsMessageCache {
-    pub fn new() -> Self {
+    /// Create a new `DnsMessageCache`
+    pub fn new(max_entries: u64) -> Self {
         Self {
-            cache: CacheBuilder::new(8192).expire_after(CacheExpiry).build(),
+            cache: CacheBuilder::new(max_entries)
+                .initial_capacity(max_entries as usize)
+                .expire_after(CacheExpiry)
+                .build(),
             negative_cache: CacheBuilder::new(8192).expire_after(CacheExpiry).build(),
         }
     }
@@ -113,14 +122,11 @@ impl DnsMessageCache {
     pub async fn lookup(&self, key: &CacheKey) -> CacheResult {
         let now = Instant::now();
 
-        if let Some(res) = self
-            .handle_negative_entry(now, &key.to_negative_cache_key())
-            .await
-        {
+        if let Some(res) = self.handle_entry(now, key).await {
             return res;
         }
 
-        if let Some(res) = self.handle_entry(now, key).await {
+        if let Some(res) = self.handle_negative_entry(now, key).await {
             return res;
         }
 
@@ -128,20 +134,33 @@ impl DnsMessageCache {
     }
 
     /// Handle negative entry
-    async fn handle_negative_entry(
-        &self,
-        now: Instant,
-        key: &NegativeCacheKey,
-    ) -> Option<CacheResult> {
-        let entry = match self.negative_cache.get(key).await {
-            None => return None,
-            Some(entry) => entry,
+    async fn handle_negative_entry(&self, now: Instant, key: &CacheKey) -> Option<CacheResult> {
+        let nxdomain_key = NegativeCacheKey::NxDomain {
+            qname: key.name.clone(),
+            class_type: key.class_type,
+        };
+        let no_data_key = NegativeCacheKey::NoData {
+            name: key.name.clone(),
+            qtype: key.record_type,
+            class_type: key.class_type,
         };
 
-        let soa_rr = match self.cache.get(&entry.soa_cache_key).await {
-            Some(entry) => entry,
-            _ => return Some(CacheResult::Miss),
+        // QTYPE=ANY cannot have nodata, only NXDOMAIN (or positive).
+        let entry = if key.record_type == RecordType::ANY {
+            self.negative_cache.get(&nxdomain_key).await?
+        } else {
+            let (nx, nd) = tokio::join!(
+                self.negative_cache.get(&nxdomain_key),
+                self.negative_cache.get(&no_data_key),
+            );
+            match (nx, nd) {
+                (Some(e), _) => e,
+                (None, Some(e)) => e,
+                (None, None) => return None,
+            }
         };
+
+        let soa_rr = self.cache.get(&entry.soa_cache_key).await?;
 
         let mut soa_record = match soa_rr.records.first() {
             Some(record) => {
@@ -167,13 +186,12 @@ impl DnsMessageCache {
 
     /// Handle Entry.
     async fn handle_entry(&self, now: Instant, key: &CacheKey) -> Option<CacheResult> {
-        let entry = match self.cache.get(key).await {
-            None => return None,
-            Some(entry) => entry,
-        };
+        let entry = self.cache.get(key).await?;
 
         let remaining = entry.expires_at.saturating_duration_since(now).as_secs();
         let updated_ttl = remaining.min(u32::MAX as u64) as u32;
+
+        // TODO: can we avoid the clone and just return a tuple of records and ttl?
 
         // Mutate the records with their upated ttl.
         let records_with_updated_ttl: Vec<DnsRecord> = entry
@@ -186,7 +204,7 @@ impl DnsMessageCache {
             })
             .collect();
 
-        Some(CacheResult::Positive(records_with_updated_ttl))
+        Some(CacheResult::Positive(records_with_updated_ttl.into()))
     }
 
     pub async fn insert(&self, query_msg: &DnsMessage, resp_msg: &DnsMessage) {
@@ -197,61 +215,119 @@ impl DnsMessageCache {
 
         // Handle negative caching.
         // https://datatracker.ietf.org/doc/html/rfc2308
-        if resp_msg.rcode() == DnsResponseCode::NxDomain {
-            let soa_record = match resp_msg
-                .authority_records()
-                .iter()
-                .find(|rec| rec.record_type == RecordType::SOA)
-            {
-                Some(rec) => rec,
-                None => return,
-            };
+        if resp_msg.flags.aa {
+            match resp_msg.rcode() {
+                DnsResponseCode::NoError => {
+                    // Check for nodata
+                    let is_no_data = resp_msg.answers().is_empty()
+                        && resp_msg
+                            .authority_records()
+                            .iter()
+                            .any(|r| r.record_type == RecordType::SOA);
 
-            let question = match query_msg.questions().first() {
-                Some(q) => q,
-                None => return,
-            };
+                    if is_no_data {
+                        let soa_record = match resp_msg
+                            .authority_records()
+                            .iter()
+                            .find(|r| r.record_type == RecordType::SOA)
+                        {
+                            Some(r) => r,
+                            None => return,
+                        };
 
-            let minimum = match soa_record.data {
-                DnsRecordData::SOA { minimum, .. } => minimum,
-                _ => return,
-            };
+                        let Some(question) = query_msg.questions().first() else {
+                            return;
+                        };
 
-            let soa_cache_key = CacheKey {
-                class_type: ClassType::IN,
-                name: soa_record.name.clone(),
-                record_type: soa_record.record_type,
-            };
+                        let DnsRecordData::SOA { minimum, .. } = soa_record.data else {
+                            return;
+                        };
 
-            let soa_rr_expires_at = Instant::now() + Duration::from_secs(soa_record.ttl as u64);
+                        let soa_cache_key = CacheKey {
+                            class_type: soa_record.class,
+                            name: soa_record.name.clone(),
+                            record_type: RecordType::SOA,
+                        };
+                        let soa_rr_expires_at =
+                            Instant::now() + Duration::from_secs(soa_record.ttl as u64);
+                        let soa_rr = CacheEntry {
+                            name: soa_record.name.clone(),
+                            expires_at: soa_rr_expires_at,
+                            record_type: RecordType::SOA,
+                            records: Arc::from([soa_record.clone()]),
+                        };
+                        self.cache.insert(soa_cache_key.clone(), soa_rr).await;
 
-            let soa_rr = CacheEntry {
-                name: soa_record.name.clone(),
-                expires_at: soa_rr_expires_at,
-                record_type: RecordType::SOA,
-                records: Arc::from([soa_record.clone()]),
-            };
+                        let ttl = minimum.min(soa_record.ttl) as u64;
 
-            self.cache.insert(soa_cache_key.clone(), soa_rr).await;
+                        let negative_entry = NegativeEntry {
+                            kind: NegKind::NoData,
+                            expires_at: Instant::now() + Duration::from_secs(ttl),
+                            soa_cache_key,
+                            soa_record_expires_at: soa_rr_expires_at,
+                        };
 
-            let key = CacheKey {
-                name: question.qname.clone(),
-                class_type: question.qclass,
-                record_type: question.qtype,
-            };
+                        let key = NegativeCacheKey::NoData {
+                            name: question.qname.clone(),
+                            qtype: question.qtype,
+                            class_type: question.qclass,
+                        };
+                        self.negative_cache.insert(key, negative_entry).await;
+                    }
+                }
+                DnsResponseCode::NxDomain => {
+                    let Some(soa_record) = resp_msg
+                        .authority_records()
+                        .iter()
+                        .find(|rec| rec.record_type == RecordType::SOA)
+                    else {
+                        return;
+                    };
 
-            let ttl = minimum.min(soa_record.ttl);
+                    let Some(question) = query_msg.questions().first() else {
+                        return;
+                    };
 
-            let negative_entry = NegativeEntry {
-                kind: NegKind::NxDomain,
-                expires_at: Instant::now() + Duration::from_secs(ttl as u64),
-                soa_cache_key,
-                soa_record_expires_at: soa_rr_expires_at,
-            };
+                    let DnsRecordData::SOA { minimum, .. } = soa_record.data else {
+                        return;
+                    };
 
-            self.negative_cache
-                .insert(key.to_negative_cache_key(), negative_entry)
-                .await;
+                    let soa_cache_key = CacheKey {
+                        class_type: soa_record.class,
+                        name: soa_record.name.clone(),
+                        record_type: soa_record.record_type,
+                    };
+
+                    let soa_rr_expires_at =
+                        Instant::now() + Duration::from_secs(soa_record.ttl as u64);
+
+                    let soa_rr = CacheEntry {
+                        name: soa_record.name.clone(),
+                        expires_at: soa_rr_expires_at,
+                        record_type: RecordType::SOA,
+                        records: Arc::from([soa_record.clone()]),
+                    };
+
+                    self.cache.insert(soa_cache_key.clone(), soa_rr).await;
+
+                    let key = NegativeCacheKey::NxDomain {
+                        qname: question.qname.clone(),
+                        class_type: question.qclass,
+                    };
+
+                    let ttl = minimum.min(soa_record.ttl);
+
+                    let negative_entry = NegativeEntry {
+                        kind: NegKind::NxDomain,
+                        expires_at: Instant::now() + Duration::from_secs(ttl as u64),
+                        soa_cache_key,
+                        soa_record_expires_at: soa_rr_expires_at,
+                    };
+
+                    self.negative_cache.insert(key, negative_entry).await;
+                }
+                _ => {}
+            }
         }
 
         // Group the records by their record types.
@@ -269,7 +345,8 @@ impl DnsMessageCache {
         for (key, records) in grouped_records {
             // Skip EDNS
             // TODO: we should probably support ENDS later on.
-            if key.2 == RecordType::OPT {
+
+            if matches!(key.2, RecordType::OPT) {
                 continue;
             }
 
@@ -294,7 +371,6 @@ impl DnsMessageCache {
                 expires_at,
             };
 
-            tracing::debug!("inserted {:?} to the cache", entry);
             self.cache.insert(cache_key, entry).await;
         }
     }
