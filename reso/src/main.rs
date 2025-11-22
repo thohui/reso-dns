@@ -10,6 +10,7 @@ use reso_cache::DnsMessageCache;
 use reso_dns::{DnsMessage, helpers};
 use reso_resolver::forwarder::ForwardResolver;
 use reso_server::DnsServer;
+use tokio::signal;
 use tracing::level_filters::LevelFilter;
 use tracing_appender::non_blocking;
 use tracing_subscriber::{Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
@@ -40,10 +41,8 @@ async fn main() -> anyhow::Result<()> {
     let connection = reso_database::connect(&config.database.path).await?;
 
     // ideally, we should setup a migration system for this
-    let init_file = concat!("init.sql");
-    let sql = std::fs::read_to_string(init_file)
-        .map_err(|e| anyhow::anyhow!("Failed to read init file: {}", e))?;
-    connection.execute(sql.as_str(), ()).await?;
+    let sql = include_str!("init.sql");
+    connection.execute(sql, ()).await?;
 
     let server_addr = format!("{}:{}", config.server.ip, config.server.port)
         .parse::<SocketAddr>()
@@ -90,8 +89,16 @@ async fn main() -> anyhow::Result<()> {
 
     global.blocklist.load_matcher().await?;
 
-    if let Err(e) = server.run(config.server.doh).await {
-        tracing::error!("Server error: {}", e);
+    tokio::select! {
+        r = server.run(config.server.doh) => {
+            if let Err(e) = r {
+                tracing::error!("DNS server exited with error: {}", e);
+            }
+        },
+        _ = signal::ctrl_c() => {
+            tracing::info!("Shutting down DNS server...");
+        },
+
     }
 
     Ok(())

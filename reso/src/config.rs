@@ -1,6 +1,6 @@
 use reso_server::DohConfig;
 use serde::{Deserialize, Serialize};
-use std::{error::Error, net::SocketAddr, path::Display};
+use std::{error::Error, net::SocketAddr};
 use tracing::{Level, level_filters::LevelFilter};
 
 pub const DEFAULT_CONFIG_PATH: &str = "config.toml";
