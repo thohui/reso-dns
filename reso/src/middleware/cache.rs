@@ -2,10 +2,11 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use reso_cache::{CacheKey, CacheResult, NegKind};
 use reso_context::{DnsMiddleware, DnsRequestCtx};
-use reso_dns::{DnsFlags, DnsMessageBuilder};
+use reso_dns::{DnsFlags, DnsMessageBuilder, DnsResponseCode};
 
 use crate::{global::Global, local::Local};
 
+/// Caching middleware that serves responses from cache if available.
 pub struct CacheMiddleware;
 
 #[async_trait]
@@ -20,10 +21,10 @@ impl DnsMiddleware<Global, Local> for CacheMiddleware {
                 let mut local = ctx.local_mut();
                 local.cache_hit = true;
 
-                // TODO: handle NODATA.
-                if result.kind == NegKind::NoData {
-                    return Ok(None);
-                }
+                let response_code = match result.kind {
+                    NegKind::NxDomain => DnsResponseCode::NxDomain,
+                    NegKind::NoData => DnsResponseCode::NoError,
+                };
 
                 let message = DnsMessageBuilder::new()
                     .with_id(message.id)
@@ -31,9 +32,10 @@ impl DnsMiddleware<Global, Local> for CacheMiddleware {
                         qr: true,
                         rd: message.flags.rd,
                         cd: message.flags.cd,
+                        ra: true,
                         ..Default::default()
                     })
-                    .with_response(reso_dns::DnsResponseCode::NxDomain)
+                    .with_response(response_code)
                     .with_questions(message.questions().to_vec())
                     .with_authority_records(vec![result.soa_record])
                     .build();
@@ -42,6 +44,7 @@ impl DnsMiddleware<Global, Local> for CacheMiddleware {
 
                 Ok(Some(bytes))
             }
+
             CacheResult::Positive(recs) => {
                 tracing::debug!("cache hit for {:?}", cache_key);
                 let mut local = ctx.local_mut();
@@ -52,6 +55,7 @@ impl DnsMiddleware<Global, Local> for CacheMiddleware {
                         qr: true,
                         rd: message.flags.rd,
                         cd: message.flags.cd,
+                        ra: true,
                         ..Default::default()
                     })
                     .with_questions(message.questions().to_vec())
