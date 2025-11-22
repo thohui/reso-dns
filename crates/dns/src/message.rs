@@ -1,11 +1,12 @@
 use std::{
+    hash::Hash,
     net::{Ipv4Addr, Ipv6Addr},
     sync::Arc,
 };
 
 use bytes::Bytes;
 
-use crate::{reader::DnsMessageReader, writer::DnsMessageWriter};
+use crate::{qname::Qname, reader::DnsMessageReader, writer::DnsMessageWriter};
 
 /// Represent a DNS message (packet)
 #[derive(Debug, Clone, PartialEq)]
@@ -387,7 +388,7 @@ impl From<DnsOpcode> for u8 {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DnsQuestion {
     /// The domain name being queried
-    pub qname: Arc<str>,
+    pub qname: Qname,
     /// The type of the query (e.g., A, AAAA, CNAME)
     pub qtype: RecordType,
     /// The class of the query (e.g., IN for Internet)
@@ -395,7 +396,7 @@ pub struct DnsQuestion {
 }
 
 impl DnsQuestion {
-    pub fn new(qname: Arc<str>, qtype: RecordType, qclass: ClassType) -> Self {
+    pub fn new(qname: Qname, qtype: RecordType, qclass: ClassType) -> Self {
         Self {
             qname,
             qtype,
@@ -405,7 +406,7 @@ impl DnsQuestion {
 
     /// Create a new DNS question from a reader.
     pub fn read(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
-        let qname: Arc<str> = reader.read_qname()?.into();
+        let qname = reader.read_qname()?;
         let qtype = RecordType::try_from(reader.read_u16()?)?;
         let qclass = ClassType::from(reader.read_u16()?);
 
@@ -508,9 +509,9 @@ pub enum DnsRecordData {
 
     SOA {
         /// Primary nameserver.
-        mname: Arc<str>,
+        mname: Qname,
         /// Contact email
-        rname: Arc<str>,
+        rname: Qname,
         /// Serial
         serial: u32,
         /// Refresh
@@ -524,15 +525,15 @@ pub enum DnsRecordData {
     },
     MX {
         priority: u16,
-        host: Arc<str>,
+        host: Qname,
     },
     SRV {
         priority: u16,
         weight: u16,
         port: u16,
-        target: Arc<str>,
+        target: Qname,
     },
-    DomainName(Arc<str>),
+    DomainName(Qname),
 }
 
 impl DnsRecordData {
@@ -598,7 +599,7 @@ impl DnsRecordData {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DnsRecord {
-    pub name: Arc<str>,
+    pub name: Qname,
     pub record_type: RecordType,
     pub class: ClassType,
     pub ttl: u32,
@@ -608,7 +609,7 @@ pub struct DnsRecord {
 impl DnsRecord {
     /// Create a new DNS record.
     pub fn read(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
-        let name = reader.read_qname()?.into();
+        let name = reader.read_qname()?;
         let r#type = RecordType::try_from(reader.read_u16()?)?;
         let class = ClassType::from(reader.read_u16()?);
         let ttl = reader.read_u32()?;
@@ -617,7 +618,7 @@ impl DnsRecord {
         let data = match r#type {
             RecordType::CNAME | RecordType::PTR | RecordType::NS => {
                 let domain_name = reader.read_qname()?;
-                DnsRecordData::DomainName(domain_name.into())
+                DnsRecordData::DomainName(domain_name)
             }
             RecordType::A => {
                 let raw_data = reader.read_bytes(4)?;
@@ -645,8 +646,8 @@ impl DnsRecord {
                 DnsRecordData::Text(utf_str.into())
             }
             RecordType::SOA => DnsRecordData::SOA {
-                mname: reader.read_qname()?.into(),
-                rname: reader.read_qname()?.into(),
+                mname: reader.read_qname()?,
+                rname: reader.read_qname()?,
                 serial: reader.read_u32()?,
                 refresh: reader.read_u32()?,
                 retry: reader.read_u32()?,
@@ -655,13 +656,13 @@ impl DnsRecord {
             },
             RecordType::MX => DnsRecordData::MX {
                 priority: reader.read_u16()?,
-                host: reader.read_qname()?.into(),
+                host: reader.read_qname()?,
             },
             RecordType::SRV => DnsRecordData::SRV {
                 priority: reader.read_u16()?,
                 weight: reader.read_u16()?,
                 port: reader.read_u16()?,
-                target: reader.read_qname()?.into(),
+                target: reader.read_qname()?,
             },
             _ => {
                 let raw_data = reader.read_bytes(data_length)?;
@@ -760,18 +761,20 @@ mod tests {
     #[test]
 
     fn test_writer_reader() {
+        let qname = Qname::from("example.com");
+
         let mut writer = DnsMessageWriter::new();
         writer.write_u8(42).unwrap();
         writer.write_u16(12345).unwrap();
         writer.write_u32(67890).unwrap();
-        writer.write_qname("example.com").unwrap();
+        writer.write_qname(&qname).unwrap();
         let bytes = writer.into_bytes();
 
         let mut reader = DnsMessageReader::new(&bytes);
         assert_eq!(reader.read_u8().unwrap(), 42);
         assert_eq!(reader.read_u16().unwrap(), 12345);
         assert_eq!(reader.read_u32().unwrap(), 67890);
-        assert_eq!(reader.read_qname().unwrap(), "example.com");
+        assert_eq!(reader.read_qname().unwrap(), qname);
     }
 
     #[test]
@@ -791,7 +794,7 @@ mod tests {
                 rcode_low: 0,
             })
             .add_question(DnsQuestion {
-                qname: Arc::<str>::from("example.com"),
+                qname: Qname::from("example.com"),
                 qtype: RecordType::A,
                 qclass: ClassType::IN,
             })

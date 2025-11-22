@@ -7,6 +7,7 @@ use moka::{
 use reso_dns::{
     DnsMessage, DnsRecord, DnsResponseCode,
     message::{ClassType, DnsRecordData, RecordType},
+    qname::Qname,
 };
 use std::{
     hash::Hash,
@@ -17,7 +18,7 @@ use std::{
 /// Cache key for positive entries.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct CacheKey {
-    pub name: Arc<str>,
+    pub name: Qname,
     pub record_type: RecordType,
     pub class_type: ClassType,
 }
@@ -27,20 +28,17 @@ pub struct CacheKey {
 enum NegativeCacheKey {
     /// NoData cache key.
     NoData {
-        name: Arc<str>,
+        name: Qname,
         qtype: RecordType,
         class_type: ClassType,
     },
     /// NxDomain cache key.
-    NxDomain {
-        qname: Arc<str>,
-        class_type: ClassType,
-    },
+    NxDomain { qname: Qname, class_type: ClassType },
 }
 
-impl TryFrom<&reso_dns::message::DnsMessage> for CacheKey {
+impl TryFrom<&DnsMessage> for CacheKey {
     type Error = anyhow::Error;
-    fn try_from(message: &reso_dns::message::DnsMessage) -> Result<Self, Self::Error> {
+    fn try_from(message: &DnsMessage) -> Result<Self, Self::Error> {
         message
             .questions()
             .first()
@@ -91,7 +89,7 @@ pub struct NegativeEntry {
 /// RRSet
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CacheEntry {
-    pub name: Arc<str>,
+    pub name: Qname,
     pub record_type: RecordType,
     pub records: Arc<[DnsRecord]>,
     pub expires_at: Instant,

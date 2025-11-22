@@ -1,6 +1,8 @@
 use anyhow::ensure;
 use bytes::{BufMut, Bytes, BytesMut};
 
+use crate::qname::Qname;
+
 pub struct DnsMessageWriter {
     buf: BytesMut,
     max_len: usize,
@@ -69,9 +71,9 @@ impl DnsMessageWriter {
     }
 
     /// Write a qname to the buffer.
-    pub fn write_qname(&mut self, qname: &str) -> anyhow::Result<()> {
+    pub fn write_qname(&mut self, qname: &Qname) -> anyhow::Result<()> {
         // TODO: support compression.
-        if qname == "." {
+        if qname.as_str() == "." {
             // root label
             return self.write_u8(0);
         }
