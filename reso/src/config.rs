@@ -5,6 +5,7 @@ use tracing::{Level, level_filters::LevelFilter};
 
 pub const DEFAULT_CONFIG_PATH: &str = "config.toml";
 
+/// Logging level for the server.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default)]
 pub enum LogLevel {
     #[serde(rename = "trace")]
@@ -43,7 +44,7 @@ impl From<LogLevel> for LevelFilter {
         }
     }
 }
-
+/// Server configuration.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ServerConfig {
     /// IP address to listen on for DNS queries.
@@ -71,6 +72,7 @@ impl Default for ServerConfig {
     }
 }
 
+/// Database configuration.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct DatabaseConfig {
     #[serde(default = "default_db_path")]
@@ -85,6 +87,7 @@ impl Default for DatabaseConfig {
     }
 }
 
+/// Resolver configuration.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ResolverConfig {
@@ -100,6 +103,7 @@ impl Default for ResolverConfig {
     }
 }
 
+/// Overall configuration for the DNS server.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default)]
 pub struct Config {
     pub server: ServerConfig,
@@ -123,9 +127,12 @@ pub fn load_config(config_path: &str) -> anyhow::Result<Config> {
     }
 }
 
+/// Errors that can occur when loading the config.
 #[derive(Debug)]
 pub enum ConfigError {
+    /// Config file not found.
     NotFound,
+    /// Failed to decode config file.
     Decode(String),
 }
 
@@ -140,6 +147,7 @@ impl std::fmt::Display for ConfigError {
 
 impl Error for ConfigError {}
 
+/// Create a default config file at the default path.
 pub fn create_default_config() -> anyhow::Result<Config> {
     let cfg = Config {
         server: ServerConfig::default(),

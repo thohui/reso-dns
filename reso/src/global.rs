@@ -4,6 +4,7 @@ use reso_cache::DnsMessageCache;
 
 use crate::blocklist::service::BlocklistService;
 
+/// Global state shared across all requests.
 pub struct Global {
     pub cache: Arc<DnsMessageCache>,
     pub blocklist: Arc<BlocklistService>,

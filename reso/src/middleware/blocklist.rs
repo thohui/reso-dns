@@ -5,6 +5,7 @@ use reso_dns::{DnsMessageBuilder, DnsResponseCode};
 
 use crate::{global::Global, local::Local};
 
+/// Middleware that blocks queries for blocklisted domain names.
 pub struct BlocklistMiddleware;
 
 #[async_trait]

@@ -18,6 +18,8 @@ pub enum RequestType {
     DOH,
 }
 
+/// Context for a DNS request.
+/// Every request gets its own context instance.
 #[derive(Debug, Clone)]
 pub struct DnsRequestCtx<G, L> {
     request_type: RequestType,
@@ -56,12 +58,13 @@ impl<G, L> DnsRequestCtx<G, L> {
         self.budget.remaining()
     }
 
-    /// Request Type
+    /// Request type
     pub fn request_type(&self) -> RequestType {
         self.request_type
     }
 
-    /// Lazily decode and return the DNS message.
+    /// Attempt to decode and get the DNS message
+    /// This also caches the decoded message for future calls.
     pub fn message(&self) -> anyhow::Result<&DnsMessage> {
         self.message
             .get_or_try_init(|| DnsMessage::decode(&self.raw))
@@ -88,11 +91,13 @@ impl<G, L> DnsRequestCtx<G, L> {
     }
 }
 
+/// Trait for DNS middlewares that can process DNS requests.
 #[async_trait]
 pub trait DnsMiddleware<G, L>: Send + Sync {
     async fn on_query(&self, ctx: &DnsRequestCtx<G, L>) -> anyhow::Result<Option<Bytes>>;
 }
 
+/// Run the middlewares in order, returning the first response found.
 pub async fn run_middlewares<G, L>(
     mws: std::sync::Arc<Vec<Arc<dyn DnsMiddleware<G, L>>>>,
     ctx: &DnsRequestCtx<G, L>,

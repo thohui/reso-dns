@@ -1,6 +1,6 @@
 use super::message::{DnsFlags, DnsMessage, DnsOpcode, DnsQuestion, DnsRecord, DnsResponseCode};
 
-/// Builder
+/// Builder for constructing DNS messages.
 #[derive(Debug, Clone, Default)]
 pub struct DnsMessageBuilder {
     id: u16,

@@ -8,7 +8,8 @@ use bytes::Bytes;
 
 use crate::{qname::Qname, reader::DnsMessageReader, writer::DnsMessageWriter};
 
-/// Represent a DNS message (packet)
+/// Represents a DNS message.
+/// This struct encapsulates the various components of a DNS message,
 #[derive(Debug, Clone, PartialEq)]
 pub struct DnsMessage {
     /// Transaction id
@@ -426,6 +427,7 @@ impl DnsQuestion {
     }
 }
 
+/// DNS record types.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 #[repr(u16)]
 pub enum RecordType {
@@ -474,6 +476,7 @@ impl TryFrom<u16> for RecordType {
     }
 }
 
+/// DNS class types.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 #[repr(u16)]
 pub enum ClassType {
@@ -500,6 +503,7 @@ impl From<u16> for ClassType {
     }
 }
 
+/// Associated data for a DNS record.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DnsRecordData {
     Raw(Vec<u8>),
@@ -583,6 +587,7 @@ impl DnsRecordData {
         }
     }
 
+    /// Convert the DNS record data to a string representation, if applicable.
     pub fn to_str(&self) -> Option<String> {
         match self {
             DnsRecordData::Raw(_) => None,
@@ -597,6 +602,7 @@ impl DnsRecordData {
     }
 }
 
+/// Represents a DNS record in a DNS message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DnsRecord {
     pub name: Qname,
@@ -724,6 +730,7 @@ impl DnsRecord {
     }
 }
 
+/// Represents EDNS (Extension Mechanisms for DNS) information in a DNS message.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Edns {
     /// From OPT.CLASS (not a DNS class): max UDP payload size sender can handle
