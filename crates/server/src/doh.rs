@@ -42,6 +42,7 @@ where
     }
 }
 
+/// Run the DNS server over DoH.
 #[allow(clippy::too_many_arguments)]
 pub async fn run_doh<L, G, R>(
     config: DohConfig,

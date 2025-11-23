@@ -5,6 +5,7 @@ use config::{DEFAULT_CONFIG_PATH, ResolverConfig, load_config};
 use global::Global;
 use local::Local;
 use middleware::{blocklist::BlocklistMiddleware, cache::CacheMiddleware};
+use migrations::MIGRATIONS;
 use moka::future::FutureExt;
 use reso_cache::DnsMessageCache;
 use reso_dns::{DnsMessage, helpers};
@@ -20,6 +21,7 @@ mod config;
 mod global;
 mod local;
 mod middleware;
+mod migrations;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -39,10 +41,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let connection = reso_database::connect(&config.database.path).await?;
-
-    // ideally, we should setup a migration system for this
-    let sql = include_str!("init.sql");
-    connection.execute(sql, ()).await?;
+    reso_database::run_migrations(&connection, MIGRATIONS).await?;
 
     let server_addr = format!("{}:{}", config.server.ip, config.server.port)
         .parse::<SocketAddr>()

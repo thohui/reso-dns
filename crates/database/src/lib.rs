@@ -1,17 +1,11 @@
 use async_trait::async_trait;
 use turso::{Builder, Connection};
 
-pub trait PrimaryKey: Send + Sync + Clone + Sized {
-    fn get(&self) -> &Self {
-        self
-    }
-}
-
-impl PrimaryKey for String {}
+mod migration;
 
 #[async_trait]
 pub trait DatabaseOperations: Sized {
-    type PrimaryKey: PrimaryKey;
+    type PrimaryKey: Send + Sync + Clone;
 
     /// Create a record.
     async fn create(&self, db: &Connection) -> anyhow::Result<()>;
@@ -37,3 +31,5 @@ pub async fn connect(url: &str) -> anyhow::Result<Connection> {
     let connection = db.connect()?;
     Ok(connection)
 }
+
+pub use migration::{Migration, run_migrations};
