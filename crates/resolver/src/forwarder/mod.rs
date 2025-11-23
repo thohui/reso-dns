@@ -5,6 +5,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 
 use bytes::{Bytes, BytesMut};
+use rand::Rng;
 use reso_cache::CacheKey;
 use reso_context::{DnsRequestCtx, RequestType};
 use reso_dns::helpers;
@@ -34,7 +35,6 @@ impl ForwardResolver {
             );
         }
         Ok(Self {
-            inflight: Inflight::new(),
             upstreams: Arc::new(
                 Upstreams::new(
                     upstreams,
@@ -48,6 +48,7 @@ impl ForwardResolver {
                 )
                 .await?,
             ),
+            inflight: Inflight::new(),
         })
     }
 }
@@ -71,12 +72,24 @@ where
         let resp_arc = self
             .inflight
             .get_or_run(cache_key, async move |_| {
-                let bytes = this.resolve_inner(&raw, req_type, deadline).await?;
-                Ok(DnsResponseBytes::new(bytes))
+                // generate a new transaction ID for the upstream request.
+                let (raw, tid) = this.generate_tid(&raw);
+                let resp = this.resolve_inner(&raw, req_type, deadline).await?;
+
+                // verify that the response transaction ID matches the request ID
+                if helpers::extract_transaction_id(&resp) != Some(tid) {
+                    return Err(anyhow::anyhow!(
+                        "upstream response transaction ID does not match request ID"
+                    ));
+                }
+                Ok(DnsResponseBytes::new(resp))
             })
             .await?;
 
-        let resp = resp_arc.as_ref().clone().into_custom_response(qmsg.id);
+        let resp = resp_arc
+            .as_ref()
+            .clone()
+            .into_custom_response(helpers::extract_transaction_id(&ctx.raw()).unwrap_or_default());
         Ok(resp)
     }
 }
@@ -171,6 +184,20 @@ impl ForwardResolver {
 
         let connection = UdpConn::new(remote_addr).await?;
         connection.send_and_receive(query, deadline).await
+    }
+
+    /// Modify the transaction ID of the given query to a random value to prevent poisoning attacks.
+    fn generate_tid(&self, query: &[u8]) -> (Bytes, u16) {
+        let mut rng = rand::rng();
+
+        let randomized_id = rng.random::<u16>();
+
+        let mut bytes = BytesMut::from(&query[0..]);
+        // overwrite the transaction id.
+        bytes[0] = (randomized_id >> 8) as u8;
+        bytes[1] = (randomized_id & 0xFF) as u8;
+
+        (bytes.freeze(), randomized_id)
     }
 }
 
