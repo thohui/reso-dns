@@ -2,7 +2,7 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use bytes::BytesMut;
 use reso_context::{DnsMiddleware, DnsRequestCtx, RequestType};
-use reso_dns::{DnsFlags, DnsMessage, DnsMessageBuilder, DnsResponseCode};
+use reso_dns::{DnsMessage, DnsMessageBuilder, DnsResponseCode};
 use reso_resolver::DnsResolver;
 use serde::{Deserialize, Serialize};
 use tokio::net::UdpSocket;

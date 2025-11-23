@@ -9,11 +9,15 @@ use reso_cache::CacheKey;
 use reso_context::{DnsRequestCtx, RequestType};
 use reso_dns::helpers;
 use reso_inflight::Inflight;
+use tcp::TcpPool;
 use tokio::time::Instant;
-use upstream::{Limits, TcpPool, UdpPool, Upstreams};
+use udp::UdpConn;
+use upstream::{Limits, Upstreams};
 
 use crate::DnsResolver;
 
+mod tcp;
+mod udp;
 mod upstream;
 
 /// Resolver that forwards the incoming request to a defined upstream server.
@@ -40,7 +44,6 @@ impl ForwardResolver {
                         max_tcp_connections: 100,
                         max_idle_tcp_connections: 100,
                         tcp_ttl: Duration::from_secs(30),
-                        udp_sockets: 100,
                     },
                 )
                 .await?,
@@ -73,8 +76,8 @@ where
             })
             .await?;
 
-        let custom = resp_arc.as_ref().clone().into_custom_response(qmsg.id);
-        Ok(custom)
+        let resp = resp_arc.as_ref().clone().into_custom_response(qmsg.id);
+        Ok(resp)
     }
 }
 
@@ -101,7 +104,7 @@ impl ForwardResolver {
 
             match request_type {
                 RequestType::TCP | RequestType::DOH => {
-                    match self.handle_tcp(raw, &upstream.tcp, deadline).await {
+                    match self.handle_tcp(raw, &upstream.tcp_pool, deadline).await {
                         Ok(resp) => return Ok(resp),
                         Err(e) => {
                             tracing::warn!(upstream = %upstream.addr, error = %e, "TCP forward failed");
@@ -111,13 +114,13 @@ impl ForwardResolver {
                 }
                 RequestType::UDP => {
                     // use a seeded slot so UDP & TCP progress similarly across upstreams
-                    match self.handle_udp(raw, &upstream.udp, deadline).await {
+                    match self.handle_udp(raw, deadline).await {
                         Ok(resp) => {
                             match helpers::is_truncated(&resp) {
                                 Some(true) => {
                                     // switch over to tcp if the response is truncated
                                     request_type = RequestType::TCP;
-                                    match self.handle_tcp(raw, &upstream.tcp, deadline).await {
+                                    match self.handle_tcp(raw, &upstream.tcp_pool, deadline).await {
                                         Ok(tcp_resp) => return Ok(tcp_resp),
                                         Err(e) => {
                                             tracing::warn!(upstream = %upstream.addr, error = %e,
@@ -151,7 +154,6 @@ impl ForwardResolver {
         deadline: Instant,
     ) -> anyhow::Result<Bytes> {
         let mut conn = pool.get_or_connect(deadline).await?;
-
         let resp_bytes = conn.send_and_receive(query, deadline).await?;
 
         pool.put_back(conn, true);
@@ -160,14 +162,15 @@ impl ForwardResolver {
     }
 
     /// Handle a UDP request by sending it to the specified address using the provided UDP pool.
-    async fn handle_udp(
-        &self,
-        query: &[u8],
-        pool: &UdpPool,
-        deadline: Instant,
-    ) -> anyhow::Result<Bytes> {
-        let socket = pool.pick();
-        socket.send_and_receive(query, deadline).await
+    async fn handle_udp(&self, query: &[u8], deadline: Instant) -> anyhow::Result<Bytes> {
+        let remote_addr = self
+            .upstreams
+            .pick()
+            .context("no upstreams available")?
+            .addr;
+
+        let connection = UdpConn::new(remote_addr).await?;
+        connection.send_and_receive(query, deadline).await
     }
 }
 

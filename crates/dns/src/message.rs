@@ -276,7 +276,7 @@ impl TryFrom<u16> for DnsFlags {
             z: (bytes >> 6) & 0x1 != 0,
             ad: (bytes >> 5) & 0x1 != 0,
             cd: (bytes >> 4) & 0x1 != 0,
-            rcode_low: (bytes & 0x0f) as u8,
+            rcode_low: (bytes & 0x0F) as u8,
         })
     }
 }
@@ -541,6 +541,7 @@ pub enum DnsRecordData {
 }
 
 impl DnsRecordData {
+    /// Write the DNS record data to the DNS message.
     pub fn write(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
         match self {
             DnsRecordData::Raw(data) => writer.write_bytes(data),
