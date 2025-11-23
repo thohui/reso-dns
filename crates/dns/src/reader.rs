@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use anyhow::{bail, ensure};
 
-use crate::qname::Qname;
+use crate::domain_name::DomainName;
 
 /// A reader for DNS messages that allows reading various components
 pub struct DnsMessageReader<'a> {
@@ -87,7 +87,7 @@ impl<'a> DnsMessageReader<'a> {
     }
 
     /// Read a DNS name (qname) from the message.
-    pub fn read_qname(&mut self) -> anyhow::Result<Qname> {
+    pub fn read_qname(&mut self) -> anyhow::Result<DomainName> {
         let mut pos = self.position;
         let mut jumped = false;
         let mut seen = HashSet::new();
@@ -170,7 +170,7 @@ impl<'a> DnsMessageReader<'a> {
             name.pop();
         }
 
-        Ok(Qname::new(name))
+        DomainName::from_ascii(name)
     }
 
     /// Read a specified number of bytes from the DNS message.

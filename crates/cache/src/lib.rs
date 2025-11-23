@@ -6,8 +6,8 @@ use moka::{
 };
 use reso_dns::{
     DnsMessage, DnsRecord, DnsResponseCode,
+    domain_name::DomainName,
     message::{ClassType, DnsRecordData, RecordType},
-    qname::Qname,
 };
 use std::{
     hash::Hash,
@@ -18,7 +18,7 @@ use std::{
 /// Cache key for positive entries.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct CacheKey {
-    pub name: Qname,
+    pub name: DomainName,
     pub record_type: RecordType,
     pub class_type: ClassType,
 }
@@ -28,12 +28,15 @@ pub struct CacheKey {
 enum NegativeCacheKey {
     /// NoData cache key.
     NoData {
-        name: Qname,
+        name: DomainName,
         qtype: RecordType,
         class_type: ClassType,
     },
     /// NxDomain cache key.
-    NxDomain { qname: Qname, class_type: ClassType },
+    NxDomain {
+        qname: DomainName,
+        class_type: ClassType,
+    },
 }
 
 impl TryFrom<&DnsMessage> for CacheKey {
@@ -89,7 +92,7 @@ pub struct NegativeEntry {
 /// RRSet
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CacheEntry {
-    pub name: Qname,
+    pub name: DomainName,
     pub record_type: RecordType,
     pub records: Arc<[DnsRecord]>,
     pub expires_at: Instant,

@@ -1,12 +1,13 @@
 use async_trait::async_trait;
 use reso_database::DatabaseOperations;
+use reso_dns::domain_name::DomainName;
 use turso::{Connection, params};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct BlockedDomain(pub String);
+pub struct BlockedDomain(pub DomainName);
 
 impl BlockedDomain {
-    pub fn new(domain: String) -> Self {
+    pub fn new(domain: DomainName) -> Self {
         BlockedDomain(domain)
     }
 
@@ -17,7 +18,7 @@ impl BlockedDomain {
 
 #[async_trait]
 impl DatabaseOperations for BlockedDomain {
-    type PrimaryKey = String;
+    type PrimaryKey = DomainName;
 
     async fn create(&self, connection: &Connection) -> anyhow::Result<()> {
         connection
@@ -39,7 +40,8 @@ impl DatabaseOperations for BlockedDomain {
 
         if let Some(row) = rows.next().await? {
             let domain: String = row.get(0)?;
-            Ok(Some(BlockedDomain(domain)))
+            let qname = DomainName::from_ascii(domain)?;
+            Ok(Some(BlockedDomain(qname)))
         } else {
             Ok(None)
         }
@@ -69,7 +71,8 @@ impl DatabaseOperations for BlockedDomain {
 
         while let Some(row) = rows.next().await? {
             let domain: String = row.get(0)?;
-            out.push(BlockedDomain(domain));
+            let qname = DomainName::from_ascii(domain)?;
+            out.push(BlockedDomain(qname));
         }
 
         Ok(out)

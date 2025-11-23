@@ -31,6 +31,7 @@ impl Node {
 }
 
 /// Trie implementation of a blocklist matcher.
+/// The nodes are sorted to allow binary search for child nodes.
 #[derive(Debug, Clone, Default)]
 pub struct BlocklistMatcher {
     root: Node,

@@ -6,7 +6,7 @@ use std::{
 
 use bytes::Bytes;
 
-use crate::{qname::Qname, reader::DnsMessageReader, writer::DnsMessageWriter};
+use crate::{domain_name::DomainName, reader::DnsMessageReader, writer::DnsMessageWriter};
 
 /// Represents a DNS message.
 /// This struct encapsulates the various components of a DNS message,
@@ -389,7 +389,7 @@ impl From<DnsOpcode> for u8 {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DnsQuestion {
     /// The domain name being queried
-    pub qname: Qname,
+    pub qname: DomainName,
     /// The type of the query (e.g., A, AAAA, CNAME)
     pub qtype: RecordType,
     /// The class of the query (e.g., IN for Internet)
@@ -397,7 +397,7 @@ pub struct DnsQuestion {
 }
 
 impl DnsQuestion {
-    pub fn new(qname: Qname, qtype: RecordType, qclass: ClassType) -> Self {
+    pub fn new(qname: DomainName, qtype: RecordType, qclass: ClassType) -> Self {
         Self {
             qname,
             qtype,
@@ -513,9 +513,9 @@ pub enum DnsRecordData {
 
     SOA {
         /// Primary nameserver.
-        mname: Qname,
+        mname: DomainName,
         /// Contact email
-        rname: Qname,
+        rname: DomainName,
         /// Serial
         serial: u32,
         /// Refresh
@@ -529,15 +529,15 @@ pub enum DnsRecordData {
     },
     MX {
         priority: u16,
-        host: Qname,
+        host: DomainName,
     },
     SRV {
         priority: u16,
         weight: u16,
         port: u16,
-        target: Qname,
+        target: DomainName,
     },
-    DomainName(Qname),
+    DomainName(DomainName),
 }
 
 impl DnsRecordData {
@@ -605,7 +605,7 @@ impl DnsRecordData {
 /// Represents a DNS record in a DNS message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DnsRecord {
-    pub name: Qname,
+    pub name: DomainName,
     pub record_type: RecordType,
     pub class: ClassType,
     pub ttl: u32,
@@ -768,7 +768,7 @@ mod tests {
     #[test]
 
     fn test_writer_reader() {
-        let qname = Qname::from("example.com");
+        let qname = DomainName::from_ascii("example.com").unwrap();
 
         let mut writer = DnsMessageWriter::new();
         writer.write_u8(42).unwrap();
@@ -801,7 +801,7 @@ mod tests {
                 rcode_low: 0,
             })
             .add_question(DnsQuestion {
-                qname: Qname::from("example.com"),
+                qname: DomainName::from_ascii("example.com").unwrap(),
                 qtype: RecordType::A,
                 qclass: ClassType::IN,
             })
@@ -820,12 +820,9 @@ mod tests {
     }
     #[test]
     fn test_ns_query_encoding() {
+        let domain_name = DomainName::from_ascii("com").unwrap();
         let packet = DnsMessageBuilder::new()
-            .add_question(DnsQuestion::new(
-                "com.".into(),
-                RecordType::NS,
-                ClassType::IN,
-            ))
+            .add_question(DnsQuestion::new(domain_name, RecordType::NS, ClassType::IN))
             .build();
 
         let encoded = packet.encode().unwrap();

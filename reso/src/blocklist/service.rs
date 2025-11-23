@@ -1,6 +1,7 @@
 use arc_swap::ArcSwap;
 use reso_blocklist::BlocklistMatcher;
 use reso_database::DatabaseOperations;
+use reso_dns::domain_name::DomainName;
 use turso::Connection;
 
 use super::model::BlockedDomain;
@@ -19,14 +20,14 @@ impl BlocklistService {
     }
 
     pub async fn add_domain(&self, domain: &str) -> anyhow::Result<()> {
-        BlockedDomain::new(domain.to_string())
-            .create(&self.connection)
-            .await?;
+        let domain = DomainName::from_user(domain)?;
+        BlockedDomain::new(domain).create(&self.connection).await?;
         self.load_matcher().await?;
         Ok(())
     }
 
-    pub async fn remove_domain(&self, domain: String) -> anyhow::Result<()> {
+    pub async fn remove_domain(&self, domain: &str) -> anyhow::Result<()> {
+        let domain = DomainName::from_user(domain)?;
         BlockedDomain::delete(&self.connection, &domain).await?;
         self.load_matcher().await?;
         Ok(())
