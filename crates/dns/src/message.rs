@@ -604,7 +604,7 @@ impl DnsRecordData {
 }
 
 /// Represents a DNS record in a DNS message.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Eq)]
 pub struct DnsRecord {
     pub name: DomainName,
     pub record_type: RecordType,
@@ -728,6 +728,16 @@ impl DnsRecord {
     /// Get the data of the DNS record.
     pub fn data(&self) -> &DnsRecordData {
         &self.data
+    }
+}
+
+impl PartialEq for DnsRecord {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.record_type == other.record_type
+            && self.class == other.class
+            && self.ttl == other.ttl
+            && self.data == other.data
     }
 }
 

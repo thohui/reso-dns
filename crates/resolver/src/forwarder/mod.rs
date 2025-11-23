@@ -8,7 +8,7 @@ use bytes::{Bytes, BytesMut};
 use rand::Rng;
 use reso_cache::CacheKey;
 use reso_context::{DnsRequestCtx, RequestType};
-use reso_dns::helpers;
+use reso_dns::{DnsMessage, helpers};
 use reso_inflight::Inflight;
 use tcp::TcpPool;
 use tokio::time::Instant;
@@ -82,6 +82,7 @@ where
                         "upstream response transaction ID does not match request ID"
                     ));
                 }
+
                 Ok(DnsResponseBytes::new(resp))
             })
             .await?;
@@ -90,6 +91,25 @@ where
             .as_ref()
             .clone()
             .into_custom_response(helpers::extract_transaction_id(&ctx.raw()).unwrap_or_default());
+
+        let resp_message = DnsMessage::decode(&resp)?;
+
+        // ensure that both request and response have exactly one question
+        if resp_message.questions().len() != 1 {
+            anyhow::bail!(
+                "upstream response contains {} questions, expected 1",
+                resp_message.questions().len()
+            );
+        }
+
+        let req_q = qmsg.questions().first();
+        let resp_q = resp_message.questions().first();
+
+        // ensure that the response question matches the request question
+        if req_q != resp_q {
+            anyhow::bail!("upstream response question does not match request question");
+        }
+
         Ok(resp)
     }
 }
