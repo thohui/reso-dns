@@ -56,7 +56,9 @@ pub struct ServerConfig {
     /// Logging level for the server.
     #[serde(default = "default_log_level")]
     pub log_level: LogLevel,
-
+    /// Timeout for dns queries in seconds.
+    #[serde(default = "default_timeout")]
+    pub timeout: u64,
     /// DNS-over-HTTPS (DoH) TLS configuration.
     pub doh: Option<DohConfig>,
 }
@@ -67,6 +69,7 @@ impl Default for ServerConfig {
             ip: default_server_ip(),
             port: default_server_port(),
             log_level: default_log_level(),
+            timeout: default_timeout(),
             doh: None,
         }
     }
@@ -176,4 +179,8 @@ fn default_server_port() -> u64 {
 
 fn default_log_level() -> LogLevel {
     LogLevel::default()
+}
+
+fn default_timeout() -> u64 {
+    5
 }

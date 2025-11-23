@@ -3,7 +3,7 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 use anyhow::Context;
 use bytes::Bytes;
 use reso_context::{DnsMiddleware, DnsRequestCtx, RequestType};
-use reso_dns::{DnsFlags, DnsMessage, DnsMessageBuilder, DnsResponseCode};
+use reso_dns::{DnsMessage, DnsMessageBuilder, DnsResponseCode};
 use reso_resolver::DnsResolver;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -48,7 +48,9 @@ where
             }
 
             let buffer_length = u16::from_be_bytes(len_buf) as usize;
+
             let mut buf = vec![0; buffer_length];
+
             if let Err(e) = stream.read_exact(&mut buf).await {
                 tracing::warn!("Failed to read data from client {}: {}", client, e);
                 return;

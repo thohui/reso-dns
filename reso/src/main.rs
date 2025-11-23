@@ -1,4 +1,4 @@
-use std::{env, net::SocketAddr, rc::Rc, sync::Arc};
+use std::{env, net::SocketAddr, sync::Arc, time::Duration};
 
 use blocklist::service::BlocklistService;
 use config::{DEFAULT_CONFIG_PATH, ResolverConfig, load_config};
@@ -60,7 +60,11 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let resolver = Arc::new(ForwardResolver::new(&upstreams).await?);
-    let mut server = DnsServer::<_, _, Local>::new(server_addr, resolver, global.clone());
+
+    let timeout_duration = Duration::from_secs(config.server.timeout);
+
+    let mut server =
+        DnsServer::<_, _, Local>::new(server_addr, resolver, timeout_duration, global.clone());
 
     server.add_success_handler(Arc::new(|ctx, resp| {
         async move {

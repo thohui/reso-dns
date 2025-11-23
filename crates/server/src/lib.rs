@@ -5,7 +5,6 @@ use doh::run_doh;
 use futures::{FutureExt, future::BoxFuture};
 use reso_context::{DnsMiddleware, DnsRequestCtx};
 use reso_resolver::DnsResolver;
-use serde::{Deserialize, Serialize};
 use tcp::run_tcp;
 use udp::run_udp;
 
@@ -45,12 +44,12 @@ impl<
     G: Send + Sync + 'static,
 > DnsServer<R, G, L>
 {
-    pub fn new(bind_addr: SocketAddr, resolver: R, global: Arc<G>) -> Self {
+    pub fn new(bind_addr: SocketAddr, resolver: R, timeout: Duration, global: Arc<G>) -> Self {
         Self {
             bind_addr,
             resolver: Arc::new(resolver),
             recv_size: 1232, // edns safe
-            timeout: Duration::from_secs(5),
+            timeout,
             middlewares: ArcSwap::new(Vec::new().into()),
             global,
             on_success: None,
