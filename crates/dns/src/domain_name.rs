@@ -23,6 +23,11 @@ impl DomainName {
             return Ok(Self(Arc::from(".")));
         }
 
+        // Remove trailing dot if present.
+        if str.ends_with('.') {
+            str.pop();
+        }
+
         let bytes = str.as_bytes();
 
         // Validate the domain name according to RFC 1035.
@@ -95,7 +100,7 @@ mod tests {
 
     #[test]
     fn test_domain_name_creation() {
-        let dn = DomainName::from_ascii("Example.COM.").unwrap();
+        let dn = DomainName::from_ascii("Example.com.").unwrap();
         assert_eq!(dn.as_str(), "example.com");
 
         let dn2 = DomainName::from_ascii("sub.domain.example.com").unwrap();
