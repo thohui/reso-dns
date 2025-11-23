@@ -89,26 +89,6 @@ impl TcpPool {
         }
     }
 
-    /// Wait for tcp connection to become available or timeout.
-    pub async fn wait_checkout(&self, overall: Duration) -> Option<TcpConn> {
-        // check if we have one available right now.
-        if let Some(c) = self.try_get() {
-            return Some(c);
-        }
-
-        let connections = self.connections.clone();
-        let permit = timeout(overall, connections.acquire_owned())
-            .await
-            .ok()?
-            .ok()?;
-
-        let to = self.limits.connect_timeout.min(overall);
-
-        TcpConn::connect(self.addr, to, permit, Instant::now() + self.limits.tcp_ttl)
-            .await
-            .ok()
-    }
-
     /// Get an idle conn or connect a new one if under cap.
     pub async fn get_or_connect(&self, deadline: Instant) -> anyhow::Result<TcpConn> {
         tokio::select! {

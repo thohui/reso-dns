@@ -10,7 +10,7 @@ use hyper::server::conn::http2;
 use hyper::{Method, Request, Response, body::Incoming, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
 use reso_context::{DnsMiddleware, DnsRequestCtx, RequestType};
-use reso_dns::{DnsFlags, DnsMessage, DnsMessageBuilder, DnsResponseCode, helpers};
+use reso_dns::{DnsMessage, DnsMessageBuilder, DnsResponseCode};
 use reso_resolver::DnsResolver;
 use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
