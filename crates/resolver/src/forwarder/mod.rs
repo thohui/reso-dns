@@ -15,7 +15,7 @@ use tokio::time::Instant;
 use udp::UdpConn;
 use upstream::{Limits, Upstreams};
 
-use crate::DnsResolver;
+use crate::{DnsResolver, ResolveError};
 
 mod tcp;
 mod udp;
@@ -59,10 +59,10 @@ where
     G: Send + Sync + 'static,
     L: Send + Sync,
 {
-    async fn resolve(&self, ctx: &DnsRequestCtx<G, L>) -> anyhow::Result<Bytes> {
-        let qmsg = ctx.message()?;
-        let cache_key =
-            CacheKey::try_from(qmsg).context("failed to create cache key from message")?;
+    async fn resolve(&self, ctx: &DnsRequestCtx<G, L>) -> Result<Bytes, ResolveError> {
+        let qmsg = ctx.message().map_err(ResolveError::Decode)?;
+
+        let cache_key = CacheKey::try_from(qmsg).map_err(ResolveError::Other)?;
 
         let raw = ctx.raw();
         let req_type = ctx.request_type();
@@ -85,21 +85,22 @@ where
 
                 Ok(DnsResponseBytes::new(resp))
             })
-            .await?;
+            .await
+            .map_err(ResolveError::Other)?;
 
         let resp = resp_arc
             .as_ref()
             .clone()
             .into_custom_response(helpers::extract_transaction_id(&ctx.raw()).unwrap_or_default());
 
-        let resp_message = DnsMessage::decode(&resp)?;
+        let resp_message = DnsMessage::decode(&resp).map_err(ResolveError::Decode)?;
 
         // ensure that both request and response have exactly one question
         if resp_message.questions().len() != 1 {
-            anyhow::bail!(
+            return Err(ResolveError::InvalidResponse(std::format!(
                 "upstream response contains {} questions, expected 1",
-                resp_message.questions().len()
-            );
+                resp_message.questions().len(),
+            )));
         }
 
         let req_q = qmsg.questions().first();
@@ -107,7 +108,9 @@ where
 
         // ensure that the response question matches the request question
         if req_q != resp_q {
-            anyhow::bail!("upstream response question does not match request question");
+            return Err(ResolveError::InvalidResponse(
+                "upstream response question does not match request question".to_string(),
+            ));
         }
 
         Ok(resp)

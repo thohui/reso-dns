@@ -11,7 +11,7 @@ use hyper::{Method, Request, Response, body::Incoming, server::conn::http1, serv
 use hyper_util::rt::TokioIo;
 use reso_context::{DnsMiddleware, DnsRequestCtx, RequestType};
 use reso_dns::{DnsMessage, DnsMessageBuilder, DnsResponseCode};
-use reso_resolver::DnsResolver;
+use reso_resolver::{DnsResolver, ResolveError};
 use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use tokio::net::TcpListener;
@@ -218,10 +218,11 @@ where
         }
         Err(e) => {
             let message = ctx.message()?;
-            let resp_bytes = create_server_error_message(message)?;
+            let resp_bytes = create_error_message(message, &e)?;
             let resp = Response::builder()
                 .status(502)
                 .body(Full::new(resp_bytes))?;
+
             tokio::spawn(async move {
                 if let Some(on_error) = on_error {
                     let _ = on_error(&ctx, &e).await;
@@ -330,12 +331,12 @@ fn error(err: String) -> io::Error {
     io::Error::new(io::ErrorKind::Other, err)
 }
 
-/// Create a DNS server failure message with the given transaction ID.
-fn create_server_error_message(message: &DnsMessage) -> anyhow::Result<Bytes> {
+// Create error message
+fn create_error_message(message: &DnsMessage, error: &ResolveError) -> anyhow::Result<Bytes> {
     let payload = DnsMessageBuilder::new()
         .with_id(message.id)
         .with_questions(message.questions().to_vec())
-        .with_response(DnsResponseCode::ServerFailure)
+        .with_response(error.response_code())
         .build()
         .encode()?;
 

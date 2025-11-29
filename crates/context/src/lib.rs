@@ -123,17 +123,14 @@ impl RequestBudget {
         }
     }
 
+    /// When the budget expires.
     pub fn at(&self) -> Instant {
         self.deadline
     }
 
+    /// Remaining time in the budget.
     pub fn remaining(&self) -> Option<Duration> {
         let now = Instant::now();
         (now < self.deadline).then_some(self.deadline - now)
-    }
-
-    pub fn cap(&self, per_step: Duration) -> Instant {
-        let rem = self.remaining().unwrap_or_default();
-        Instant::now() + rem.min(per_step)
     }
 }

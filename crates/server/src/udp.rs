@@ -3,7 +3,7 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 use bytes::BytesMut;
 use reso_context::{DnsMiddleware, DnsRequestCtx, RequestType};
 use reso_dns::{DnsMessage, DnsMessageBuilder, DnsResponseCode};
-use reso_resolver::DnsResolver;
+use reso_resolver::{DnsResolver, ResolveError};
 use serde::{Deserialize, Serialize};
 use tokio::net::UdpSocket;
 
@@ -79,7 +79,8 @@ where
                 }
                 Err(e) => {
                     if let Ok(message) = ctx.message() {
-                        let res = write_udp_server_error_response(message, &sock, &client).await;
+                        let res =
+                            write_udp_server_error_response(message, &sock, &client, &e).await;
                         if let Err(err) = res {
                             tracing::warn!(
                                 "Failed to write error response to client {}: {}",
@@ -102,11 +103,12 @@ async fn write_udp_server_error_response(
     message: &DnsMessage,
     socket: &UdpSocket,
     client: &SocketAddr,
+    error: &ResolveError,
 ) -> anyhow::Result<()> {
     let bytes = DnsMessageBuilder::new()
         .with_id(message.id)
         .with_questions(message.questions().to_vec())
-        .with_response(DnsResponseCode::ServerFailure)
+        .with_response(error.response_code())
         .build()
         .encode()?;
 

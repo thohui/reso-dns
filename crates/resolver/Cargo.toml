@@ -24,6 +24,7 @@ reso-cache.workspace = true
 reso-inflight.workspace = true
 crossbeam-queue = "0.3.12"
 rand = { version = "0.9.2" }
+thiserror = "2.0.17"
 
 [lib]
 name = "reso_resolver"

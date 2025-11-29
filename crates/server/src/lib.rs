@@ -4,7 +4,7 @@ use arc_swap::ArcSwap;
 use doh::run_doh;
 use futures::{FutureExt, future::BoxFuture};
 use reso_context::{DnsMiddleware, DnsRequestCtx};
-use reso_resolver::DnsResolver;
+use reso_resolver::{DnsResolver, ResolveError};
 use tcp::run_tcp;
 use udp::run_udp;
 
@@ -21,7 +21,10 @@ type SuccessCallback<G, L> = Arc<
 >;
 
 type ErrorCallback<G, L> = Arc<
-    dyn for<'a> Fn(&'a DnsRequestCtx<G, L>, &'a anyhow::Error) -> BoxFuture<'a, anyhow::Result<()>>
+    dyn for<'a> Fn(
+            &'a DnsRequestCtx<G, L>,
+            &'a ResolveError,
+        ) -> BoxFuture<'a, Result<(), ResolveError>>
         + Send
         + Sync,
 >;
