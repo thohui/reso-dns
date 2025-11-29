@@ -300,6 +300,9 @@ impl DnsFlags {
     }
 }
 
+/// Dns response code
+///
+/// Based on: https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml#dns-parameters-6
 #[derive(Debug, Copy, Clone, Default, PartialEq)]
 #[repr(u16)]
 pub enum DnsResponseCode {
@@ -312,16 +315,46 @@ pub enum DnsResponseCode {
     ServerFailure = 2,
     /// Non-existent domain, the requested domain does not exist
     NxDomain = 3,
+    /// Not Implemented
+    NotImp = 4,
+    /// Query refused
+    Refused = 5,
+    /// Name Exists when it should not
+    YXDomain = 6,
+    /// RR Set Exists when it should not
+    YXRRSet = 7,
+    /// RR Set that should exist does not
+    NXRRSet = 8,
+    /// Server Not Authoritative for zone
+    ///
+    /// Not Authorized
+    NotAuth = 9,
+    /// Name not contained in zone
+    NotZone = 10,
+    /// DSO-TYPE Not Implemented
+    DSOTYPENI = 11,
+    /// Bad OPT Version
+    /// TSIG Signature Failure
+    BADVERS = 16,
+    /// Key not recognized
+    BADKEY = 17,
+    /// Signature out of time window
+    BADTIME = 18,
+    /// Bad TKEY Mode
+    BADMODE = 19,
+    /// Duplicate key name
+    BADNAME = 20,
+    /// Algorithm not supported
+    BADALG = 21,
+    /// Bad Truncation
+    BADTRUNC = 22,
+    /// Bad/missing Server Cookie
+    BADCOOKIE = 23,
 }
 
 impl From<DnsResponseCode> for u8 {
     fn from(value: DnsResponseCode) -> Self {
-        match value {
-            DnsResponseCode::NoError => 0,
-            DnsResponseCode::FormatError => 1,
-            DnsResponseCode::ServerFailure => 2,
-            DnsResponseCode::NxDomain => 3,
-        }
+        value as u8
     }
 }
 
@@ -341,12 +374,7 @@ impl TryFrom<u16> for DnsResponseCode {
 
 impl From<DnsResponseCode> for u16 {
     fn from(value: DnsResponseCode) -> u16 {
-        match value {
-            DnsResponseCode::NoError => 0,
-            DnsResponseCode::FormatError => 1,
-            DnsResponseCode::ServerFailure => 2,
-            DnsResponseCode::NxDomain => 3,
-        }
+        value as u16
     }
 }
 
@@ -428,6 +456,8 @@ impl DnsQuestion {
 }
 
 /// DNS record types.
+///
+/// Based on: https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml#dns-parameters-4
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 #[repr(u16)]
 pub enum RecordType {
@@ -435,24 +465,192 @@ pub enum RecordType {
     A = 1,
     /// Name server
     NS = 2,
+    /// Mail destination
+    MD = 3,
+    /// Mail forwarder
+    MF = 4,
     /// Canonical name
     CNAME = 5,
     /// Start of authority
     SOA = 6,
+    /// MB
+    MB = 7,
+    /// MG
+    MG = 8,
+    /// MR
+    MR = 9,
+    /// Null
+    NULL = 10,
+    /// Well known service description
+    WKS = 11,
     /// Pointer (for reverse DNS)
     PTR = 12,
+    /// HINFO
+    HINFO = 13,
+    /// MINFO
+    MINFO = 14,
     /// Mail exchange
     MX = 15,
-    /// Text record
+    /// Text strings
     TXT = 16,
+    /// for Responsible Person
+    RP = 17,
+    /// for AFS Data Base location
+    AFSDB = 18,
+    /// for X.25 PSDN address
+    X25 = 19,
+    /// for ISDN address
+    ISDN = 20,
+    /// for Route Through
+    RT = 21,
+    /// for NSAP address, NSAP style A record (DEPRECATED)
+    NSAP = 22,
+    /// for domain name pointer, NSAP style (DEPRECATED)
+    NSAPPTR = 23,
+    /// for security signature
+    SIG = 24,
+    /// for security key
+    KEY = 25,
+    /// X.400 mail mapping information
+    PX = 26,
+    /// Geographical Position
+    GPOS = 27,
     /// IPv6
     AAAA = 28,
+    /// Location Information
+    LOC = 29,
+    /// Next Domain (OBSOLETE)
+    NXT = 30,
+    /// Endpoint Identifier
+    EID = 31,
+    /// Nimrod Locator
+    NIMLOC = 32,
     /// Service locator
     SRV = 33,
+    /// ATM Address
+    ATMA = 34,
+    /// Naming Authority Pointer
+    NAPTR = 35,
+    /// Key Exchanger
+    KX = 36,
+    /// CERT
+    CERT = 37,
+    /// A6 (OBSOLETE - use AAAA)
+    A6 = 38,
+    /// DNAME
+    DNAME = 39,
+    /// SINK
+    SINK = 40,
     /// OPT, only used by additional records (EDNS)
     OPT = 41,
+    /// APL
+    APL = 42,
+    /// Delegation Signer
+    DS = 43,
+    /// SSH Key Fingerprint
+    SSHFP = 44,
+    /// IP SEC KEY
+    IPSECKEY = 45,
+    /// RRSIG
+    RRSIG = 46,
+    /// NSEC
+    NSEC = 47,
+    /// DNS KEY
+    DNSKEY = 48,
+    /// DHCID
+    DHCID = 49,
+    /// NSEC3
+    NSEC3 = 50,
+    /// NSEC3PARAM
+    NSEC3PARAM = 51,
+    /// TLSA
+    TLSA = 52,
+    /// S/MIME cert association
+    SMIMEA = 53,
+    /// Host Identity Protocol
+    HIP = 55,
+    /// NINFO
+    NINFO = 56,
+    /// RKEY
+    RKEY = 57,
+    /// Trust Anchor LINK
+    TALINK = 58,
+    /// Child DS
+    CDS = 59,
+    /// DNSKEY(s) the Child wants reflected in DS
+    CDNSKEY = 60,
+    /// OpenPGP Key
+    OPENPGPKEY = 61,
+    /// Child-To-Parent Synchronization
+    CSYNC = 62,
+    /// Message Digest Over Zone Data
+    ZONEMD = 63,
+    /// General-purpose service binding
+    SVCB = 64,
+    /// SVCB-compatible type for use with HTTP
+    HTTPS = 65,
+    /// Endpoint discovery for delegation synchronization
+    DSYNC = 66,
+    /// Hierarchical Host Identity Tag
+    HHIT = 67,
+    /// UAS Broadcast Remote Identification
+    BRID = 68,
+    /// SPF
+    SPF = 99,
+    /// UINFO
+    UINFO = 100,
+    /// UID
+    UID = 101,
+    /// GID
+    GID = 102,
+    /// UNSPEC
+    UNSPEC = 103,
+    /// NID
+    NID = 104,
+    /// L32
+    L32 = 105,
+    /// L64
+    L64 = 106,
+    /// LP
+    LP = 107,
+    /// an EUI-48 address
+    EUI48 = 108,
+    /// an EUI-64 address
+    EUI64 = 109,
+    /// NXDOMAIN indicator for Compact Denial of Existence
+    NXNAME = 128,
+    /// Transaction Key
+    TKEY = 249,
+    /// Transaction Signature
+    TSIG = 250,
+    /// Incremental transfer
+    IXFR = 251,
+    /// transfer of an entire zone
+    AXFR = 252,
+    /// Mailbox-related RRs (MB, MG or MR)
+    MAILB = 253,
+    /// Mail agent RRs (OBSOLETE - see MX)
+    MAILA = 254,
     /// All records
     ANY = 255,
+    /// URI
+    URI = 256,
+    /// Certification Authority Restriction
+    CAA = 257,
+    /// Application Visibility and Control
+    AVC = 258,
+    /// Digital Object Architecture
+    DOA = 259,
+    /// Automatic Multicast Tunneling Relay
+    AMTRELAY = 260,
+    // Resolver Information as Key/Value Pairs
+    RESINFO = 261,
+    /// Public wallet address
+    WALLET = 262,
+    /// BP Convergence Layer Adapter
+    CLA = 263,
+    /// BP Node Number
+    IPN = 264,
 }
 
 impl TryFrom<u16> for RecordType {
@@ -487,7 +685,7 @@ pub enum ClassType {
     /// Hesoid (MIT Athena)
     HS = 4,
     /// Any
-    Any = 255,
+    ANY = 255,
 }
 
 impl From<u16> for ClassType {
@@ -497,7 +695,7 @@ impl From<u16> for ClassType {
             1 => ClassType::IN,
             3 => ClassType::CH,
             4 => ClassType::HS,
-            255 => ClassType::Any,
+            255 => ClassType::ANY,
             _ => panic!("Unknown class type: {}", value),
         }
     }
