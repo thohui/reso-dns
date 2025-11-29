@@ -6,6 +6,8 @@ use std::{
 
 use bytes::Bytes;
 
+use num_enum::{FromPrimitive, IntoPrimitive, TryFromPrimitive};
+
 use crate::{domain_name::DomainName, reader::DnsMessageReader, writer::DnsMessageWriter};
 
 /// Represents a DNS message.
@@ -234,7 +236,8 @@ impl DnsMessage {
     pub fn rcode(&self) -> anyhow::Result<DnsResponseCode> {
         let low = self.flags.rcode_low as u16;
         let high = self.edns.as_ref().map(|e| e.extended_rcode).unwrap_or(0) as u16;
-        DnsResponseCode::try_from((high << 4) | low)
+        let code = DnsResponseCode::try_from((high << 4) | low)?;
+        Ok(code)
     }
 }
 
@@ -303,7 +306,7 @@ impl DnsFlags {
 /// Dns response code
 ///
 /// Based on: https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml#dns-parameters-6
-#[derive(Debug, Copy, Clone, Default, PartialEq)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, TryFromPrimitive, IntoPrimitive)]
 #[repr(u16)]
 pub enum DnsResponseCode {
     /// No error, the request was successful
@@ -352,33 +355,7 @@ pub enum DnsResponseCode {
     BADCOOKIE = 23,
 }
 
-impl From<DnsResponseCode> for u8 {
-    fn from(value: DnsResponseCode) -> Self {
-        value as u8
-    }
-}
-
-impl TryFrom<u16> for DnsResponseCode {
-    type Error = anyhow::Error;
-
-    fn try_from(value: u16) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(DnsResponseCode::NoError),
-            1 => Ok(DnsResponseCode::FormatError),
-            2 => Ok(DnsResponseCode::ServerFailure),
-            3 => Ok(DnsResponseCode::NxDomain),
-            _ => anyhow::bail!("unsupported dns response code {}", value),
-        }
-    }
-}
-
-impl From<DnsResponseCode> for u16 {
-    fn from(value: DnsResponseCode) -> u16 {
-        value as u16
-    }
-}
-
-#[derive(Debug, Copy, Clone, Default, PartialEq)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, TryFromPrimitive, IntoPrimitive)]
 #[repr(u8)]
 pub enum DnsOpcode {
     /// Standard query
@@ -388,29 +365,6 @@ pub enum DnsOpcode {
     IQuery = 1,
     /// Server status request, obsolete
     Status = 2,
-}
-
-impl TryFrom<u8> for DnsOpcode {
-    type Error = anyhow::Error;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(DnsOpcode::Query),
-            1 => Ok(DnsOpcode::IQuery),
-            2 => Ok(DnsOpcode::Status),
-            _ => anyhow::bail!("unsupported opcode {}", value),
-        }
-    }
-}
-
-impl From<DnsOpcode> for u8 {
-    fn from(value: DnsOpcode) -> Self {
-        match value {
-            DnsOpcode::Query => 0,
-            DnsOpcode::IQuery => 1,
-            DnsOpcode::Status => 2,
-        }
-    }
 }
 
 /// Represents a DNS question in a DNS message.
@@ -437,7 +391,7 @@ impl DnsQuestion {
     pub fn read(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
         let qname = reader.read_qname()?;
         let qtype = RecordType::try_from(reader.read_u16()?)?;
-        let qclass = ClassType::from(reader.read_u16()?);
+        let qclass = ClassType::try_from(reader.read_u16()?)?;
 
         Ok(Self {
             qname,
@@ -458,7 +412,7 @@ impl DnsQuestion {
 /// DNS record types.
 ///
 /// Based on: https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml#dns-parameters-4
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, IntoPrimitive)]
 #[repr(u16)]
 pub enum RecordType {
     /// IPv4
@@ -675,7 +629,7 @@ impl TryFrom<u16> for RecordType {
 }
 
 /// DNS class types.
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, TryFromPrimitive)]
 #[repr(u16)]
 pub enum ClassType {
     /// Internet
@@ -686,19 +640,6 @@ pub enum ClassType {
     HS = 4,
     /// Any
     ANY = 255,
-}
-
-impl From<u16> for ClassType {
-    // todo: refactor this to tryfrom.
-    fn from(value: u16) -> Self {
-        match value {
-            1 => ClassType::IN,
-            3 => ClassType::CH,
-            4 => ClassType::HS,
-            255 => ClassType::ANY,
-            _ => panic!("Unknown class type: {}", value),
-        }
-    }
 }
 
 /// Associated data for a DNS record.
@@ -816,7 +757,7 @@ impl DnsRecord {
     pub fn read(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
         let name = reader.read_qname()?;
         let r#type = RecordType::try_from(reader.read_u16()?)?;
-        let class = ClassType::from(reader.read_u16()?);
+        let class = ClassType::try_from(reader.read_u16()?)?;
         let ttl = reader.read_u32()?;
         let data_length = reader.read_u16()? as usize;
 

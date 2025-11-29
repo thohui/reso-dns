@@ -102,7 +102,7 @@ impl DnsMessageBuilder {
         let flags = if let Some(rcode) = self.response_code {
             let mut f = self.flags;
             f.qr = true;
-            f.rcode_low = rcode.into();
+            f.rcode_low = rcode as u16 as u8;
             f
         } else {
             self.flags

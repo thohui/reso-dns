@@ -8,6 +8,7 @@ anyhow.workspace = true
 bitflags.workspace = true
 bytes.workspace = true
 idna.workspace = true
+num_enum = "0.7.5"
 tokio.workspace = true
 tracing.workspace = true
 
