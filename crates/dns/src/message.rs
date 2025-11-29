@@ -6,7 +6,7 @@ use std::{
 
 use bytes::Bytes;
 
-use num_enum::{FromPrimitive, IntoPrimitive, TryFromPrimitive};
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use crate::{domain_name::DomainName, reader::DnsMessageReader, writer::DnsMessageWriter};
 
@@ -412,7 +412,7 @@ impl DnsQuestion {
 /// DNS record types.
 ///
 /// Based on: https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml#dns-parameters-4
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, IntoPrimitive)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, IntoPrimitive, TryFromPrimitive)]
 #[repr(u16)]
 pub enum RecordType {
     /// IPv4
@@ -607,27 +607,6 @@ pub enum RecordType {
     IPN = 264,
 }
 
-impl TryFrom<u16> for RecordType {
-    type Error = anyhow::Error;
-
-    fn try_from(value: u16) -> Result<Self, Self::Error> {
-        match value {
-            1 => Ok(RecordType::A),
-            2 => Ok(RecordType::NS),
-            5 => Ok(RecordType::CNAME),
-            6 => Ok(RecordType::SOA),
-            12 => Ok(RecordType::PTR),
-            15 => Ok(RecordType::MX),
-            16 => Ok(RecordType::TXT),
-            28 => Ok(RecordType::AAAA),
-            33 => Ok(RecordType::SRV),
-            41 => Ok(RecordType::OPT),
-            255 => Ok(RecordType::ANY),
-            _ => Err(anyhow::format_err!("unknown record type {}", value)),
-        }
-    }
-}
-
 /// DNS class types.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, TryFromPrimitive)]
 #[repr(u16)]
@@ -727,41 +706,13 @@ impl DnsRecordData {
         }
     }
 
-    /// Convert the DNS record data to a string representation, if applicable.
-    pub fn to_str(&self) -> Option<String> {
-        match self {
-            DnsRecordData::Raw(_) => None,
-            DnsRecordData::Ipv4(addr) => Some(addr.to_string()),
-            DnsRecordData::Ipv6(addr) => Some(addr.to_string()),
-            DnsRecordData::Text(text) => Some(text.to_string()),
-            DnsRecordData::DomainName(name) => Some(name.to_string()),
-            DnsRecordData::SOA { .. } => None,
-            DnsRecordData::MX { .. } => None,
-            DnsRecordData::SRV { .. } => None,
-        }
-    }
-}
-
-/// Represents a DNS record in a DNS message.
-#[derive(Debug, Clone, Eq)]
-pub struct DnsRecord {
-    pub name: DomainName,
-    pub record_type: RecordType,
-    pub class: ClassType,
-    pub ttl: u32,
-    pub data: DnsRecordData,
-}
-
-impl DnsRecord {
-    /// Create a new DNS record.
-    pub fn read(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
-        let name = reader.read_qname()?;
-        let r#type = RecordType::try_from(reader.read_u16()?)?;
-        let class = ClassType::try_from(reader.read_u16()?)?;
-        let ttl = reader.read_u32()?;
-        let data_length = reader.read_u16()? as usize;
-
-        let data = match r#type {
+    /// Decode record data based on the provided `record_type`.
+    pub fn read_from_record_type(
+        reader: &mut DnsMessageReader,
+        record_type: &RecordType,
+        data_length: usize,
+    ) -> anyhow::Result<DnsRecordData> {
+        Ok(match *record_type {
             RecordType::CNAME | RecordType::PTR | RecordType::NS => {
                 let domain_name = reader.read_qname()?;
                 DnsRecordData::DomainName(domain_name)
@@ -785,7 +736,7 @@ impl DnsRecord {
                 );
                 DnsRecordData::Ipv6(ipv6_addr)
             }
-            RecordType::TXT => {
+            RecordType::TXT | RecordType::SPF => {
                 let text_length = reader.read_u8()? as usize;
                 let text = reader.read_bytes(text_length)?;
                 let utf_str = String::from_utf8(text.to_vec())?;
@@ -814,11 +765,34 @@ impl DnsRecord {
                 let raw_data = reader.read_bytes(data_length)?;
                 DnsRecordData::Raw(raw_data.into())
             }
-        };
+        })
+    }
+}
+
+/// Represents a DNS record in a DNS message.
+#[derive(Debug, Clone, Eq)]
+pub struct DnsRecord {
+    pub name: DomainName,
+    pub record_type: RecordType,
+    pub class: ClassType,
+    pub ttl: u32,
+    pub data: DnsRecordData,
+}
+
+impl DnsRecord {
+    /// Create a new DNS record.
+    pub fn read(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
+        let name = reader.read_qname()?;
+        let record_type = RecordType::try_from(reader.read_u16()?)?;
+        let class = ClassType::try_from(reader.read_u16()?)?;
+        let ttl = reader.read_u32()?;
+        let data_length = reader.read_u16()? as usize;
+
+        let data = DnsRecordData::read_from_record_type(reader, &record_type, data_length)?;
 
         Ok(Self {
             name,
-            record_type: r#type,
+            record_type,
             class,
             ttl,
             data,
