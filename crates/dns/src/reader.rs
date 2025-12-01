@@ -173,6 +173,75 @@ impl<'a> DnsMessageReader<'a> {
         DomainName::from_ascii(name)
     }
 
+    /// Read an uncompressed dns name from the next `length` bytes.
+    ///
+    /// This function is mainly intended for EDNS where compression is forbidden.
+    pub fn read_qname_uncompressed(&mut self, len: usize) -> anyhow::Result<DomainName> {
+        ensure!(len > 0, "read_qname_uncompressed called with len = 0");
+
+        self.need(len, "uncompressed qname")?;
+
+        let start = self.position;
+        let end = start + len;
+        let mut pos = start;
+        let mut name = String::new();
+
+        loop {
+            if pos >= end {
+                bail!(
+                    "unterminated qname in uncompressed name (no root label within len = {})",
+                    len
+                );
+            }
+
+            let length = self.buffer[pos];
+            pos += 1;
+
+            if length == 0 {
+                // End of name
+                break;
+            }
+
+            // Compression not allowed in EDNS qnames
+            if length & 0xC0 != 0 {
+                bail!(
+                    "compression pointer (0x{:02x}) not allowed in uncompressed qname",
+                    length
+                );
+            }
+
+            let label_len = length as usize;
+
+            if pos + label_len > end {
+                bail!(
+                    "label overruns option boundary in uncompressed qname: pos={} label_len={} end={}",
+                    pos,
+                    label_len,
+                    end
+                );
+            }
+
+            let label_bytes = &self.buffer[pos..pos + label_len];
+            pos += label_len;
+
+            if !name.is_empty() {
+                name.push('.');
+            }
+            name.push_str(&String::from_utf8_lossy(label_bytes));
+        }
+
+        ensure!(
+            pos == end,
+            "extra bytes after qname in uncompressed name: pos={} end={}",
+            pos,
+            end
+        );
+
+        self.position = end;
+
+        DomainName::from_ascii(name)
+    }
+
     /// Read a specified number of bytes from the DNS message.
     pub fn read_bytes(&mut self, length: usize) -> anyhow::Result<&'a [u8]> {
         self.need(length, "raw bytes")?;
@@ -194,4 +263,23 @@ impl<'a> DnsMessageReader<'a> {
     }
 }
 
-mod tests {}
+mod tests {
+
+    use crate::{DnsMessageWriter, domain_name::DomainName};
+    #[test]
+    fn test_read_qname_uncompressed() {
+        use super::DnsMessageReader;
+        let name = "mail.google.com";
+        let dname = DomainName::from_user(name).unwrap();
+        let mut writer = DnsMessageWriter::new();
+
+        writer.write_qname(&dname).unwrap();
+
+        let bytes = writer.into_bytes();
+        let mut reader = DnsMessageReader::new(&bytes);
+
+        let decoded = reader.read_qname_uncompressed(bytes.len()).unwrap();
+
+        assert!(dname.as_str() == decoded.as_str());
+    }
+}

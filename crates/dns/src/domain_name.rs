@@ -19,7 +19,7 @@ impl DomainName {
         let mut str: String = s.as_ref().into();
 
         // Handle root
-        if &str == "." {
+        if &str == "." || str.is_empty() {
             return Ok(Self(Arc::from(".")));
         }
 

@@ -11,7 +11,7 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 use crate::{domain_name::DomainName, reader::DnsMessageReader, writer::DnsMessageWriter};
 
 /// Represents a DNS message.
-/// This struct encapsulates the various components of a DNS message,
+/// This struct encapsulates the various components of a DNS messag and doesn not represent the full wire structure.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DnsMessage {
     /// Transaction id
@@ -93,59 +93,7 @@ impl DnsMessage {
 
             // Handle EDNS
             if rtype == RecordType::OPT {
-                let udp_payload_size = reader.read_u16()?;
-
-                // TTL packed: ext_rcode | version | z_flags
-                let ttl = reader.read_u32()?;
-
-                let extended_rcode = ((ttl >> 24) & 0xFF) as u8;
-                let version = ((ttl >> 16) & 0xFF) as u8;
-                let z_flags = (ttl & 0xFFFF) as u16;
-
-                // RDLEN + options;
-                let rdlen = reader.read_u16()? as usize;
-                let opts_end = reader.position() + rdlen;
-
-                let mut options = Vec::new();
-
-                while reader.position() < opts_end {
-                    let code = reader.read_u16()?;
-                    let len = reader.read_u16()? as usize;
-                    let data = reader.read_bytes(len)?;
-                    match code {
-                        8 => {
-                            // ECS
-                            if data.len() >= 4 {
-                                let family = u16::from_be_bytes([data[0], data[1]]);
-                                let source_prefix = data[2];
-                                let scope_prefix = data[3];
-                                let addr = data[4..].to_vec();
-                                options.push(EdnsOption::ClientSubnet {
-                                    family,
-                                    source_prefix,
-                                    scope_prefix,
-                                    address: addr,
-                                });
-                            } else {
-                                println!("unknown edns option: {}", code);
-                            }
-                        }
-                        10 => {
-                            // Cookie
-                            options.push(EdnsOption::Cookie(data.to_vec()));
-                        }
-                        _ => {
-                            println!("unknown edns option: {}", code);
-                        }
-                    }
-                }
-                edns = Some(Edns {
-                    udp_payload_size,
-                    extended_rcode,
-                    version,
-                    z_flags,
-                    options,
-                });
+                edns = Some(Edns::read(&mut reader)?)
             } else {
                 // Not OPT: handle as normal record.
                 reader.seek(start)?;
@@ -869,17 +817,315 @@ pub struct Edns {
     pub options: Vec<EdnsOption>,
 }
 
+impl Edns {
+    pub fn read(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
+        let udp_payload_size = reader.read_u16()?;
+
+        // TTL packed: ext_rcode | version | z_flags
+        let ttl = reader.read_u32()?;
+
+        let extended_rcode = ((ttl >> 24) & 0xFF) as u8;
+        let version = ((ttl >> 16) & 0xFF) as u8;
+        let z_flags = (ttl & 0xFFFF) as u16;
+
+        // RDLEN + options;
+        let rdlen = reader.read_u16()? as usize;
+        let opts_end = reader.position() + rdlen;
+
+        let mut options: Vec<EdnsOption> = Vec::new();
+
+        while reader.position() < opts_end {
+            let code = EdnsOptionCode::try_from(reader.read_u16()?)?;
+            let len = reader.read_u16()?;
+            let data = EdnsOptionData::read(reader, &code, len)?;
+            options.push(EdnsOption { code, data });
+        }
+        Ok(Self {
+            udp_payload_size,
+            extended_rcode,
+            version,
+            z_flags,
+            options,
+        })
+    }
+}
+
+/// EDNS option
 #[derive(Debug, Clone, PartialEq)]
-pub enum EdnsOption {
-    /// RFC 7873
-    Cookie(Vec<u8>),
-    /// RFC 7871
+pub struct EdnsOption {
+    /// EDNS option code
+    code: EdnsOptionCode,
+    /// EDNS option data
+    data: EdnsOptionData,
+}
+
+/// EDNS Option codes
+///
+/// Based on: https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml#dns-parameters-11
+#[derive(Debug, Clone, PartialEq, TryFromPrimitive)]
+#[repr(u16)]
+pub enum EdnsOptionCode {
+    /// Apple's DNS Long-Lived Queries Protocol (RFC 8764)
+    LLQ = 1,
+    /// Update Lease (RFC 9664)
+    UpdateLease = 2,
+    /// DNS Name Server Identifier (NSID) Option
+    NSID = 3,
+    /// DNSSEC Algorithm Understood (RFC 6975)
+    DAU = 5,
+    /// DNSSEC Hash Understood (RFC 6975)
+    DHU = 6,
+    /// NSEC3 Hash Understood (RFC 6975)
+    N3U = 7,
+    /// Client Subnet in DNS Queries (RFC 7871)
+    ClientSubnet = 8,
+    /// EDNS expire (RFC 7314)
+    Expire = 9,
+    /// EDNS Cookie (RFC 7873)
+    Cookie = 10,
+    /// EDNS TCP Keep Alive (RFC 7828)
+    TcpKeepAlive = 11,
+    /// EDNS Padding (7830)
+    Padding = 12,
+    /// CHAIN (RFC 7901)
+    CHAIN = 13,
+    /// EDNS Key Tag (RFC 8145)
+    KeyTag = 14,
+    /// Extended DNS error (RFC 8914)
+    ExtendedDnsError = 15,
+    /// Report channel (RFC 9567)
+    ReportChannel = 18,
+    /// Zone version (RFC 9660)
+    ZONEVERSION = 19,
+
+    #[num_enum(alternatives = [21..=65536])]
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum EdnsOptionData {
+    /// Lease
+    Lease {
+        /// Desired lease duration (Lease Update Request) or granted lease duration (Lease Update response), in seconds
+        lease: u32,
+        /// Optional desired (or granted) lease duration for KEY RRs, in seconds
+        key_lease: Option<u32>,
+    },
+    /// Client Subnet
     ClientSubnet {
         family: u16,
         source_prefix: u8,
         scope_prefix: u8,
         address: Vec<u8>,
     },
+
+    // Timeout in units of 100ms.
+    Timeout(Option<u16>),
+
+    // Paddingk
+    Padding(u16),
+
+    // Domain Name
+    DomainName(DomainName),
+
+    // Extended Dns Error
+    ExtendedError {
+        info_code: ExtendedDnsErrorInfoCode,
+        extra_text: Option<String>,
+    },
+
+    /// Zone version Query
+    ZoneVersionQuery,
+
+    // Zone Version
+    ZoneVersion {
+        label_count: u8,
+        r#type: u8,
+        version: Vec<u8>,
+    },
+
+    /// Empty data
+    Empty,
+
+    // Raw data
+    Raw(Vec<u8>),
+}
+
+impl EdnsOptionData {
+    pub fn read(
+        reader: &mut DnsMessageReader,
+        code: &EdnsOptionCode,
+        len: u16,
+    ) -> anyhow::Result<Self> {
+        Ok(match *code {
+            EdnsOptionCode::ClientSubnet => {
+                anyhow::ensure!(len >= 4, "ECS option too short (must be at least 4 bytes)");
+                let family_bytes = reader.read_bytes(2)?;
+                let source_prefix_length = reader.read_u8()?;
+                let scope_prefix_length = reader.read_u8()?;
+                let address_size = (source_prefix_length as usize).div_ceil(8);
+                let address = reader.read_bytes(address_size)?;
+                Self::ClientSubnet {
+                    family: u16::from_be_bytes([family_bytes[0], family_bytes[1]]),
+                    source_prefix: source_prefix_length,
+                    scope_prefix: scope_prefix_length,
+                    address: address.to_vec(),
+                }
+            }
+            EdnsOptionCode::Cookie => Self::Raw(reader.read_bytes(len as usize)?.to_vec()),
+            EdnsOptionCode::UpdateLease => {
+                anyhow::ensure!(
+                    len == 4 || len == 8,
+                    "invalid UPDATE-LEASE option length: {}",
+                    len
+                );
+                let lease = reader.read_u32()?;
+                let key_lease: Option<u32> = if len == 8 {
+                    Some(reader.read_u32()?)
+                } else {
+                    None
+                };
+                Self::Lease { lease, key_lease }
+            }
+            EdnsOptionCode::DAU | EdnsOptionCode::DHU | EdnsOptionCode::N3U => {
+                Self::Raw(reader.read_bytes(len as usize)?.to_vec())
+            }
+            EdnsOptionCode::TcpKeepAlive => {
+                anyhow::ensure!(
+                    len == 0 || len == 2,
+                    "invalid TCP Keepalive option length: {}",
+                    len
+                );
+
+                // if len is 2 => present
+                let timeout: Option<u16> = if len == 2 {
+                    Some(reader.read_u16()?)
+                } else {
+                    None
+                };
+                Self::Timeout(timeout)
+            }
+            EdnsOptionCode::Padding => {
+                reader.read_bytes(len as usize)?; // discard padding bytes
+                Self::Padding(len)
+            }
+            EdnsOptionCode::CHAIN | EdnsOptionCode::ReportChannel => {
+                if len == 0 {
+                    return Ok(Self::Empty);
+                }
+                Self::DomainName(reader.read_qname_uncompressed(len as usize)?)
+            }
+            EdnsOptionCode::ExtendedDnsError => {
+                let len_usize = usize::from(len);
+                anyhow::ensure!(
+                    len_usize >= std::mem::size_of::<u16>(),
+                    "extended dns error length too short"
+                );
+                let info_code = ExtendedDnsErrorInfoCode::try_from(reader.read_u16()?)?;
+
+                let remaining_length = len_usize - std::mem::size_of::<u16>();
+
+                let remaining_bytes = reader.read_bytes(remaining_length)?;
+
+                let extra_text: Option<String> = if !remaining_bytes.is_empty() {
+                    Some(String::from_utf8_lossy(remaining_bytes).into_owned())
+                } else {
+                    None
+                };
+
+                Self::ExtendedError {
+                    info_code,
+                    extra_text,
+                }
+            }
+            EdnsOptionCode::ZONEVERSION => {
+                // Query
+                if len == 0 {
+                    Self::ZoneVersionQuery
+                    // Response
+                } else {
+                    anyhow::ensure!(
+                        len >= 2,
+                        "ZONEVERSION option too short: len={} (need at least 2)",
+                        len
+                    );
+
+                    let label_count = reader.read_u8()?;
+                    let typ = reader.read_u8()?;
+
+                    let remaining_length = len as usize - (std::mem::size_of::<u8>() * 2);
+                    let version_bytes = reader.read_bytes(remaining_length)?;
+
+                    // todo: make this more concrete (version type parsing)
+
+                    Self::ZoneVersion {
+                        label_count,
+                        r#type: typ,
+                        version: version_bytes.to_vec(),
+                    }
+                }
+            }
+            _ => {
+                let raw_data = reader.read_bytes(len as usize)?;
+                Self::Raw(raw_data.into())
+            }
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, TryFromPrimitive, PartialEq)]
+#[repr(u16)]
+pub enum ExtendedDnsErrorInfoCode {
+    /// The error in question falls into a category that does not match known extended error codes.
+    OtherError = 0,
+    /// The resolver attempted to perform DNSSEC validation, but a DNSKEY RRset contained only unsupported DNSSEC algorithms.
+    UnsupportedDnskeyAlgorithm = 1,
+    ///The resolver attempted to perform DNSSEC validation, but a DS RRset contained only unsupported Digest Types.
+    UnsupportedDsDigestType = 2,
+    /// The resolver was unable to resolve the answer within its time limits and decided to answer with previously cached data instead of answering with an error. This is typically caused by problems communicating with an authoritative server, possibly as result of a denial of service (DoS) attack against another network.
+    StaleAnswer = 3,
+    /// For policy reasons (legal obligation or malware filtering, for instance), an answer was forged. Note that this should be used when an answer is still provided, not when failure codes are returned instead.
+    ForgedAnswer = 4,
+    /// The resolver attempted to perform DNSSEC validation, but validation ended in the Indeterminate state
+    DnssecIndeterminate = 5,
+    /// The resolver attempted to perform DNSSEC validation, but validation ended in the Bogus state.
+    DnssecBogus = 6,
+    /// The resolver attempted to perform DNSSEC validation, but no signatures are presently valid and some (often all) are expired.
+    SignatureExpired = 7,
+    /// The resolver attempted to perform DNSSEC validation, but no signatures are presently valid and at least some are not yet valid.
+    SignatureNotYetValid = 8,
+    /// A DS record existed at a parent, but no supported matching DNSKEY record could be found for the child.
+    DnsKeyMissing = 9,
+    /// The resolver attempted to perform DNSSEC validation, but no RRSIGs could be found for at least one RRset where RRSIGs were expected.
+    RrSigsMissing = 10,
+    /// The resolver attempted to perform DNSSEC validation, but no Zone Key Bit was set in a DNSKEY.
+    NoZoneKeyBitSet = 11,
+    /// The resolver attempted to perform DNSSEC validation, but the requested data was missing and a covering NSEC or NSEC3 was not provided.
+    NSecMissing = 12,
+    /// The resolver is returning the SERVFAIL RCODE from its cache.
+    CachedError = 13,
+    /// The server is unable to answer the query, as it was not fully functional when the query was received.
+    NotReady = 14,
+    /// The server is unable to respond to the request because the domain is on a blocklist due to an internal security policy imposed by the operator of the server resolving or forwarding the query.
+    Blocked = 15,
+    /// The server is unable to respond to the request because the domain is on a blocklist due to an external requirement imposed by an entity other than the operator of the server resolving or forwarding the query. Note that how the imposed policy is applied is irrelevant (in-band DNS filtering, court order, etc.).
+    Censored = 16,
+    /// The server is unable to respond to the request because the domain is on a blocklist as requested by the client. Functionally, this amounts to "you requested that we filter domains like this one."
+    Filtered = 17,
+    /// An authoritative server or recursive resolver that receives a query from an "unauthorized" client can annotate its REFUSED message with this code. Examples of "unauthorized" clients are recursive queries from IP addresses outside the network, blocklisted IP addresses, local policy, etc.
+    Prohibited = 18,
+    /// The resolver was unable to resolve an answer within its configured time limits and decided to answer with a previously cached NXDOMAIN answer instead of answering with an error. This may be caused, for example, by problems communicating with an authoritative server, possibly as result of a denial of service (DoS) attack against another network.
+    StaleNxDomainAnswer = 19,
+    /// An authoritative server that receives a query with the Recursion Desired (RD) bit clear, or when it is not configured for recursion for a domain for which it is not authoritative, SHOULD include this EDE code in the REFUSED response. A resolver that receives a query with the RD bit clear SHOULD include this EDE code in the REFUSED response.
+    NotAuthorative = 20,
+    /// The requested operation or query is not supported.
+    NotSupported = 21,
+    /// The resolver could not reach any of the authoritative name servers (or they potentially refused to reply).
+    NoReachableAuthority = 22,
+    /// An unrecoverable error occurred while communicating with another server.
+    NetworkError = 23,
+    /// The authoritative server cannot answer with data for a zone it is otherwise configured to support. Examples of this include its most recent zone being too old or having expired.
+    InvalidData = 24,
 }
 
 #[cfg(test)]
