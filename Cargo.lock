@@ -1631,6 +1631,7 @@ dependencies = [
  "bytes",
  "idna",
  "num_enum",
+ "once_cell",
  "tokio",
  "tracing",
 ]

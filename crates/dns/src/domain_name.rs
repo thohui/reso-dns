@@ -78,6 +78,14 @@ impl DomainName {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    // Get an iterator of labels.
+    pub fn label_iter(&self) -> impl Iterator<Item = &str> {
+        if self.as_str() == "." {
+            return "".split('.');
+        }
+        self.0.split('.')
+    }
 }
 
 impl Deref for DomainName {

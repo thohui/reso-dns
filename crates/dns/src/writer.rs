@@ -1,11 +1,15 @@
+use std::collections::{HashMap, HashSet};
+
 use anyhow::ensure;
 use bytes::{BufMut, Bytes, BytesMut};
+use once_cell::sync::OnceCell;
 
 use crate::domain_name::DomainName;
 
 pub struct DnsMessageWriter {
     buf: BytesMut,
     max_len: usize,
+    label_pointers: OnceCell<HashMap<String, u16>>,
 }
 
 impl Default for DnsMessageWriter {
@@ -20,6 +24,7 @@ impl DnsMessageWriter {
         Self {
             buf: BytesMut::with_capacity(max_len.min(512)), // 512 is min dns message payload size.
             max_len,
+            label_pointers: OnceCell::new(),
         }
     }
 
@@ -70,29 +75,61 @@ impl DnsMessageWriter {
         Ok(())
     }
 
-    /// Write a qname to the buffer.
-    pub fn write_qname(&mut self, qname: &DomainName) -> anyhow::Result<()> {
-        // TODO: support compression.
-        if qname.as_str() == "." {
+    // Write a compressed qname to the buffer.
+    pub fn write_qname(&mut self, name: &DomainName) -> anyhow::Result<()> {
+        let labels: Vec<&str> = name.label_iter().collect();
+
+        if labels.is_empty() {
             // root label
             return self.write_u8(0);
         }
 
-        let mut total = 1; // for the final zero
-        for label in qname.trim_end_matches('.').split('.') {
-            ensure!(!label.is_empty(), "empty label in qname '{}'", qname);
-            ensure!(label.len() <= 63, "label '{}' exceeds 63 bytes", label);
-            total += 1 + label.len();
-        }
-        ensure!(
-            total <= 255,
-            "qname too long ({} bytes): '{}'",
-            total,
-            qname
-        );
+        let needed_space = name.len() + 1; // +1 for the terminator.
+        self.ensure_space(needed_space, "qname")?;
 
-        self.ensure_space(total, "qname")?;
-        for label in qname.trim_end_matches('.').split('.') {
+        for i in 0..labels.len() {
+            let suffix = labels[i..].join(".");
+
+            let ptrs = self.label_pointers.get_or_init(|| HashMap::default());
+            if let Some(&offset) = ptrs.get(&suffix) {
+                let ptr = 0xC000 | offset;
+                self.write_u16(ptr)?;
+                return Ok(());
+            }
+
+            let pos = self.position();
+
+            let ptrs = self
+                .label_pointers
+                .get_mut()
+                .ok_or(anyhow::anyhow!("expected label_pointers to be initialized"))?;
+
+            ptrs.insert(suffix, pos as u16);
+
+            let label = labels[i];
+            self.write_u8(label.len() as u8)?;
+            self.write_bytes(label.as_bytes())?;
+        }
+
+        self.write_u8(0)?;
+
+        Ok(())
+    }
+
+    /// Write an uncompressed qname to the buffer.
+    ///
+    /// This function is mainly intended for EDNS where compression is forbidden.
+    pub fn write_qname_uncompressed(&mut self, name: &DomainName) -> anyhow::Result<()> {
+        let labels: Vec<&str> = name.label_iter().collect();
+
+        if labels.is_empty() {
+            // root label
+            return self.write_u8(0);
+        }
+
+        let needed_space = name.len() + 1; // +1 for the terminator.
+        self.ensure_space(needed_space, "qname")?;
+        for label in &labels {
             self.buf.put_u8(label.len() as u8);
             self.buf.extend_from_slice(label.as_bytes());
         }

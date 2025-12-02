@@ -273,7 +273,7 @@ mod tests {
         let dname = DomainName::from_user(name).unwrap();
         let mut writer = DnsMessageWriter::new();
 
-        writer.write_qname(&dname).unwrap();
+        writer.write_qname_uncompressed(&dname).unwrap();
 
         let bytes = writer.into_bytes();
         let mut reader = DnsMessageReader::new(&bytes);

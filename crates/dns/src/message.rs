@@ -1245,6 +1245,8 @@ pub enum ExtendedDnsErrorInfoCode {
 #[cfg(test)]
 mod tests {
 
+    use bitflags::Flags;
+
     use crate::builder::DnsMessageBuilder;
 
     use super::*;
@@ -1317,5 +1319,28 @@ mod tests {
         assert!(hex.contains(&"02".to_string())); // QTYPE = 2
         assert!(hex.contains(&"00".to_string()));
         assert!(hex.contains(&"01".to_string())); // QCLASS = 1
+    }
+
+    #[test]
+    fn test_message_compression() {
+        let message = DnsMessageBuilder::new()
+            .with_id(1)
+            .with_flags(DnsFlags::default())
+            .add_question(DnsQuestion::new(
+                DomainName::from_user("google.com").unwrap(),
+                RecordType::A,
+                ClassType::IN,
+            ))
+            .add_question(DnsQuestion::new(
+                DomainName::from_user("mail.google.com").unwrap(),
+                RecordType::A,
+                ClassType::IN,
+            ))
+            .build();
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        assert!(message == decoded);
     }
 }
