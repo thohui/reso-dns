@@ -8,7 +8,11 @@ use bytes::Bytes;
 
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-use crate::{domain_name::DomainName, reader::DnsMessageReader, writer::DnsMessageWriter};
+use crate::{
+    domain_name::DomainName,
+    reader::{DnsMessageReader, DnsReadable},
+    writer::{DnsMessageWriter, DnsWritable},
+};
 
 /// Represents a DNS message.
 /// This struct encapsulates the various components of a DNS messag and doesn not represent the full wire structure.
@@ -54,7 +58,7 @@ impl DnsMessage {
         let mut reader = DnsMessageReader::new(data);
 
         let id = reader.read_u16()?;
-        let flags = DnsFlags::try_from(reader.read_u16()?)?;
+        let flags = DnsFlags::read_from(&mut reader)?;
 
         let number_of_questions = reader.read_u16()?; // QDCOUNT
         let number_of_answers = reader.read_u16()?; // ANCOUNT
@@ -64,21 +68,21 @@ impl DnsMessage {
         let mut questions = Vec::with_capacity(number_of_questions as usize);
 
         for _ in 0..number_of_questions {
-            let question = DnsQuestion::read(&mut reader)?;
+            let question = DnsQuestion::read_from(&mut reader)?;
             questions.push(question);
         }
 
         let mut answers = Vec::with_capacity(number_of_answers as usize);
 
         for _ in 0..number_of_answers {
-            let answer = DnsRecord::read(&mut reader)?;
+            let answer = DnsRecord::read_from(&mut reader)?;
             answers.push(answer);
         }
 
         let mut authority_records = Vec::with_capacity(number_of_authority_records as usize);
 
         for _ in 0..number_of_authority_records {
-            authority_records.push(DnsRecord::read(&mut reader)?);
+            authority_records.push(DnsRecord::read_from(&mut reader)?);
         }
 
         let mut additional_records = Vec::with_capacity(number_of_additional_records as usize);
@@ -93,11 +97,11 @@ impl DnsMessage {
 
             // Handle EDNS
             if rtype == RecordType::OPT {
-                edns = Some(Edns::read(&mut reader)?)
+                edns = Some(Edns::read_from(&mut reader)?)
             } else {
                 // Not OPT: handle as normal record.
                 reader.seek(start)?;
-                additional_records.push(DnsRecord::read(&mut reader)?);
+                additional_records.push(DnsRecord::read_from(&mut reader)?);
             }
         }
 
@@ -119,7 +123,7 @@ impl DnsMessage {
         writer.write_u16(self.id)?;
 
         // Flags
-        self.flags.write(&mut writer)?;
+        self.flags.write_to(&mut writer)?;
 
         // QDCOUNT
         writer.write_u16(self.questions.len() as u16)?;
@@ -135,22 +139,22 @@ impl DnsMessage {
 
         // Questions
         for question in &self.questions {
-            question.write(&mut writer)?;
+            question.write_to(&mut writer)?;
         }
 
         // Answers
         for answer in &self.answers {
-            answer.write(&mut writer)?;
+            answer.write_to(&mut writer)?;
         }
 
         // Authority records
         for authority_record in &self.authority_records {
-            authority_record.write(&mut writer)?;
+            authority_record.write_to(&mut writer)?;
         }
 
         // Additional records
         for additional_record in &self.additional_records {
-            additional_record.write(&mut writer)?;
+            additional_record.write_to(&mut writer)?;
         }
 
         Ok(writer.into_bytes())
@@ -181,7 +185,20 @@ impl DnsMessage {
         &self.edns
     }
 
-    pub fn rcode(&self) -> anyhow::Result<DnsResponseCode> {
+    // Set the response code
+    pub fn set_response_code(&mut self, response_code: DnsResponseCode) {
+        let full: u16 = response_code.into();
+        self.flags.rcode_low = (full & 0x0F) as u8;
+
+        // handle higher part.
+        if full > 0x0F {
+            let edns = self.edns.get_or_insert_with(Edns::default);
+            edns.extended_rcode = (full >> 4) as u8;
+        }
+    }
+
+    /// Response code
+    pub fn response_code(&self) -> anyhow::Result<DnsResponseCode> {
         let low = self.flags.rcode_low as u16;
         let high = self.edns.as_ref().map(|e| e.extended_rcode).unwrap_or(0) as u16;
         let code = DnsResponseCode::try_from((high << 4) | low)?;
@@ -192,25 +209,25 @@ impl DnsMessage {
 #[derive(Debug, Copy, Clone, Default, PartialEq)]
 pub struct DnsFlags {
     /// Query or Response
-    pub qr: bool,
+    pub response: bool,
     /// Opcode
     pub opcode: DnsOpcode,
     /// Authoritative Answer
-    pub aa: bool,
+    pub authorative_answer: bool,
     /// Truncated, indicates that this message was truncated due to length greater than 512 bytes
-    pub tc: bool,
+    pub truncated: bool,
     /// Recursion Desired, indicates that the client desires recursive resolution
-    pub rd: bool,
+    pub recursion_desired: bool,
     /// Recursion Available, indicates that the server supports recursive resolution
-    pub ra: bool,
+    pub recursion_available: bool,
     /// Z flag, reserved for future use, must be zero in all queries and responses
-    pub z: bool,
+    pub(crate) z: bool,
     /// Authentic Data, indicates that the response is authentic
-    pub ad: bool,
+    pub authentic_data: bool,
     /// Checking Disabled, indicates that the server is not performing DNSSEC validation
-    pub cd: bool,
+    pub checking_disabled: bool,
     // Lower part of the response code.
-    pub rcode_low: u8,
+    pub(crate) rcode_low: u8,
 }
 
 impl TryFrom<u16> for DnsFlags {
@@ -218,33 +235,77 @@ impl TryFrom<u16> for DnsFlags {
 
     fn try_from(bytes: u16) -> Result<Self, Self::Error> {
         Ok(Self {
-            qr: (bytes >> 15) & 0x1 != 0,
+            response: (bytes >> 15) & 0x1 != 0,
             opcode: DnsOpcode::try_from(((bytes >> 11) & 0xF) as u8)?,
-            aa: (bytes >> 10) & 0x1 != 0,
-            tc: (bytes >> 9) & 0x1 != 0,
-            rd: (bytes >> 8) & 0x1 != 0,
-            ra: (bytes >> 7) & 0x1 != 0,
+            authorative_answer: (bytes >> 10) & 0x1 != 0,
+            truncated: (bytes >> 9) & 0x1 != 0,
+            recursion_desired: (bytes >> 8) & 0x1 != 0,
+            recursion_available: (bytes >> 7) & 0x1 != 0,
             z: (bytes >> 6) & 0x1 != 0,
-            ad: (bytes >> 5) & 0x1 != 0,
-            cd: (bytes >> 4) & 0x1 != 0,
+            authentic_data: (bytes >> 5) & 0x1 != 0,
+            checking_disabled: (bytes >> 4) & 0x1 != 0,
             rcode_low: (bytes & 0x0F) as u8,
         })
     }
 }
 
 impl DnsFlags {
-    pub fn write(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
+    pub fn new(
+        response: bool,
+        opcode: DnsOpcode,
+        authorative_answer: bool,
+        truncated: bool,
+        recursion_desired: bool,
+        recursion_available: bool,
+        authentic_data: bool,
+        checking_disabled: bool,
+    ) -> Self {
+        Self {
+            response,
+            opcode,
+            authorative_answer,
+            truncated,
+            recursion_desired,
+            recursion_available,
+            z: false,
+            authentic_data,
+            checking_disabled,
+            rcode_low: 0,
+        }
+    }
+}
+
+impl DnsReadable for DnsFlags {
+    fn read_from(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
+        let bytes = reader.read_u16()?;
+        Ok(Self {
+            response: (bytes >> 15) & 0x1 != 0,
+            opcode: DnsOpcode::try_from(((bytes >> 11) & 0xF) as u8)?,
+            authorative_answer: (bytes >> 10) & 0x1 != 0,
+            truncated: (bytes >> 9) & 0x1 != 0,
+            recursion_desired: (bytes >> 8) & 0x1 != 0,
+            recursion_available: (bytes >> 7) & 0x1 != 0,
+            z: (bytes >> 6) & 0x1 != 0,
+            authentic_data: (bytes >> 5) & 0x1 != 0,
+            checking_disabled: (bytes >> 4) & 0x1 != 0,
+            rcode_low: (bytes & 0x0F) as u8,
+        })
+    }
+}
+
+impl DnsWritable for DnsFlags {
+    fn write_to(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
         let opcode: u8 = self.opcode.into();
         writer.write_u16(
-            ((self.qr as u16) << 15)
+            ((self.response as u16) << 15)
                 | ((opcode as u16) << 11)
-                | ((self.aa as u16) << 10)
-                | ((self.tc as u16) << 9)
-                | ((self.rd as u16) << 8)
-                | ((self.ra as u16) << 7)
+                | ((self.authorative_answer as u16) << 10)
+                | ((self.truncated as u16) << 9)
+                | ((self.recursion_desired as u16) << 8)
+                | ((self.recursion_available as u16) << 7)
                 | ((self.z as u16) << 6)
-                | ((self.ad as u16) << 5)
-                | (self.cd as u16) << 4
+                | ((self.authentic_data as u16) << 5)
+                | (self.checking_disabled as u16) << 4
                 | self.rcode_low as u16, // todo: add edns support for this. should probably move this inside the encode fn.
         )?;
         Ok(())
@@ -334,9 +395,10 @@ impl DnsQuestion {
             qclass,
         }
     }
+}
 
-    /// Create a new DNS question from a reader.
-    pub fn read(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
+impl DnsReadable for DnsQuestion {
+    fn read_from(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
         let qname = reader.read_qname()?;
         let qtype = RecordType::try_from(reader.read_u16()?)?;
         let qclass = ClassType::try_from(reader.read_u16()?)?;
@@ -347,9 +409,10 @@ impl DnsQuestion {
             qclass,
         })
     }
+}
 
-    /// Write the DNS question to the writer.
-    pub fn write(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
+impl DnsWritable for DnsQuestion {
+    fn write_to(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
         writer.write_qname(&self.qname)?;
         writer.write_u16(self.qtype as u16)?;
         writer.write_u16(self.qclass as u16)?;
@@ -728,48 +791,6 @@ pub struct DnsRecord {
 }
 
 impl DnsRecord {
-    /// Create a new DNS record.
-    pub fn read(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
-        let name = reader.read_qname()?;
-        let record_type = RecordType::try_from(reader.read_u16()?)?;
-        let class = ClassType::try_from(reader.read_u16()?)?;
-        let ttl = reader.read_u32()?;
-        let data_length = reader.read_u16()? as usize;
-
-        let data = DnsRecordData::read_from_record_type(reader, &record_type, data_length)?;
-
-        Ok(Self {
-            name,
-            record_type,
-            class,
-            ttl,
-            data,
-        })
-    }
-
-    /// Write the DNS record to the DNS message.
-    pub fn write(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
-        writer.write_qname(&self.name)?;
-        writer.write_u16(self.record_type as u16)?;
-        writer.write_u16(self.class as u16)?;
-        writer.write_u32(self.ttl)?;
-
-        let rdlen_pos = writer.position();
-
-        // Reserve rdlen so we can go back once we know the size.
-        writer.write_u16(0)?;
-
-        let before = writer.position();
-        self.data.write(writer)?;
-        let after = writer.position();
-        let rdlen = (after - before) as u16;
-
-        // Write the rdlen.
-        writer.overwrite_bytes(rdlen_pos, &rdlen.to_be_bytes())?;
-
-        Ok(())
-    }
-
     /// Get the name of the DNS record.
     pub fn name(&self) -> &str {
         &self.name
@@ -792,6 +813,50 @@ impl DnsRecord {
     }
 }
 
+impl DnsReadable for DnsRecord {
+    fn read_from(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
+        let name = reader.read_qname()?;
+        let record_type = RecordType::try_from(reader.read_u16()?)?;
+        let class = ClassType::try_from(reader.read_u16()?)?;
+        let ttl = reader.read_u32()?;
+        let data_length = reader.read_u16()? as usize;
+
+        let data = DnsRecordData::read_from_record_type(reader, &record_type, data_length)?;
+
+        Ok(Self {
+            name,
+            record_type,
+            class,
+            ttl,
+            data,
+        })
+    }
+}
+
+impl DnsWritable for DnsRecord {
+    fn write_to(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
+        writer.write_qname(&self.name)?;
+        writer.write_u16(self.record_type as u16)?;
+        writer.write_u16(self.class as u16)?;
+        writer.write_u32(self.ttl)?;
+
+        let rdlen_pos = writer.position();
+
+        // Reserve rdlen so we can go back once we know the size.
+        writer.write_u16(0)?;
+
+        let before = writer.position();
+        self.data.write(writer)?;
+        let after = writer.position();
+        let rdlen = (after - before) as u16;
+
+        // Write the rdlen.
+        writer.overwrite_bytes(rdlen_pos, &rdlen.to_be_bytes())?;
+
+        Ok(())
+    }
+}
+
 impl PartialEq for DnsRecord {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
@@ -803,22 +868,50 @@ impl PartialEq for DnsRecord {
 }
 
 /// Represents EDNS (Extension Mechanisms for DNS) information in a DNS message.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Edns {
-    /// From OPT.CLASS (not a DNS class): max UDP payload size sender can handle
+    /// Max UDP payload size sender can handle
     pub udp_payload_size: u16,
     /// High bits of RCODE (ttl[31:24])
-    pub extended_rcode: u8,
-    /// EDNS version (ttl[23:16]) — must be 0 today
+    extended_rcode: u8,
+    /// EDNS version - must be 0.
     pub version: u8,
-    /// Z flags (ttl[15:0]); DO (DNSSEC OK) is 0x8000
-    pub z_flags: u16,
+    /// Z flags
+    z_flags: u16,
     /// Edns option
     pub options: Vec<EdnsOption>,
 }
 
+impl Default for Edns {
+    fn default() -> Self {
+        Self {
+            udp_payload_size: 4096,
+            extended_rcode: 0,
+            version: 0,
+            z_flags: 0,
+            options: vec![],
+        }
+    }
+}
+
 impl Edns {
-    pub fn read(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
+    // Get the do bit
+    pub fn do_bit(&self) -> bool {
+        self.z_flags & 0x8000 != 0
+    }
+
+    // Set the do bit
+    pub fn set_do_bit(&mut self, v: bool) {
+        if v {
+            self.z_flags |= 0x8000;
+        } else {
+            self.z_flags &= !0x8000
+        }
+    }
+}
+
+impl DnsReadable for Edns {
+    fn read_from(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
         let udp_payload_size = reader.read_u16()?;
 
         // TTL packed: ext_rcode | version | z_flags
@@ -835,10 +928,8 @@ impl Edns {
         let mut options: Vec<EdnsOption> = Vec::new();
 
         while reader.position() < opts_end {
-            let code = EdnsOptionCode::try_from(reader.read_u16()?)?;
-            let len = reader.read_u16()?;
-            let data = EdnsOptionData::read(reader, &code, len)?;
-            options.push(EdnsOption { code, data });
+            let option = EdnsOption::read_from(reader)?;
+            options.push(option);
         }
         Ok(Self {
             udp_payload_size,
@@ -850,11 +941,19 @@ impl Edns {
     }
 }
 
+impl DnsWritable for Edns {
+    fn write_to(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
+        todo!()
+    }
+}
+
 /// EDNS option
 #[derive(Debug, Clone, PartialEq)]
 pub struct EdnsOption {
     /// EDNS option code
     code: EdnsOptionCode,
+    /// EDNS option length.
+    len: u16,
     /// EDNS option data
     data: EdnsOptionData,
 }
@@ -898,7 +997,8 @@ pub enum EdnsOptionCode {
     /// Zone version (RFC 9660)
     ZONEVERSION = 19,
 
-    #[num_enum(alternatives = [21..=65536])]
+    /// Unknown or reserved/unassigned
+    #[num_enum(alternatives = [16, 17, 21..=65536])]
     Unknown,
 }
 
@@ -1073,6 +1173,20 @@ impl EdnsOptionData {
     }
 }
 
+impl DnsReadable for EdnsOption {
+    fn read_from(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
+        let code = EdnsOptionCode::try_from(reader.read_u16()?)?;
+        let len = reader.read_u16()?;
+        // todo: find a way to implement the DnsReader trait for EdnsOptionData. we can't currently because it relies on the code which we parse here.
+        let data = EdnsOptionData::read(reader, &code, len)?;
+        Ok(Self {
+            code: code,
+            len,
+            data: data,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, TryFromPrimitive, PartialEq)]
 #[repr(u16)]
 pub enum ExtendedDnsErrorInfoCode {
@@ -1159,15 +1273,15 @@ mod tests {
         let packet = DnsMessageBuilder::new()
             .with_id(12345)
             .with_flags(DnsFlags {
-                qr: true,
+                response: true,
                 opcode: DnsOpcode::Query,
-                aa: false,
-                tc: false,
-                rd: true,
-                ra: false,
+                authorative_answer: false,
+                truncated: false,
+                recursion_desired: true,
+                recursion_available: false,
                 z: false,
-                ad: false,
-                cd: false,
+                authentic_data: false,
+                checking_disabled: false,
                 rcode_low: 0,
             })
             .add_question(DnsQuestion {
@@ -1185,7 +1299,7 @@ mod tests {
         assert_eq!(&*decoded_message.questions[0].qname, "example.com");
         assert_eq!(decoded_message.questions[0].qtype, RecordType::A);
         assert_eq!(decoded_message.questions[0].qclass, ClassType::IN);
-        assert!(decoded_message.flags.qr);
+        assert!(decoded_message.flags.response);
         assert_eq!(decoded_message.flags.opcode, DnsOpcode::Query);
     }
     #[test]

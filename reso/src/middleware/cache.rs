@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use reso_cache::{CacheKey, CacheResult, NegKind};
 use reso_context::{DnsMiddleware, DnsRequestCtx};
-use reso_dns::{DnsFlags, DnsMessageBuilder, DnsResponseCode};
+use reso_dns::{DnsFlags, DnsMessageBuilder, DnsOpcode, DnsResponseCode};
 
 use crate::{global::Global, local::Local};
 
@@ -26,15 +26,20 @@ impl DnsMiddleware<Global, Local> for CacheMiddleware {
                     NegKind::NoData => DnsResponseCode::NoError,
                 };
 
+                let flags = DnsFlags::new(
+                    true,
+                    DnsOpcode::Query,
+                    false,
+                    false,
+                    message.flags.recursion_desired,
+                    true,
+                    false,
+                    message.flags.checking_disabled,
+                );
+
                 let message = DnsMessageBuilder::new()
                     .with_id(message.id)
-                    .with_flags(DnsFlags {
-                        qr: true,
-                        rd: message.flags.rd,
-                        cd: message.flags.cd,
-                        ra: true,
-                        ..Default::default()
-                    })
+                    .with_flags(flags)
                     .with_response(response_code)
                     .with_questions(message.questions().to_vec())
                     .with_authority_records(vec![result.soa_record])
@@ -49,15 +54,19 @@ impl DnsMiddleware<Global, Local> for CacheMiddleware {
                 tracing::debug!("cache hit for {:?}", cache_key);
                 let mut local = ctx.local_mut();
                 local.cache_hit = true;
+                let flags = DnsFlags::new(
+                    true,
+                    DnsOpcode::Query,
+                    false,
+                    false,
+                    message.flags.recursion_desired,
+                    true,
+                    false,
+                    message.flags.checking_disabled,
+                );
                 let message = DnsMessageBuilder::new()
                     .with_id(message.id)
-                    .with_flags(DnsFlags {
-                        qr: true,
-                        rd: message.flags.rd,
-                        cd: message.flags.cd,
-                        ra: true,
-                        ..Default::default()
-                    })
+                    .with_flags(flags)
                     .with_questions(message.questions().to_vec())
                     .with_answers(recs.to_vec())
                     .build();

@@ -213,14 +213,14 @@ impl DnsMessageCache {
 
     pub async fn insert(&self, query_msg: &DnsMessage, resp_msg: &DnsMessage) {
         // dont cache truncated or non responses.
-        if resp_msg.flags.tc || !resp_msg.flags.qr {
+        if resp_msg.flags.truncated || !resp_msg.flags.response {
             return;
         }
 
         // Handle negative caching.
         // https://datatracker.ietf.org/doc/html/rfc2308
-        if resp_msg.flags.aa {
-            match resp_msg.rcode() {
+        if resp_msg.flags.authorative_answer {
+            match resp_msg.response_code() {
                 Ok(DnsResponseCode::NoError) => {
                     // Check for nodata
                     let is_no_data = resp_msg.answers().is_empty()

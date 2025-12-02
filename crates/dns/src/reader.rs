@@ -283,3 +283,8 @@ mod tests {
         assert!(dname.as_str() == decoded.as_str());
     }
 }
+
+/// Trait for types that can be directly parsed from a DNS message.
+pub trait DnsReadable: Sized {
+    fn read_from(reader: &mut DnsMessageReader) -> anyhow::Result<Self>;
+}

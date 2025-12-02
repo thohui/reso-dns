@@ -18,15 +18,15 @@ impl DnsMessageBuilder {
         Self {
             id: 0,
             flags: DnsFlags {
-                qr: false,
+                response: false,
                 opcode: DnsOpcode::Query,
-                aa: false,
-                tc: false,
-                rd: true,
-                ra: false,
+                authorative_answer: false,
+                truncated: false,
+                recursion_desired: true,
+                recursion_available: false,
                 z: false,
-                ad: false,
-                cd: false,
+                authentic_data: false,
+                checking_disabled: false,
                 rcode_low: 0,
             },
             questions: Vec::new(),
@@ -99,22 +99,19 @@ impl DnsMessageBuilder {
 
     /// Build the DNS message.
     pub fn build(self) -> DnsMessage {
-        let flags = if let Some(rcode) = self.response_code {
-            let mut f = self.flags;
-            f.qr = true;
-            f.rcode_low = rcode as u16 as u8;
-            f
-        } else {
-            self.flags
-        };
-
-        DnsMessage::new(
+        let mut message = DnsMessage::new(
             self.id,
-            flags,
+            self.flags,
             self.questions,
             self.answers,
             self.authority_records,
             self.additional_records,
-        )
+        );
+
+        if let Some(response_code) = self.response_code {
+            message.set_response_code(response_code)
+        };
+
+        message
     }
 }

@@ -144,3 +144,8 @@ impl DnsMessageWriter {
         self.buf.len()
     }
 }
+
+/// Trait for types that can be serialized into DNS wire format
+pub trait DnsWritable {
+    fn write_to(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()>;
+}
