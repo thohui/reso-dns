@@ -1187,6 +1187,7 @@ impl DnsReadable for EdnsOption {
     }
 }
 
+/// Extended DNS error info code
 #[derive(Debug, Clone, Copy, TryFromPrimitive, PartialEq)]
 #[repr(u16)]
 pub enum ExtendedDnsErrorInfoCode {
@@ -1244,8 +1245,6 @@ pub enum ExtendedDnsErrorInfoCode {
 
 #[cfg(test)]
 mod tests {
-
-    use bitflags::Flags;
 
     use crate::builder::DnsMessageBuilder;
 

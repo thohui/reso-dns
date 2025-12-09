@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use anyhow::ensure;
 use bytes::{BufMut, Bytes, BytesMut};
