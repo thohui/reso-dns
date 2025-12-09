@@ -17,8 +17,8 @@ pub enum ResolveError {
     #[error("request timed out")]
     Timeout,
 
-    #[error("failed to decode incoming request: {0}")]
-    Decode(#[source] anyhow::Error),
+    #[error("invalid request {0}")]
+    InvalidRequest(String),
 
     #[error("invalid response {0}")]
     InvalidResponse(String),
@@ -31,7 +31,7 @@ impl ResolveError {
     pub fn response_code(&self) -> DnsResponseCode {
         match self {
             ResolveError::Timeout => DnsResponseCode::ServerFailure,
-            ResolveError::Decode(_) => DnsResponseCode::FormatError,
+            ResolveError::InvalidRequest(_) => DnsResponseCode::FormatError,
             ResolveError::InvalidResponse(_) => DnsResponseCode::ServerFailure,
             ResolveError::Other(_) => DnsResponseCode::ServerFailure,
         }

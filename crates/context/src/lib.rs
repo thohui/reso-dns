@@ -48,14 +48,9 @@ impl<G, L> DnsRequestCtx<G, L> {
         }
     }
 
-    /// The deadline for the request.
-    pub fn deadline(&self) -> Instant {
-        self.budget.at()
-    }
-
-    // Remaining time budget for the request.
-    pub fn remaining(&self) -> Option<Duration> {
-        self.budget.remaining()
+    // Request budget
+    pub fn budget(&self) -> &RequestBudget {
+        &self.budget
     }
 
     /// Request type
@@ -111,7 +106,7 @@ pub async fn run_middlewares<G, L>(
 }
 
 /// A budget for processing a DNS request, based on a deadline.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct RequestBudget {
     deadline: Instant,
 }
@@ -124,7 +119,7 @@ impl RequestBudget {
     }
 
     /// When the budget expires.
-    pub fn at(&self) -> Instant {
+    pub fn deadline(&self) -> Instant {
         self.deadline
     }
 

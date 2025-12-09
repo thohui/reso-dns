@@ -9,7 +9,7 @@ use migrations::MIGRATIONS;
 use moka::future::FutureExt;
 use reso_cache::DnsMessageCache;
 use reso_dns::{DnsMessage, helpers};
-use reso_resolver::forwarder::ForwardResolver;
+use reso_resolver::forwarder::resolver::ForwardResolver;
 use reso_server::DnsServer;
 use tokio::signal;
 use tracing::level_filters::LevelFilter;
@@ -59,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
         return Err(anyhow::anyhow!("Unsupported resolver configuration"));
     };
 
-    let resolver = Arc::new(ForwardResolver::new(&upstreams).await?);
+    let resolver = ForwardResolver::new(&upstreams).await?;
 
     let timeout_duration = Duration::from_secs(config.server.timeout);
 
