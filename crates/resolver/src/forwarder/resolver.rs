@@ -54,18 +54,18 @@ where
     L: Send + Sync,
 {
     async fn resolve(&self, ctx: &DnsRequestCtx<G, L>) -> Result<Bytes, ResolveError> {
-        let qmsg = ctx
+        let query_message = ctx
             .message()
             .or_else(|e| Err(ResolveError::InvalidRequest(e.to_string())))?;
 
-        if qmsg.questions().len() != 1 {
+        if query_message.questions().len() != 1 {
             return Err(ResolveError::InvalidRequest(format!(
                 "request contains {} questions, expected 1",
-                qmsg.questions().len(),
+                query_message.questions().len(),
             )));
         }
 
-        let key = CacheKey::try_from(qmsg).or_else(|e| Err(ResolveError::Other(e)))?;
+        let key = CacheKey::try_from(query_message).or_else(|e| Err(ResolveError::Other(e)))?;
 
         let upstreams = self.upstreams.clone();
 
@@ -88,21 +88,24 @@ where
                 Err(e) => ResolveError::Other(e),
             })?;
 
-        let response = resp_arc.as_ref().clone().into_custom_response(qmsg.id);
+        let response = resp_arc
+            .as_ref()
+            .clone()
+            .into_custom_response(query_message.id);
 
-        let resp_message = DnsMessage::decode(&response)
+        let response_message = DnsMessage::decode(&response)
             .or_else(|e| Err(ResolveError::InvalidResponse(e.to_string())))?;
 
         // ensure that the response has exactly one question
-        if resp_message.questions().len() != 1 {
+        if response_message.questions().len() != 1 {
             return Err(ResolveError::InvalidResponse(std::format!(
                 "upstream response contains {} questions, expected 1",
-                resp_message.questions().len(),
+                response_message.questions().len(),
             )));
         }
 
-        let req_q = qmsg.questions().first();
-        let resp_q = resp_message.questions().first();
+        let req_q = query_message.questions().first();
+        let resp_q = response_message.questions().first();
 
         // ensure that the response question matches the request question
         if req_q != resp_q {

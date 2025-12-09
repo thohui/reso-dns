@@ -12,7 +12,7 @@ pub(crate) struct UdpConn {
 }
 
 impl UdpConn {
-    /// Create a new UDP connection to the specified upstream address.
+    /// Create a new UDP connection to the specified upstream address utilizing source port randomization.
     pub async fn new(upstream_addr: SocketAddr) -> anyhow::Result<Self> {
         let bind_addr = if upstream_addr.is_ipv4() {
             SocketAddr::from(([0, 0, 0, 0], 0))
