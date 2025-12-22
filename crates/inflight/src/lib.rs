@@ -70,11 +70,7 @@ where
         };
 
         #[allow(clippy::async_yields_async)]
-        let shared = entry
-            .fut
-            .get_or_init(async move || shared_future)
-            .await
-            .clone();
+        let shared = entry.fut.get_or_init(async move || shared_future).await.clone();
 
         let arc_res = shared.await;
 

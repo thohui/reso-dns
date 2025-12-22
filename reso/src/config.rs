@@ -116,8 +116,7 @@ pub struct Config {
 
 fn decode_from_path(path: &str) -> anyhow::Result<Config, ConfigError> {
     let content = std::fs::read_to_string(path).map_err(|_| ConfigError::NotFound)?;
-    let config: Config =
-        toml::from_str(&content).map_err(|e| ConfigError::Decode(e.message().into()))?;
+    let config: Config = toml::from_str(&content).map_err(|e| ConfigError::Decode(e.message().into()))?;
     Ok(config)
 }
 

@@ -120,10 +120,7 @@ where
 
             if http2 {
                 // HTTP/2
-                if let Err(e) = http2::Builder::new(TokioExecutor)
-                    .serve_connection(io, svc)
-                    .await
-                {
+                if let Err(e) = http2::Builder::new(TokioExecutor).serve_connection(io, svc).await {
                     tracing::error!("h2 conn error: {e}");
                 }
             } else {
@@ -152,9 +149,7 @@ where
     L: Send + Sync + Default + 'static,
 {
     if req.uri().path() != "/dns-query" {
-        return Ok(Response::builder()
-            .status(404)
-            .body(Full::new(Bytes::new()))?);
+        return Ok(Response::builder().status(404).body(Full::new(Bytes::new()))?);
     }
 
     let bytes = match *req.method() {
@@ -162,25 +157,19 @@ where
             Ok(b) => b,
             Err(e) => {
                 tracing::error!("failed to handle DOH GET request: {e:?}");
-                return Ok(Response::builder()
-                    .status(400)
-                    .body(Full::new(Bytes::new()))?);
+                return Ok(Response::builder().status(400).body(Full::new(Bytes::new()))?);
             }
         },
         Method::POST => match extract_bytes_from_post(req, max_size).await {
             Ok(b) => b,
             Err(e) => {
                 tracing::error!("failed to handle DOH POST request: {e:?}");
-                return Ok(Response::builder()
-                    .status(400)
-                    .body(Full::new(Bytes::new()))?);
+                return Ok(Response::builder().status(400).body(Full::new(Bytes::new()))?);
             }
         },
         _ => {
             tracing::error!("unsupported DOH method: {}", req.method());
-            return Ok(Response::builder()
-                .status(405)
-                .body(Full::new(Bytes::new()))?);
+            return Ok(Response::builder().status(405).body(Full::new(Bytes::new()))?);
         }
     };
 
@@ -219,9 +208,7 @@ where
         Err(e) => {
             let message = ctx.message()?;
             let resp_bytes = create_error_message(message, &e)?;
-            let resp = Response::builder()
-                .status(502)
-                .body(Full::new(resp_bytes))?;
+            let resp = Response::builder().status(502).body(Full::new(resp_bytes))?;
 
             tokio::spawn(async move {
                 if let Some(on_error) = on_error {
@@ -283,11 +270,7 @@ async fn extract_bytes_from_post(req: Req, max_size: usize) -> anyhow::Result<By
     if let Some(len) = req.headers().get(CONTENT_LENGTH) {
         if let Ok(len) = len.to_str().unwrap_or("0").parse::<usize>() {
             if len > max_size {
-                return Err(anyhow::anyhow!(
-                    "request body too large: {}, max: {}",
-                    len,
-                    max_size
-                ));
+                return Err(anyhow::anyhow!("request body too large: {}, max: {}", len, max_size));
             }
         } else {
             return Err(anyhow::anyhow!("invalid Content-Length header"));
@@ -308,8 +291,7 @@ async fn extract_bytes_from_post(req: Req, max_size: usize) -> anyhow::Result<By
 // Load public certificate from file.
 fn load_certs(filename: &str) -> io::Result<Vec<CertificateDer<'static>>> {
     // Open certificate file.
-    let certfile =
-        fs::File::open(filename).map_err(|e| error(format!("failed to open {filename}: {e}")))?;
+    let certfile = fs::File::open(filename).map_err(|e| error(format!("failed to open {filename}: {e}")))?;
     let mut reader = io::BufReader::new(certfile);
 
     // Load and return certificate.
@@ -319,8 +301,7 @@ fn load_certs(filename: &str) -> io::Result<Vec<CertificateDer<'static>>> {
 // Load private key from file.
 fn load_private_key(filename: &str) -> io::Result<PrivateKeyDer<'static>> {
     // Open keyfile.
-    let keyfile =
-        fs::File::open(filename).map_err(|e| error(format!("failed to open {filename}: {e}")))?;
+    let keyfile = fs::File::open(filename).map_err(|e| error(format!("failed to open {filename}: {e}")))?;
     let mut reader = io::BufReader::new(keyfile);
 
     // Load and return a single private key.

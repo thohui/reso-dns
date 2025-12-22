@@ -17,10 +17,7 @@ impl Node {
         }
     }
     fn child_mut(&mut self, label: &str) -> &mut Node {
-        match self
-            .children
-            .binary_search_by(|l| l.label.as_ref().cmp(label))
-        {
+        match self.children.binary_search_by(|l| l.label.as_ref().cmp(label)) {
             Ok(i) => &mut self.children[i],
             Err(i) => {
                 self.children.insert(i, Node::new(label));
@@ -52,10 +49,7 @@ impl BlocklistMatcher {
                 return true;
             }
 
-            match node
-                .children
-                .binary_search_by(|n| n.label.as_ref().cmp(&label))
-            {
+            match node.children.binary_search_by(|n| n.label.as_ref().cmp(&label)) {
                 Ok(i) => node = &node.children[i],
                 Err(_) => return false,
             }
@@ -111,19 +105,12 @@ fn normalize_to_rev_labels(input: &str) -> anyhow::Result<Vec<String>> {
     let s = input.trim().trim_end_matches('.').to_ascii_lowercase();
 
     // Convert Unicode to ASCII.
-    let ascii =
-        idna::domain_to_ascii(&s).map_err(|_| anyhow::anyhow!("invalid domain: {}", input))?;
+    let ascii = idna::domain_to_ascii(&s).map_err(|_| anyhow::anyhow!("invalid domain: {}", input))?;
 
     // Split labels, map "*" to itself, reject empties (except root)
     let mut labels: Vec<String> = ascii
         .split('.')
-        .map(|l| {
-            if l == "*" {
-                "*".to_string()
-            } else {
-                l.to_string()
-            }
-        })
+        .map(|l| if l == "*" { "*".to_string() } else { l.to_string() })
         .filter(|l| !l.is_empty())
         .collect();
 

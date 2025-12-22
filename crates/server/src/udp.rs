@@ -79,14 +79,9 @@ where
                 }
                 Err(e) => {
                     if let Ok(message) = ctx.message() {
-                        let res =
-                            write_udp_server_error_response(message, &sock, &client, &e).await;
+                        let res = write_udp_server_error_response(message, &sock, &client, &e).await;
                         if let Err(err) = res {
-                            tracing::warn!(
-                                "Failed to write error response to client {}: {}",
-                                client,
-                                err
-                            );
+                            tracing::warn!("Failed to write error response to client {}: {}", client, err);
                         }
                     }
                     if let Some(cb) = &on_error {

@@ -14,19 +14,11 @@ mod udp;
 
 pub use crate::udp::DohConfig;
 
-type SuccessCallback<G, L> = Arc<
-    dyn for<'a> Fn(&'a DnsRequestCtx<G, L>, &'a bytes::Bytes) -> BoxFuture<'a, anyhow::Result<()>>
-        + Send
-        + Sync,
->;
+type SuccessCallback<G, L> =
+    Arc<dyn for<'a> Fn(&'a DnsRequestCtx<G, L>, &'a bytes::Bytes) -> BoxFuture<'a, anyhow::Result<()>> + Send + Sync>;
 
 type ErrorCallback<G, L> = Arc<
-    dyn for<'a> Fn(
-            &'a DnsRequestCtx<G, L>,
-            &'a ResolveError,
-        ) -> BoxFuture<'a, Result<(), ResolveError>>
-        + Send
-        + Sync,
+    dyn for<'a> Fn(&'a DnsRequestCtx<G, L>, &'a ResolveError) -> BoxFuture<'a, Result<(), ResolveError>> + Send + Sync,
 >;
 
 /// DNS Server
@@ -41,11 +33,8 @@ pub struct DnsServer<R, G, L> {
     on_error: Option<ErrorCallback<G, L>>,
 }
 
-impl<
-    L: Default + Send + Sync + 'static,
-    R: DnsResolver<G, L> + Send + Sync + 'static,
-    G: Send + Sync + 'static,
-> DnsServer<R, G, L>
+impl<L: Default + Send + Sync + 'static, R: DnsResolver<G, L> + Send + Sync + 'static, G: Send + Sync + 'static>
+    DnsServer<R, G, L>
 {
     pub fn new(bind_addr: SocketAddr, resolver: R, timeout: Duration, global: Arc<G>) -> Self {
         Self {

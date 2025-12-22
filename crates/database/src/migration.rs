@@ -22,9 +22,7 @@ pub async fn run_migrations(conn: &Connection, migrations: &[Migration]) -> anyh
     .await?;
 
     // load existing migrations
-    let mut rows = conn
-        .query("SELECT version FROM schema_migrations", ())
-        .await?;
+    let mut rows = conn.query("SELECT version FROM schema_migrations", ()).await?;
     let mut applied = HashSet::new();
 
     while let Some(row) = rows.next().await? {
@@ -43,11 +41,8 @@ pub async fn run_migrations(conn: &Connection, migrations: &[Migration]) -> anyh
         // A migration file may contain multiple statements
         conn.execute_batch(m.sql).await?;
 
-        conn.execute(
-            "INSERT INTO schema_migrations (version) VALUES (?)",
-            (m.version,),
-        )
-        .await?;
+        conn.execute("INSERT INTO schema_migrations (version) VALUES (?)", (m.version,))
+            .await?;
     }
 
     Ok(())

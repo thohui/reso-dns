@@ -389,11 +389,7 @@ pub struct DnsQuestion {
 
 impl DnsQuestion {
     pub fn new(qname: DomainName, qtype: RecordType, qclass: ClassType) -> Self {
-        Self {
-            qname,
-            qtype,
-            qclass,
-        }
+        Self { qname, qtype, qclass }
     }
 }
 
@@ -403,11 +399,7 @@ impl DnsReadable for DnsQuestion {
         let qtype = RecordType::try_from(reader.read_u16()?)?;
         let qclass = ClassType::try_from(reader.read_u16()?)?;
 
-        Ok(Self {
-            qname,
-            qtype,
-            qclass,
-        })
+        Ok(Self { qname, qtype, qclass })
     }
 }
 
@@ -1052,11 +1044,7 @@ pub enum EdnsOptionData {
 }
 
 impl EdnsOptionData {
-    pub fn read(
-        reader: &mut DnsMessageReader,
-        code: &EdnsOptionCode,
-        len: u16,
-    ) -> anyhow::Result<Self> {
+    pub fn read(reader: &mut DnsMessageReader, code: &EdnsOptionCode, len: u16) -> anyhow::Result<Self> {
         Ok(match *code {
             EdnsOptionCode::ClientSubnet => {
                 anyhow::ensure!(len >= 4, "ECS option too short (must be at least 4 bytes)");
@@ -1074,35 +1062,19 @@ impl EdnsOptionData {
             }
             EdnsOptionCode::Cookie => Self::Raw(reader.read_bytes(len as usize)?.to_vec()),
             EdnsOptionCode::UpdateLease => {
-                anyhow::ensure!(
-                    len == 4 || len == 8,
-                    "invalid UPDATE-LEASE option length: {}",
-                    len
-                );
+                anyhow::ensure!(len == 4 || len == 8, "invalid UPDATE-LEASE option length: {}", len);
                 let lease = reader.read_u32()?;
-                let key_lease: Option<u32> = if len == 8 {
-                    Some(reader.read_u32()?)
-                } else {
-                    None
-                };
+                let key_lease: Option<u32> = if len == 8 { Some(reader.read_u32()?) } else { None };
                 Self::Lease { lease, key_lease }
             }
             EdnsOptionCode::DAU | EdnsOptionCode::DHU | EdnsOptionCode::N3U => {
                 Self::Raw(reader.read_bytes(len as usize)?.to_vec())
             }
             EdnsOptionCode::TcpKeepAlive => {
-                anyhow::ensure!(
-                    len == 0 || len == 2,
-                    "invalid TCP Keepalive option length: {}",
-                    len
-                );
+                anyhow::ensure!(len == 0 || len == 2, "invalid TCP Keepalive option length: {}", len);
 
                 // if len is 2 => present
-                let timeout: Option<u16> = if len == 2 {
-                    Some(reader.read_u16()?)
-                } else {
-                    None
-                };
+                let timeout: Option<u16> = if len == 2 { Some(reader.read_u16()?) } else { None };
                 Self::Timeout(timeout)
             }
             EdnsOptionCode::Padding => {
@@ -1133,10 +1105,7 @@ impl EdnsOptionData {
                     None
                 };
 
-                Self::ExtendedError {
-                    info_code,
-                    extra_text,
-                }
+                Self::ExtendedError { info_code, extra_text }
             }
             EdnsOptionCode::ZONEVERSION => {
                 // Query
@@ -1144,11 +1113,7 @@ impl EdnsOptionData {
                     Self::ZoneVersionQuery
                     // Response
                 } else {
-                    anyhow::ensure!(
-                        len >= 2,
-                        "ZONEVERSION option too short: len={} (need at least 2)",
-                        len
-                    );
+                    anyhow::ensure!(len >= 2, "ZONEVERSION option too short: len={} (need at least 2)", len);
 
                     let label_count = reader.read_u8()?;
                     let typ = reader.read_u8()?;

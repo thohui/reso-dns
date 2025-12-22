@@ -35,16 +35,13 @@ impl UpstreamResolveRequest {
 
         let pools = self.upstreams.as_slice();
         if pools.is_empty() {
-            return Err(ResolveError::Other(anyhow::anyhow!(
-                "no upstreams available"
-            )));
+            return Err(ResolveError::Other(anyhow::anyhow!("no upstreams available")));
         }
 
         let start = self.upstreams.pick_index().unwrap(); // SAFE: we have alreay checked if the pool is not empty.
 
-        let request_tid = helpers::extract_transaction_id(&self.query).ok_or(
-            ResolveError::InvalidRequest("failed to extract tid from query".into()),
-        )?;
+        let request_tid = helpers::extract_transaction_id(&self.query)
+            .ok_or(ResolveError::InvalidRequest("failed to extract tid from query".into()))?;
 
         let n = pools.len();
         let req_type = self.request_type;
@@ -65,9 +62,7 @@ impl UpstreamResolveRequest {
             let upstream = &pools[idx];
 
             let attempt_res = match req_type {
-                RequestType::TCP | RequestType::DOH => {
-                    self.resolve_tcp(&upstream.tcp_pool, &self.query).await
-                }
+                RequestType::TCP | RequestType::DOH => self.resolve_tcp(&upstream.tcp_pool, &self.query).await,
                 RequestType::UDP => {
                     match self.resolve_udp(upstream.addr, &self.query).await {
                         Ok(resp) => match helpers::is_truncated(&resp) {

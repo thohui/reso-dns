@@ -81,11 +81,7 @@ where
                     if let Ok(message) = ctx.message() {
                         let res = write_tcp_server_error_response(message, &mut stream, &e).await;
                         if let Err(err) = res {
-                            tracing::warn!(
-                                "Failed to write error response to client {}: {}",
-                                client,
-                                err
-                            );
+                            tracing::warn!("Failed to write error response to client {}: {}", client, err);
                         }
                     }
                     if let Some(cb) = &on_error {
@@ -98,10 +94,7 @@ where
 }
 
 /// Write a DNS friendly response to a TCP stream.
-async fn write_tcp_response(
-    stream: &mut tokio::net::TcpStream,
-    response: &Bytes,
-) -> anyhow::Result<()> {
+async fn write_tcp_response(stream: &mut tokio::net::TcpStream, response: &Bytes) -> anyhow::Result<()> {
     let len = u16::try_from(response.len()).context("DNS payload exceeds 65535 bytes")?;
     stream.write_u16(len).await?;
     stream.write_all(response).await?;

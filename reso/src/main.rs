@@ -63,8 +63,7 @@ async fn main() -> anyhow::Result<()> {
 
     let timeout_duration = Duration::from_secs(config.server.timeout);
 
-    let mut server =
-        DnsServer::<_, _, Local>::new(server_addr, resolver, timeout_duration, global.clone());
+    let mut server = DnsServer::<_, _, Local>::new(server_addr, resolver, timeout_duration, global.clone());
 
     server.add_success_handler(Arc::new(|ctx, resp| {
         async move {

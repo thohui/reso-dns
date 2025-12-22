@@ -14,10 +14,7 @@ pub struct DnsMessageReader<'a> {
 
 impl<'a> DnsMessageReader<'a> {
     pub fn new(buffer: &'a [u8]) -> Self {
-        Self {
-            buffer,
-            position: 0,
-        }
+        Self { buffer, position: 0 }
     }
 
     /// Seek the a position inside the buffer.
@@ -95,11 +92,7 @@ impl<'a> DnsMessageReader<'a> {
 
         loop {
             if pos >= self.buffer.len() {
-                bail!(
-                    "qname of out bounds at pos {} (buf len {})",
-                    pos,
-                    self.buffer.len()
-                )
+                bail!("qname of out bounds at pos {} (buf len {})", pos, self.buffer.len())
             }
 
             // Check for loops

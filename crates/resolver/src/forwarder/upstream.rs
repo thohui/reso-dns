@@ -34,10 +34,7 @@ impl Upstreams {
             let tcp = TcpPool::new(addr, limits);
             tcp.clone().start_reaper(limits.tcp_ttl);
 
-            list.push(Arc::new(Upstream {
-                addr,
-                tcp_pool: tcp,
-            }));
+            list.push(Arc::new(Upstream { addr, tcp_pool: tcp }));
         }
         Ok(Self {
             list: Arc::from(list),

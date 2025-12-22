@@ -69,11 +69,7 @@ impl TcpPool {
                     }
                 }
                 if dropped > 0 {
-                    tracing::info!(
-                        "reaper dropped {} expired tcp conns to {}",
-                        dropped,
-                        this.addr
-                    );
+                    tracing::info!("reaper dropped {} expired tcp conns to {}", dropped, this.addr);
                 }
             }
         });
@@ -103,12 +99,11 @@ impl TcpPool {
             return Ok(c);
         }
 
-        let permit = self.connections.clone().try_acquire_owned().map_err(|_| {
-            anyhow::anyhow!(
-                "upstream {} at max concurrent connection attempts",
-                self.addr
-            )
-        })?;
+        let permit = self
+            .connections
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| anyhow::anyhow!("upstream {} at max concurrent connection attempts", self.addr))?;
 
         TcpConn::connect(
             self.addr,
@@ -121,8 +116,7 @@ impl TcpPool {
 
     /// Attempt to put back a connection to the pool.
     pub fn put_back(&self, conn: TcpConn, healthy: bool) {
-        if healthy && self.idle_count.load(Ordering::Relaxed) < self.limits.max_idle_tcp_connections
-        {
+        if healthy && self.idle_count.load(Ordering::Relaxed) < self.limits.max_idle_tcp_connections {
             self.idle.push(conn);
             self.idle_count.fetch_add(1, Ordering::Relaxed);
         }
@@ -167,11 +161,7 @@ impl TcpConn {
     }
 
     /// Send a DNS query and receive the response over this TCP connection.
-    pub async fn send_and_receive(
-        &mut self,
-        query: &[u8],
-        deadline: Instant,
-    ) -> anyhow::Result<Bytes> {
+    pub async fn send_and_receive(&mut self, query: &[u8], deadline: Instant) -> anyhow::Result<Bytes> {
         if query.len() > u16::MAX as usize {
             anyhow::bail!("query too large for DNS/TCP: {}", query.len());
         }

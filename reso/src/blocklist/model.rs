@@ -22,10 +22,7 @@ impl DatabaseOperations for BlockedDomain {
 
     async fn create(&self, connection: &Connection) -> anyhow::Result<()> {
         connection
-            .execute(
-                "INSERT INTO blocklist (domain) VALUES (?1)",
-                params![self.domain()],
-            )
+            .execute("INSERT INTO blocklist (domain) VALUES (?1)", params![self.domain()])
             .await?;
         Ok(())
     }
@@ -57,11 +54,8 @@ impl DatabaseOperations for BlockedDomain {
     }
 
     async fn delete(db: &Connection, key: &Self::PrimaryKey) -> anyhow::Result<()> {
-        db.execute(
-            "DELETE FROM blocklist WHERE domain = ?1",
-            params![key.as_str()],
-        )
-        .await?;
+        db.execute("DELETE FROM blocklist WHERE domain = ?1", params![key.as_str()])
+            .await?;
         Ok(())
     }
 

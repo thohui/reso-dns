@@ -33,10 +33,7 @@ enum NegativeCacheKey {
         class_type: ClassType,
     },
     /// NxDomain cache key.
-    NxDomain {
-        qname: DomainName,
-        class_type: ClassType,
-    },
+    NxDomain { qname: DomainName, class_type: ClassType },
 }
 
 impl TryFrom<&DnsMessage> for CacheKey {
@@ -255,8 +252,7 @@ impl DnsMessageCache {
                         name: soa_record.name.clone(),
                         record_type: RecordType::SOA,
                     };
-                    let soa_rr_expires_at =
-                        Instant::now() + Duration::from_secs(soa_record.ttl as u64);
+                    let soa_rr_expires_at = Instant::now() + Duration::from_secs(soa_record.ttl as u64);
                     let soa_rr = CacheEntry {
                         name: soa_record.name.clone(),
                         expires_at: soa_rr_expires_at,
@@ -309,8 +305,7 @@ impl DnsMessageCache {
                         record_type: soa_record.record_type,
                     };
 
-                    let soa_rr_expires_at =
-                        Instant::now() + Duration::from_secs(soa_record.ttl as u64);
+                    let soa_rr_expires_at = Instant::now() + Duration::from_secs(soa_record.ttl as u64);
 
                     let soa_rr = CacheEntry {
                         name: soa_record.name.clone(),

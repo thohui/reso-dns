@@ -24,9 +24,7 @@ pub struct ForwardResolver {
 impl ForwardResolver {
     pub async fn new(upstreams: &[SocketAddr]) -> anyhow::Result<Self> {
         if upstreams.is_empty() {
-            tracing::warn!(
-                "No upstreams configured for forward resolver, it will not be able to resolve any queries!"
-            );
+            tracing::warn!("No upstreams configured for forward resolver, it will not be able to resolve any queries!");
         }
         Ok(Self {
             upstreams: Arc::new(
@@ -77,9 +75,11 @@ where
             .inflight_requests
             .get_or_run(key, async move |_| {
                 let (randomized_query, _) = generate_tid(&query);
-                let request =
-                    UpstreamResolveRequest::new(request_type, randomized_query, budget, upstreams);
+
+                let request = UpstreamResolveRequest::new(request_type, randomized_query, budget, upstreams);
+
                 let response = request.resolve().await?;
+
                 Ok(DnsResponseBytes::new(response))
             })
             .await
@@ -88,13 +88,10 @@ where
                 Err(e) => ResolveError::Other(e),
             })?;
 
-        let response = resp_arc
-            .as_ref()
-            .clone()
-            .into_custom_response(query_message.id);
+        let response = resp_arc.as_ref().clone().into_custom_response(query_message.id);
 
-        let response_message = DnsMessage::decode(&response)
-            .or_else(|e| Err(ResolveError::InvalidResponse(e.to_string())))?;
+        let response_message =
+            DnsMessage::decode(&response).or_else(|e| Err(ResolveError::InvalidResponse(e.to_string())))?;
 
         // ensure that the response has exactly one question
         if response_message.questions().len() != 1 {

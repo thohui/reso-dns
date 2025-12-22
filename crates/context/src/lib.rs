@@ -31,13 +31,7 @@ pub struct DnsRequestCtx<G, L> {
 }
 
 impl<G, L> DnsRequestCtx<G, L> {
-    pub fn new(
-        deadline: Duration,
-        request_type: RequestType,
-        raw: Bytes,
-        global: Arc<G>,
-        local: L,
-    ) -> Self {
+    pub fn new(deadline: Duration, request_type: RequestType, raw: Bytes, global: Arc<G>, local: L) -> Self {
         Self {
             budget: RequestBudget::new(deadline),
             request_type,
@@ -61,8 +55,7 @@ impl<G, L> DnsRequestCtx<G, L> {
     /// Attempt to decode and get the DNS message
     /// This also caches the decoded message for future calls.
     pub fn message(&self) -> anyhow::Result<&DnsMessage> {
-        self.message
-            .get_or_try_init(|| DnsMessage::decode(&self.raw))
+        self.message.get_or_try_init(|| DnsMessage::decode(&self.raw))
     }
 
     /// Raw request bytes
