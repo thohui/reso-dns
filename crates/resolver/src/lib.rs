@@ -10,6 +10,8 @@ use thiserror::Error;
 pub trait DnsResolver<G: Send + Sync, L> {
     async fn resolve(&self, ctx: &DnsRequestCtx<G, L>) -> Result<Bytes, ResolveError>;
 }
+/// DynResolver
+pub type DynResolver<G, L> = dyn DnsResolver<G, L> + Send + Sync;
 
 /// Error type for DNS resolvers
 #[derive(Error, Debug)]

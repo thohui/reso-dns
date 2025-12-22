@@ -1,6 +1,8 @@
 use std::{env, net::SocketAddr, sync::Arc, time::Duration};
 
+use arc_swap::Cache;
 use blocklist::service::BlocklistService;
+use bytes::Bytes;
 use config::{DEFAULT_CONFIG_PATH, ResolverConfig, load_config};
 use global::Global;
 use local::Local;
@@ -8,9 +10,10 @@ use middleware::{blocklist::BlocklistMiddleware, cache::CacheMiddleware};
 use migrations::MIGRATIONS;
 use moka::future::FutureExt;
 use reso_cache::DnsMessageCache;
+use reso_context::DnsRequestCtx;
 use reso_dns::{DnsMessage, helpers};
-use reso_resolver::forwarder::resolver::ForwardResolver;
-use reso_server::DnsServer;
+use reso_resolver::{ResolveError, forwarder::resolver::ForwardResolver};
+use reso_server::{DnsServer, ErrorCallback, ServerMiddlewares, ServerState, SuccessCallback};
 use tokio::signal;
 use tracing::level_filters::LevelFilter;
 use tracing_appender::non_blocking;
@@ -63,31 +66,42 @@ async fn main() -> anyhow::Result<()> {
 
     let timeout_duration = Duration::from_secs(config.server.timeout);
 
-    let mut server = DnsServer::<_, _, Local>::new(server_addr, resolver, timeout_duration, global.clone());
-
-    server.add_success_handler(Arc::new(|ctx, resp| {
-        async move {
-            if !ctx.local().cache_hit {
-                let message = ctx.message()?;
-                let resp_msg = DnsMessage::decode(resp)?;
-                let _ = ctx.global().cache.insert(message, &resp_msg).await;
+    let error_handler: ErrorCallback<Global, Local> =
+        Arc::new(|ctx: &DnsRequestCtx<Global, Local>, err: &ResolveError| {
+            async move {
+                let id = helpers::extract_transaction_id(&ctx.raw()).unwrap_or_default();
+                tracing::error!("Error processing request: {}, error: {}", id, err,);
+                Ok(())
             }
-            Ok(())
-        }
-        .boxed()
-    }));
+            .boxed()
+        });
 
-    server.add_error_handler(Arc::new(|ctx, err| {
-        async move {
-            let id = helpers::extract_transaction_id(&ctx.raw()).unwrap_or_default();
-            tracing::error!("Error processing request: {}, error: {}", id, err,);
-            Ok(())
-        }
-        .boxed()
-    }));
+    let success_handler: SuccessCallback<Global, Local> =
+        Arc::new(|ctx: &DnsRequestCtx<Global, Local>, resp: &Bytes| {
+            async move {
+                if !ctx.local().cache_hit {
+                    let message = ctx.message()?;
+                    let resp_msg = DnsMessage::decode(resp)?;
+                    let _ = ctx.global().cache.insert(message, &resp_msg).await;
+                }
+                Ok(())
+            }
+            .boxed()
+        });
 
-    server.add_middleware(BlocklistMiddleware);
-    server.add_middleware(CacheMiddleware);
+    let middlewares: ServerMiddlewares<Global, Local> =
+        Arc::new(vec![Arc::new(BlocklistMiddleware), Arc::new(CacheMiddleware)]);
+
+    let state = ServerState {
+        global: global.clone(),
+        middlewares: middlewares,
+        on_error: Some(error_handler),
+        on_success: Some(success_handler),
+        resolver: Arc::new(resolver),
+        timeout: timeout_duration,
+    };
+
+    let server = DnsServer::<_, Local>::new(server_addr, state);
 
     global.blocklist.load_matcher().await?;
 

@@ -1,23 +1,24 @@
 use std::{fs, io};
 
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Context;
+use arc_swap::ArcSwap;
 use base64::{Engine, engine::GeneralPurpose};
 use bytes::{BufMut, Bytes, BytesMut};
 use http_body_util::{BodyExt, Full};
 use hyper::server::conn::http2;
 use hyper::{Method, Request, Response, body::Incoming, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
-use reso_context::{DnsMiddleware, DnsRequestCtx, RequestType};
-use reso_dns::{DnsMessage, DnsMessageBuilder, DnsResponseCode};
-use reso_resolver::{DnsResolver, ResolveError};
+use reso_context::{DnsRequestCtx, RequestType};
+use reso_dns::{DnsMessage, DnsMessageBuilder};
+use reso_resolver::ResolveError;
 use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 
-use crate::{DohConfig, ErrorCallback, SuccessCallback};
+use crate::{DohConfig, ServerState};
 
 type Req = Request<Incoming>;
 type Res = Response<Full<Bytes>>;
@@ -44,19 +45,12 @@ where
 
 /// Run the DNS server over DoH.
 #[allow(clippy::too_many_arguments)]
-pub async fn run_doh<L, G, R>(
+pub async fn run_doh<G, L>(
     config: DohConfig,
     bind_addr: SocketAddr,
-    resolver: Arc<R>,
-    middlewares: Arc<Vec<Arc<dyn DnsMiddleware<G, L> + 'static>>>,
-    global: Arc<G>,
-    recv_size: usize,
-    timeout: Duration,
-    on_success: Option<SuccessCallback<G, L>>,
-    on_error: Option<ErrorCallback<G, L>>,
+    state: &ArcSwap<ServerState<G, L>>,
 ) -> anyhow::Result<()>
 where
-    R: DnsResolver<G, L> + Send + Sync + 'static,
     G: Send + Sync + 'static,
     L: Send + Sync + Default + 'static,
 {
@@ -96,27 +90,10 @@ where
 
         let io = TokioIo::new(tls_stream);
 
-        let resolver = resolver.clone();
-        let global = global.clone();
-
-        let middlewares = middlewares.clone();
-
-        let on_success = on_success.clone();
-        let on_error = on_error.clone();
+        let state = state.load_full();
 
         tokio::task::spawn(async move {
-            let svc = service_fn(move |req: Req| {
-                handle_req(
-                    resolver.clone(),
-                    global.clone(),
-                    timeout,
-                    req,
-                    recv_size,
-                    middlewares.clone(),
-                    on_success.clone(),
-                    on_error.clone(),
-                )
-            });
+            let svc = service_fn(move |req: Req| handle_req(req, state.clone()));
 
             if http2 {
                 // HTTP/2
@@ -133,24 +110,16 @@ where
     }
 }
 #[allow(clippy::too_many_arguments)]
-async fn handle_req<G, L, R>(
-    resolver: Arc<R>,
-    global: Arc<G>,
-    timeout: Duration,
-    req: Req,
-    max_size: usize,
-    middlewares: Arc<Vec<Arc<dyn DnsMiddleware<G, L> + 'static>>>,
-    on_success: Option<SuccessCallback<G, L>>,
-    on_error: Option<ErrorCallback<G, L>>,
-) -> anyhow::Result<Res>
+async fn handle_req<G, L>(req: Req, state: Arc<ServerState<G, L>>) -> anyhow::Result<Res>
 where
-    R: DnsResolver<G, L> + Send + Sync + 'static,
     G: Send + Sync + 'static,
     L: Send + Sync + Default + 'static,
 {
     if req.uri().path() != "/dns-query" {
         return Ok(Response::builder().status(404).body(Full::new(Bytes::new()))?);
     }
+
+    const MAX_RECV_SIZE: usize = 1232;
 
     let bytes = match *req.method() {
         Method::GET => match extract_bytes_from_get(req).await {
@@ -160,7 +129,7 @@ where
                 return Ok(Response::builder().status(400).body(Full::new(Bytes::new()))?);
             }
         },
-        Method::POST => match extract_bytes_from_post(req, max_size).await {
+        Method::POST => match extract_bytes_from_post(req, MAX_RECV_SIZE).await {
             Ok(b) => b,
             Err(e) => {
                 tracing::error!("failed to handle DOH POST request: {e:?}");
@@ -173,7 +142,12 @@ where
         }
     };
 
-    let ctx = DnsRequestCtx::new(timeout, RequestType::DOH, bytes, global, L::default());
+    let middlewares = state.middlewares.clone();
+    let global = state.global.clone();
+    let on_success = state.on_success.clone();
+    let on_error = state.on_error.clone();
+
+    let ctx = DnsRequestCtx::new(state.timeout, RequestType::DOH, bytes, global, L::default());
 
     if let Ok(Some(bytes)) = reso_context::run_middlewares(middlewares, &ctx).await {
         let resp = Response::builder()
@@ -190,7 +164,7 @@ where
         return Ok(resp);
     }
 
-    match resolver.resolve(&ctx).await {
+    match state.resolver.resolve(&ctx).await {
         Ok(b) => {
             let resp = Response::builder()
                 .status(200)

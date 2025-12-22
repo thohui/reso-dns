@@ -1,5 +1,6 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
+use arc_swap::ArcSwap;
 use bytes::BytesMut;
 use reso_context::{DnsMiddleware, DnsRequestCtx, RequestType};
 use reso_dns::{DnsMessage, DnsMessageBuilder, DnsResponseCode};
@@ -7,7 +8,7 @@ use reso_resolver::{DnsResolver, ResolveError};
 use serde::{Deserialize, Serialize};
 use tokio::net::UdpSocket;
 
-use crate::{ErrorCallback, SuccessCallback};
+use crate::{ErrorCallback, ServerState, SuccessCallback};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct DohConfig {
@@ -21,44 +22,38 @@ pub struct DohConfig {
 
 /// Run the DNS server over UDP.
 #[allow(clippy::too_many_arguments)]
-pub async fn run_udp<L, G, R>(
-    bind_addr: SocketAddr,
-    resolver: Arc<R>,
-    middlewares: Arc<Vec<Arc<dyn DnsMiddleware<G, L> + 'static>>>,
-    global: Arc<G>,
-    recv_size: usize,
-    timeout: Duration,
-    on_success: Option<SuccessCallback<G, L>>,
-    on_error: Option<ErrorCallback<G, L>>,
-) -> anyhow::Result<()>
+pub async fn run_udp<G, L>(bind_addr: SocketAddr, state: &ArcSwap<ServerState<G, L>>) -> anyhow::Result<()>
 where
     L: Default + Send + Sync + 'static,
     G: Send + Sync + 'static,
-    R: DnsResolver<G, L> + Send + Sync + 'static,
 {
+    const RECV_SIZE: usize = 512;
+
     let socket = Arc::new(UdpSocket::bind(bind_addr).await?);
-    let mut buffer = BytesMut::with_capacity(recv_size);
+    let mut buffer = BytesMut::with_capacity(RECV_SIZE);
 
     tracing::info!("UDP listening on {}", bind_addr);
 
     loop {
         let sock = socket.clone();
 
+        let state = state.load_full();
+
         // TODO: we should not resize the buffer every time, but rather reuse it.
-        buffer.resize(recv_size, 0);
+        buffer.resize(RECV_SIZE, 0);
         let (len, client) = sock.recv_from(&mut buffer[..]).await?;
         let raw = buffer.split_to(len).freeze();
 
-        let resolver = resolver.clone();
+        let resolver = state.resolver.clone();
 
-        let middlewares = middlewares.clone();
-        let global = global.clone();
+        let middlewares = state.middlewares.clone();
+        let global = state.global.clone();
 
-        let on_success = on_success.clone();
-        let on_error = on_error.clone();
+        let on_success = state.on_success.clone();
+        let on_error = state.on_error.clone();
 
         tokio::spawn(async move {
-            let ctx = DnsRequestCtx::new(timeout, RequestType::UDP, raw, global, L::default());
+            let ctx = DnsRequestCtx::new(state.timeout, RequestType::UDP, raw, global, L::default());
 
             if let Ok(Some(resp)) = reso_context::run_middlewares(middlewares, &ctx).await {
                 let _ = sock.send_to(&resp, client).await;

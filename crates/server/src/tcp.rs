@@ -1,6 +1,7 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use anyhow::Context;
+use arc_swap::ArcSwap;
 use bytes::Bytes;
 use reso_context::{DnsMiddleware, DnsRequestCtx, RequestType};
 use reso_dns::{DnsMessage, DnsMessageBuilder, DnsResponseCode};
@@ -10,23 +11,14 @@ use tokio::{
     net::{TcpListener, TcpStream},
 };
 
-use crate::{ErrorCallback, SuccessCallback};
+use crate::ServerState;
 
 /// Run the DNS server over TCP.
 #[allow(clippy::too_many_arguments)]
-pub async fn run_tcp<L, G, R>(
-    bind_addr: SocketAddr,
-    resolver: Arc<R>,
-    middlewares: Arc<Vec<Arc<dyn DnsMiddleware<G, L> + 'static>>>,
-    global: Arc<G>,
-    timeout: Duration,
-    on_success: Option<SuccessCallback<G, L>>,
-    on_error: Option<ErrorCallback<G, L>>,
-) -> anyhow::Result<()>
+pub async fn run_tcp<G, L>(bind_addr: SocketAddr, state: &ArcSwap<ServerState<G, L>>) -> anyhow::Result<()>
 where
     L: Default + Send + Sync + 'static,
     G: Send + Sync + 'static,
-    R: DnsResolver<G, L> + Send + Sync + 'static,
 {
     let listener = TcpListener::bind(bind_addr).await?;
     tracing::info!("TCP listening on {}", bind_addr);
@@ -34,11 +26,13 @@ where
     loop {
         let (mut stream, client) = listener.accept().await?;
 
-        let resolver = resolver.clone();
-        let middlewares = middlewares.clone();
-        let global = global.clone();
-        let on_success = on_success.clone();
-        let on_error = on_error.clone();
+        let state = state.load_full();
+
+        let resolver = state.resolver.clone();
+        let middlewares = state.middlewares.clone();
+        let global = state.global.clone();
+        let on_success = state.on_success.clone();
+        let on_error = state.on_error.clone();
 
         tokio::spawn(async move {
             let mut len_buf = [0u8; 2];
@@ -58,7 +52,7 @@ where
 
             let bytes = Bytes::from(buf);
 
-            let ctx = DnsRequestCtx::new(timeout, RequestType::TCP, bytes, global, L::default());
+            let ctx = DnsRequestCtx::new(state.timeout, RequestType::TCP, bytes, global, L::default());
 
             if let Ok(Some(resp)) = reso_context::run_middlewares(middlewares, &ctx).await {
                 let _ = write_tcp_response(&mut stream, &resp).await;

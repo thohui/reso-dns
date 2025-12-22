@@ -4,7 +4,7 @@ use arc_swap::ArcSwap;
 use doh::run_doh;
 use futures::{FutureExt, future::BoxFuture};
 use reso_context::{DnsMiddleware, DnsRequestCtx};
-use reso_resolver::{DnsResolver, ResolveError};
+use reso_resolver::{DnsResolver, DynResolver, ResolveError};
 use tcp::run_tcp;
 use udp::run_udp;
 
@@ -14,103 +14,54 @@ mod udp;
 
 pub use crate::udp::DohConfig;
 
-type SuccessCallback<G, L> =
+pub type SuccessCallback<G, L> =
     Arc<dyn for<'a> Fn(&'a DnsRequestCtx<G, L>, &'a bytes::Bytes) -> BoxFuture<'a, anyhow::Result<()>> + Send + Sync>;
 
-type ErrorCallback<G, L> = Arc<
+pub type ErrorCallback<G, L> = Arc<
     dyn for<'a> Fn(&'a DnsRequestCtx<G, L>, &'a ResolveError) -> BoxFuture<'a, Result<(), ResolveError>> + Send + Sync,
 >;
 
-/// DNS Server
-pub struct DnsServer<R, G, L> {
-    bind_addr: SocketAddr,
-    resolver: Arc<R>,
-    recv_size: usize,
-    timeout: Duration,
-    middlewares: ArcSwap<Vec<Arc<dyn DnsMiddleware<G, L> + 'static>>>,
-    global: Arc<G>,
-    on_success: Option<SuccessCallback<G, L>>,
-    on_error: Option<ErrorCallback<G, L>>,
+pub type ServerMiddlewares<G, L> = Arc<Vec<Arc<dyn DnsMiddleware<G, L> + 'static>>>;
+
+pub struct ServerState<G, L> {
+    pub resolver: Arc<DynResolver<G, L>>,
+    pub middlewares: ServerMiddlewares<G, L>,
+    pub on_success: Option<SuccessCallback<G, L>>,
+    pub on_error: Option<ErrorCallback<G, L>>,
+    pub global: Arc<G>,
+    pub timeout: Duration,
 }
 
-impl<L: Default + Send + Sync + 'static, R: DnsResolver<G, L> + Send + Sync + 'static, G: Send + Sync + 'static>
-    DnsServer<R, G, L>
-{
-    pub fn new(bind_addr: SocketAddr, resolver: R, timeout: Duration, global: Arc<G>) -> Self {
+/// DNS Server
+pub struct DnsServer<G, L> {
+    bind_addr: SocketAddr,
+    state: ArcSwap<ServerState<G, L>>,
+}
+
+impl<L: Default + Send + Sync + 'static, G: Send + Sync + 'static> DnsServer<G, L> {
+    pub fn new(bind_addr: SocketAddr, state: ServerState<G, L>) -> Self {
         Self {
             bind_addr,
-            resolver: Arc::new(resolver),
-            recv_size: 1232, // edns safe
-            timeout,
-            middlewares: ArcSwap::new(Vec::new().into()),
-            global,
-            on_success: None,
-            on_error: None,
+            state: ArcSwap::new(state.into()),
         }
     }
 
-    /// Add a handler for successful request processing.
-    pub fn add_success_handler(&mut self, handler: SuccessCallback<G, L>) {
-        self.on_success = Some(handler);
-    }
-
-    /// Add a handler for errors that occur during request processing.
-    pub fn add_error_handler(&mut self, handler: ErrorCallback<G, L>) {
-        self.on_error = Some(handler);
-    }
-
-    /// Add a middleware to the DNS server.
-    pub fn add_middleware<M>(&self, mw: M)
-    where
-        M: DnsMiddleware<G, L> + 'static,
-    {
-        let cur = self.middlewares.load();
-        let mut v = Vec::with_capacity(cur.len() + 1);
-        v.extend(cur.iter().cloned());
-        v.push(Arc::new(mw));
-        self.middlewares.store(Arc::new(v));
+    pub fn swap_state(&self, new_state: ServerState<G, L>) {
+        self.state.swap(new_state.into());
     }
 
     /// Run the DNS server, listening for incoming requests.
     pub async fn run(self, doh: Option<DohConfig>) -> anyhow::Result<()> {
-        let udp_future = run_udp(
-            self.bind_addr,
-            self.resolver.clone(),
-            self.middlewares.load().clone(),
-            self.global.clone(),
-            self.recv_size,
-            self.timeout,
-            self.on_success.clone(),
-            self.on_error.clone(),
-        )
-        .boxed();
+        let state = &self.state;
 
-        let tcp_future = run_tcp(
-            self.bind_addr,
-            self.resolver.clone(),
-            self.middlewares.load().clone(),
-            self.global.clone(),
-            self.timeout,
-            self.on_success.clone(),
-            self.on_error.clone(),
-        )
-        .boxed();
+        let udp_future = run_udp(self.bind_addr, state).boxed();
+
+        let tcp_future = run_tcp(self.bind_addr, state).boxed();
 
         let mut futures = vec![udp_future, tcp_future];
 
         if let Some(doh) = doh {
-            let doh_future = run_doh(
-                doh,
-                self.bind_addr,
-                self.resolver,
-                self.middlewares.load().clone(),
-                self.global,
-                self.recv_size,
-                self.timeout,
-                self.on_success,
-                self.on_error,
-            )
-            .boxed();
+            let doh_future = run_doh(doh, self.bind_addr, state).boxed();
             futures.push(doh_future);
         }
 
