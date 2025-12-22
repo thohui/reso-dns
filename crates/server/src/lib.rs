@@ -34,14 +34,12 @@ pub struct ServerState<G, L> {
 
 /// DNS Server
 pub struct DnsServer<G, L> {
-    bind_addr: SocketAddr,
     state: ArcSwap<ServerState<G, L>>,
 }
 
 impl<L: Default + Send + Sync + 'static, G: Send + Sync + 'static> DnsServer<G, L> {
-    pub fn new(bind_addr: SocketAddr, state: ServerState<G, L>) -> Self {
+    pub fn new(state: ServerState<G, L>) -> Self {
         Self {
-            bind_addr,
             state: ArcSwap::new(state.into()),
         }
     }
@@ -50,23 +48,18 @@ impl<L: Default + Send + Sync + 'static, G: Send + Sync + 'static> DnsServer<G, 
         self.state.swap(new_state.into());
     }
 
-    /// Run the DNS server, listening for incoming requests.
-    pub async fn run(self, doh: Option<DohConfig>) -> anyhow::Result<()> {
-        let state = &self.state;
+    /// Serve the server over TCP.
+    pub async fn serve_tcp(&self, bind_addr: SocketAddr) -> anyhow::Result<()> {
+        run_tcp(bind_addr, &self.state).await
+    }
 
-        let udp_future = run_udp(self.bind_addr, state).boxed();
+    /// Serve the server over UDP.
+    pub async fn serve_udp(&self, bind_addr: SocketAddr) -> anyhow::Result<()> {
+        run_udp(bind_addr, &self.state).await
+    }
 
-        let tcp_future = run_tcp(self.bind_addr, state).boxed();
-
-        let mut futures = vec![udp_future, tcp_future];
-
-        if let Some(doh) = doh {
-            let doh_future = run_doh(doh, self.bind_addr, state).boxed();
-            futures.push(doh_future);
-        }
-
-        futures::future::try_join_all(futures).await?;
-
-        Ok(())
+    /// Serve the server over DOH.
+    pub async fn serve_doh(&self, bind_addr: SocketAddr, config: DohConfig) -> anyhow::Result<()> {
+        run_doh(config, bind_addr, &self.state).await
     }
 }

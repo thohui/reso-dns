@@ -1,4 +1,4 @@
-use std::{env, net::SocketAddr, sync::Arc, time::Duration};
+use std::{env, net::SocketAddr, str::FromStr, sync::Arc, time::Duration};
 
 use arc_swap::Cache;
 use blocklist::service::BlocklistService;
@@ -45,11 +45,6 @@ async fn main() -> anyhow::Result<()> {
 
     let connection = reso_database::connect(&config.database.path).await?;
     reso_database::run_migrations(&connection, MIGRATIONS).await?;
-
-    let server_addr = format!("{}:{}", config.server.ip, config.server.port)
-        .parse::<SocketAddr>()
-        .expect("Invalid server address format");
-
     let global = Arc::new(Global::new(
         DnsMessageCache::new(50_000),
         BlocklistService::new(connection),
@@ -94,23 +89,32 @@ async fn main() -> anyhow::Result<()> {
 
     let state = ServerState {
         global: global.clone(),
-        middlewares: middlewares,
+        middlewares,
         on_error: Some(error_handler),
         on_success: Some(success_handler),
         resolver: Arc::new(resolver),
         timeout: timeout_duration,
     };
 
-    let server = DnsServer::<_, Local>::new(server_addr, state);
+    let server = DnsServer::<_, Local>::new(state);
 
     global.blocklist.load_matcher().await?;
 
+    let server_addr = format!("{}:{}", config.server.ip, config.server.port)
+        .parse::<SocketAddr>()
+        .expect("invalid server address format");
+
     tokio::select! {
-        r = server.run(config.server.doh) => {
+        r = server.serve_tcp(server_addr) => {
             if let Err(e) = r {
-                tracing::error!("DNS server exited with error: {}", e);
+                tracing::error!("TCP listener exited with error: {}", e);
             }
         },
+        r = server.serve_udp(server_addr) => {
+            if let Err(e) = r {
+                tracing::error!("UDP listener exited with error: {}", e);
+            }
+        }
         _ = signal::ctrl_c() => {
             tracing::info!("Shutting down DNS server...");
         },
