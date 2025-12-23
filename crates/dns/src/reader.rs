@@ -258,8 +258,8 @@ impl<'a> DnsMessageReader<'a> {
 }
 
 mod tests {
-
     use crate::{DnsMessageWriter, domain_name::DomainName};
+
     #[test]
     fn test_read_qname_uncompressed() {
         use super::DnsMessageReader;

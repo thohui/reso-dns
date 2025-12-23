@@ -1,6 +1,5 @@
-use std::{env, net::SocketAddr, str::FromStr, sync::Arc, time::Duration};
+use std::{env, net::SocketAddr, sync::Arc, time::Duration};
 
-use arc_swap::Cache;
 use blocklist::service::BlocklistService;
 use bytes::Bytes;
 use config::{DEFAULT_CONFIG_PATH, ResolverConfig, load_config};

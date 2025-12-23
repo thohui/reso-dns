@@ -1,11 +1,11 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::net::SocketAddr;
 
 use anyhow::Context;
 use arc_swap::ArcSwap;
 use bytes::Bytes;
-use reso_context::{DnsMiddleware, DnsRequestCtx, RequestType};
-use reso_dns::{DnsMessage, DnsMessageBuilder, DnsResponseCode};
-use reso_resolver::{DnsResolver, ResolveError};
+use reso_context::{DnsRequestCtx, RequestType};
+use reso_dns::{DnsMessage, DnsMessageBuilder};
+use reso_resolver::ResolveError;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},

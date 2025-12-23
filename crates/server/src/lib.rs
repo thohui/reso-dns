@@ -2,9 +2,9 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwap;
 use doh::run_doh;
-use futures::{FutureExt, future::BoxFuture};
+use futures::future::BoxFuture;
 use reso_context::{DnsMiddleware, DnsRequestCtx};
-use reso_resolver::{DnsResolver, DynResolver, ResolveError};
+use reso_resolver::{DynResolver, ResolveError};
 use tcp::run_tcp;
 use udp::run_udp;
 

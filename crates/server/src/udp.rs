@@ -1,14 +1,14 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc};
 
 use arc_swap::ArcSwap;
 use bytes::BytesMut;
-use reso_context::{DnsMiddleware, DnsRequestCtx, RequestType};
-use reso_dns::{DnsMessage, DnsMessageBuilder, DnsResponseCode};
-use reso_resolver::{DnsResolver, ResolveError};
+use reso_context::{DnsRequestCtx, RequestType};
+use reso_dns::{DnsMessage, DnsMessageBuilder};
+use reso_resolver::ResolveError;
 use serde::{Deserialize, Serialize};
 use tokio::net::UdpSocket;
 
-use crate::{ErrorCallback, ServerState, SuccessCallback};
+use crate::ServerState;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct DohConfig {
