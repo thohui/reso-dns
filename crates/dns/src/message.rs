@@ -635,7 +635,7 @@ pub enum DnsRecordData {
     Raw(Vec<u8>),
     Ipv4(std::net::Ipv4Addr),
     Ipv6(std::net::Ipv6Addr),
-    Text(Arc<str>),
+    Text(Vec<Arc<str>>),
 
     SOA {
         /// Primary nameserver.
@@ -673,7 +673,13 @@ impl DnsRecordData {
             DnsRecordData::Raw(data) => writer.write_bytes(data),
             DnsRecordData::Ipv4(addr) => writer.write_bytes(&addr.octets()),
             DnsRecordData::Ipv6(addr) => writer.write_bytes(&addr.octets()),
-            DnsRecordData::Text(text) => writer.write_bytes(text.as_bytes()),
+            DnsRecordData::Text(chunks) => {
+                for chunk in chunks {
+                    writer.write_u8(chunk.len() as u8)?;
+                    writer.write_bytes(chunk.as_bytes())?;
+                }
+                Ok(())
+            }
             DnsRecordData::DomainName(name) => writer.write_qname(name),
 
             DnsRecordData::SOA {
@@ -745,10 +751,27 @@ impl DnsRecordData {
                 DnsRecordData::Ipv6(ipv6_addr)
             }
             RecordType::TXT | RecordType::SPF => {
-                let text_length = reader.read_u8()? as usize;
-                let text = reader.read_bytes(text_length)?;
-                let utf_str = String::from_utf8(text.to_vec())?;
-                DnsRecordData::Text(utf_str.into())
+                let mut remaining = data_length;
+                let mut chunks: Vec<Arc<str>> = Vec::new();
+
+                while remaining > 0 {
+                    anyhow::ensure!(remaining >= 1, "TXT RDATA truncated (missing length byte)");
+                    let len = reader.read_u8()? as usize;
+                    remaining -= 1;
+
+                    anyhow::ensure!(
+                        len <= remaining,
+                        "TXT chunk len {} exceeds remaining {}",
+                        len,
+                        remaining
+                    );
+                    let bytes = reader.read_bytes(len)?;
+                    remaining -= len;
+                    let chunk = String::from_utf8_lossy(bytes).into_owned();
+                    chunks.push(chunk.into())
+                }
+
+                DnsRecordData::Text(chunks)
             }
             RecordType::SOA => DnsRecordData::SOA {
                 mname: reader.read_qname()?,
