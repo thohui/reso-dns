@@ -27,7 +27,7 @@ where
     L: Default + Send + Sync + 'static,
     G: Send + Sync + 'static,
 {
-    const RECV_SIZE: usize = 512;
+    const RECV_SIZE: usize = 1232;
 
     let socket = Arc::new(UdpSocket::bind(bind_addr).await?);
     let mut buffer = BytesMut::with_capacity(RECV_SIZE);

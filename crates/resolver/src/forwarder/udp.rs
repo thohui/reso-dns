@@ -35,7 +35,7 @@ impl UdpConn {
             .await
             .context("send timeout")??;
 
-        const MAX_BUFFER_SIZE: usize = 512;
+        const MAX_BUFFER_SIZE: usize = 1232;
         let mut buf = BytesMut::with_capacity(MAX_BUFFER_SIZE);
         buf.resize(MAX_BUFFER_SIZE, 0);
 

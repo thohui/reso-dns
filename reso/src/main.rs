@@ -64,7 +64,7 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(|ctx: &DnsRequestCtx<Global, Local>, err: &ResolveError| {
             async move {
                 let id = helpers::extract_transaction_id(&ctx.raw()).unwrap_or_default();
-                tracing::error!("Error processing request: {}, error: {}", id, err,);
+                tracing::error!("error processing request: {}, error: {}", id, err,);
                 Ok(())
             }
             .boxed()

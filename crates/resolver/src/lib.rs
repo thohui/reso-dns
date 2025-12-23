@@ -19,13 +19,13 @@ pub enum ResolveError {
     #[error("request timed out")]
     Timeout,
 
-    #[error("invalid request {0}")]
+    #[error("invalid request: {0}")]
     InvalidRequest(String),
 
-    #[error("invalid response {0}")]
+    #[error("invalid response: {0}")]
     InvalidResponse(String),
 
-    #[error("unexpected error {0}")]
+    #[error("unexpected error: {0}")]
     Other(#[source] anyhow::Error),
 }
 
