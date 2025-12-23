@@ -214,6 +214,11 @@ impl DnsMessageCache {
             return false;
         }
 
+        // don't cache edns for now.
+        if resp_msg.edns().as_ref().is_some() {
+            return false;
+        }
+
         // Handle negative caching.
         // https://datatracker.ietf.org/doc/html/rfc2308
         if resp_msg.flags.authorative_answer {

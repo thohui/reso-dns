@@ -13,6 +13,12 @@ pub struct CacheMiddleware;
 impl DnsMiddleware<Global, Local> for CacheMiddleware {
     async fn on_query(&self, ctx: &DnsRequestCtx<Global, Local>) -> anyhow::Result<Option<Bytes>> {
         let message = ctx.message()?;
+
+        // skip the cache if the query uses edns for now.
+        if message.edns().as_ref().is_some() {
+            return Ok(None);
+        }
+
         let cache_key = CacheKey::try_from(message)?;
         match ctx.global().cache.lookup(&cache_key).await {
             CacheResult::Negative(result) => {
