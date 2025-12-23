@@ -159,10 +159,11 @@ impl<'a> DnsMessageReader<'a> {
             }
         }
 
-        if name.ends_with('.') {
-            name.pop();
+        if name.is_empty() {
+            return Ok(DomainName::root());
         }
 
+        name.pop();
         DomainName::from_ascii(name)
     }
 

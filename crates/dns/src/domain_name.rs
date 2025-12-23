@@ -74,6 +74,11 @@ impl DomainName {
         Self::from_ascii(&ascii)
     }
 
+    /// Create a root `DomainName``
+    pub fn root() -> Self {
+        Self { 0: ".".into() }
+    }
+
     /// Get the string representation of the DomainName.
     pub fn as_str(&self) -> &str {
         &self.0

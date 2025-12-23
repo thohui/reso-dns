@@ -79,7 +79,9 @@ impl DnsMessageWriter {
     pub fn write_qname(&mut self, name: &DomainName) -> anyhow::Result<()> {
         let labels: Vec<&str> = name.label_iter().collect();
 
-        if labels.is_empty() {
+        let is_root = labels.is_empty() || name.as_str() == ".";
+
+        if is_root {
             // root label
             return self.write_u8(0);
         }
@@ -158,6 +160,13 @@ impl DnsMessageWriter {
         );
         self.buf[position..end].copy_from_slice(data);
 
+        Ok(())
+    }
+
+    /// Write a `String` to the buffer.
+    pub fn write_string(&mut self, str: &String) -> anyhow::Result<()> {
+        self.ensure_space(str.len(), "str")?;
+        self.buf.extend_from_slice(str.as_bytes());
         Ok(())
     }
 
