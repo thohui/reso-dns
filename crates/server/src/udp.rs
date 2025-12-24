@@ -53,7 +53,7 @@ where
         let on_error = state.on_error.clone();
 
         tokio::spawn(async move {
-            let ctx = DnsRequestCtx::new(state.timeout, RequestType::UDP, raw, global, L::default());
+            let ctx = DnsRequestCtx::new(state.timeout, client, RequestType::UDP, raw, global, L::default());
 
             if let Ok(Some(resp)) = reso_context::run_middlewares(middlewares, &ctx).await {
                 let _ = sock.send_to(&resp, client).await;

@@ -75,7 +75,7 @@ where
 
     loop {
         let acceptor = tls_acceptor.clone();
-        let (stream, _) = listener.accept().await?;
+        let (stream, client) = listener.accept().await?;
 
         let tls_stream = match acceptor.accept(stream).await {
             Ok(s) => s,
@@ -93,7 +93,7 @@ where
         let state = state.load_full();
 
         tokio::task::spawn(async move {
-            let svc = service_fn(move |req: Req| handle_req(req, state.clone()));
+            let svc = service_fn(move |req: Req| handle_req(req, client, state.clone()));
 
             if http2 {
                 // HTTP/2
@@ -110,7 +110,7 @@ where
     }
 }
 #[allow(clippy::too_many_arguments)]
-async fn handle_req<G, L>(req: Req, state: Arc<ServerState<G, L>>) -> anyhow::Result<Res>
+async fn handle_req<G, L>(req: Req, addr: SocketAddr, state: Arc<ServerState<G, L>>) -> anyhow::Result<Res>
 where
     G: Send + Sync + 'static,
     L: Send + Sync + Default + 'static,
@@ -147,7 +147,7 @@ where
     let on_success = state.on_success.clone();
     let on_error = state.on_error.clone();
 
-    let ctx = DnsRequestCtx::new(state.timeout, RequestType::DOH, bytes, global, L::default());
+    let ctx = DnsRequestCtx::new(state.timeout, addr, RequestType::DOH, bytes, global, L::default());
 
     if let Ok(Some(bytes)) = reso_context::run_middlewares(middlewares, &ctx).await {
         let resp = Response::builder()

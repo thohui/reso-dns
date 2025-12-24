@@ -3,27 +3,29 @@ use std::{env, net::SocketAddr, sync::Arc, time::Duration};
 use blocklist::service::BlocklistService;
 use bytes::Bytes;
 use config::{DEFAULT_CONFIG_PATH, ResolverConfig, load_config};
+use database::{connect, models::query_log::DnsQueryLog, run_migrations};
 use global::Global;
 use local::Local;
+use metrics::{event::QueryLogEvent, service::MetricsService};
 use middleware::{blocklist::BlocklistMiddleware, cache::CacheMiddleware};
-use migrations::MIGRATIONS;
 use moka::future::FutureExt;
 use reso_cache::DnsMessageCache;
 use reso_context::DnsRequestCtx;
-use reso_dns::{DnsMessage, helpers};
+use reso_dns::{DnsMessage, domain_name::DomainName, helpers};
 use reso_resolver::{ResolveError, forwarder::resolver::ForwardResolver};
 use reso_server::{DnsServer, ErrorCallback, ServerMiddlewares, ServerState, SuccessCallback};
-use tokio::signal;
+use tokio::{io::unix, signal, time};
 use tracing::level_filters::LevelFilter;
 use tracing_appender::non_blocking;
 use tracing_subscriber::{Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 mod blocklist;
 mod config;
+mod database;
 mod global;
 mod local;
+mod metrics;
 mod middleware;
-mod migrations;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -42,12 +44,17 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let connection = reso_database::connect(&config.database.path).await?;
-    reso_database::run_migrations(&connection, MIGRATIONS).await?;
-    let global = Arc::new(Global::new(
-        DnsMessageCache::new(50_000),
-        BlocklistService::new(connection),
-    ));
+    let connection = Arc::new(connect(&config.database.path).await?);
+    run_migrations(&connection).await?;
+
+    let (handle, stats, metrics_service) = MetricsService::new(connection.clone(), 1024);
+
+    let global = Arc::new(Global {
+        cache: DnsMessageCache::new(50_000),
+        blocklist: BlocklistService::new(connection.clone()),
+        metrics: handle,
+        stats,
+    });
 
     #[allow(irrefutable_let_patterns)]
     let upstreams = if let ResolverConfig::Forwarder { upstreams } = config.resolver {
@@ -64,7 +71,7 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(|ctx: &DnsRequestCtx<Global, Local>, err: &ResolveError| {
             async move {
                 let id = helpers::extract_transaction_id(&ctx.raw()).unwrap_or_default();
-                tracing::error!("error processing request: {}, error: {}", id, err,);
+                tracing::error!("error processing request: {}: {}", id, err);
                 Ok(())
             }
             .boxed()
@@ -73,11 +80,36 @@ async fn main() -> anyhow::Result<()> {
     let success_handler: SuccessCallback<Global, Local> =
         Arc::new(|ctx: &DnsRequestCtx<Global, Local>, resp: &Bytes| {
             async move {
+                let message = ctx.message()?;
+
                 if !ctx.local().cache_hit {
-                    let message = ctx.message()?;
                     let resp_msg = DnsMessage::decode(resp)?;
                     let _ = ctx.global().cache.insert(message, &resp_msg).await;
                 }
+
+                let local = ctx.local();
+
+                let ts_ms: i64 = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)?
+                    .as_millis() as i64;
+
+                // This should be safe as the questions are validated earlier on in the resolver.
+                let question = message.questions().first().unwrap();
+
+                let response = DnsMessage::decode(&resp)?;
+
+                ctx.global().metrics.record(QueryLogEvent {
+                    ts_ms,
+                    transport: ctx.request_type(),
+                    client: ctx.request_address().to_string(),
+                    qname: question.qname.clone(),
+                    qtype: question.qtype,
+                    rcode: response.response_code()?,
+                    dur_us: ctx.budget().elapsed().as_micros() as u32,
+                    cache_hit: local.cache_hit,
+                    blocked: local.blocked,
+                })?;
+
                 Ok(())
             }
             .boxed()
@@ -104,6 +136,11 @@ async fn main() -> anyhow::Result<()> {
         .expect("invalid server address format");
 
     tokio::select! {
+        r = metrics_service.run() => {
+            if let Err(e) = r {
+                tracing::error!("Metrics exited with error: {}", e);
+            }
+        },
         r = server.serve_tcp(server_addr) => {
             if let Err(e) = r {
                 tracing::error!("TCP listener exited with error: {}", e);
@@ -119,6 +156,8 @@ async fn main() -> anyhow::Result<()> {
         },
 
     }
+
+    let _ = global.metrics.shutdown();
 
     Ok(())
 }

@@ -1,18 +1,18 @@
+use std::sync::Arc;
+
 use arc_swap::ArcSwap;
 use reso_blocklist::BlocklistMatcher;
-use reso_database::DatabaseOperations;
 use reso_dns::domain_name::DomainName;
-use turso::Connection;
 
-use super::model::BlockedDomain;
+use crate::database::{DatabaseConnection, models::blocklist::BlockedDomain};
 
 pub struct BlocklistService {
     matcher: ArcSwap<BlocklistMatcher>,
-    connection: Connection,
+    connection: Arc<DatabaseConnection>,
 }
 
 impl BlocklistService {
-    pub fn new(connection: Connection) -> Self {
+    pub fn new(connection: Arc<DatabaseConnection>) -> Self {
         Self {
             matcher: ArcSwap::new(BlocklistMatcher::default().into()),
             connection,
@@ -21,7 +21,7 @@ impl BlocklistService {
 
     pub async fn add_domain(&self, domain: &str) -> anyhow::Result<()> {
         let domain = DomainName::from_user(domain)?;
-        BlockedDomain::new(domain).create(&self.connection).await?;
+        BlockedDomain::new(domain).insert(&self.connection).await?;
         self.load_matcher().await?;
         Ok(())
     }
@@ -34,8 +34,8 @@ impl BlocklistService {
     }
 
     pub async fn load_matcher(&self) -> anyhow::Result<()> {
-        let domains = BlockedDomain::all(&self.connection).await?;
-        let updated_matcher = BlocklistMatcher::load(domains.iter().map(|d| d.domain()))?;
+        let domains = BlockedDomain::list(&self.connection).await?;
+        let updated_matcher = BlocklistMatcher::load(domains.iter().map(|d| d.0.as_str()))?;
         self.matcher.swap(updated_matcher.into());
         Ok(())
     }

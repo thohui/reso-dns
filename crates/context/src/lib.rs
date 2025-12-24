@@ -1,4 +1,8 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    net::{IpAddr, SocketAddr},
+    sync::Arc,
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -9,6 +13,7 @@ use tokio::time::Instant;
 
 /// The type of DNS request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 pub enum RequestType {
     /// UDP
     UDP,
@@ -22,6 +27,7 @@ pub enum RequestType {
 /// Every request gets its own context instance.
 #[derive(Debug, Clone)]
 pub struct DnsRequestCtx<G, L> {
+    request_address: SocketAddr,
     request_type: RequestType,
     raw: Bytes,
     message: OnceCell<DnsMessage>,
@@ -31,9 +37,17 @@ pub struct DnsRequestCtx<G, L> {
 }
 
 impl<G, L> DnsRequestCtx<G, L> {
-    pub fn new(deadline: Duration, request_type: RequestType, raw: Bytes, global: Arc<G>, local: L) -> Self {
+    pub fn new(
+        deadline: Duration,
+        request_address: SocketAddr,
+        request_type: RequestType,
+        raw: Bytes,
+        global: Arc<G>,
+        local: L,
+    ) -> Self {
         Self {
             budget: RequestBudget::new(deadline),
+            request_address,
             request_type,
             raw,
             message: OnceCell::new(),
@@ -45,6 +59,11 @@ impl<G, L> DnsRequestCtx<G, L> {
     // Request budget
     pub fn budget(&self) -> &RequestBudget {
         &self.budget
+    }
+
+    /// Request address
+    pub fn request_address(&self) -> &SocketAddr {
+        &self.request_address
     }
 
     /// Request type
@@ -101,14 +120,23 @@ pub async fn run_middlewares<G, L>(
 /// A budget for processing a DNS request, based on a deadline.
 #[derive(Debug, Clone, Copy)]
 pub struct RequestBudget {
+    time_created: Instant,
     deadline: Instant,
 }
 
 impl RequestBudget {
     pub fn new(timeout: Duration) -> Self {
+        let now = Instant::now();
         Self {
-            deadline: Instant::now() + timeout,
+            deadline: now + timeout,
+            time_created: now,
         }
+    }
+
+    /// Elapsed time.
+    pub fn elapsed(&self) -> Duration {
+        let now = Instant::now();
+        now - self.time_created
     }
 
     /// When the budget expires.

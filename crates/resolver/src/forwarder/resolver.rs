@@ -95,7 +95,7 @@ where
 
         // ensure that the response has exactly one question
         if response_message.questions().len() != 1 {
-            return Err(ResolveError::InvalidResponse(std::format!(
+            return Err(ResolveError::MalformedResponse(std::format!(
                 "upstream response contains {} questions, expected 1",
                 response_message.questions().len(),
             )));
@@ -106,7 +106,7 @@ where
 
         // ensure that the response question matches the request question
         if req_q != resp_q {
-            return Err(ResolveError::InvalidResponse(
+            return Err(ResolveError::MalformedResponse(
                 "upstream response question does not match request question".to_string(),
             ));
         }

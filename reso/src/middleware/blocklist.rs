@@ -21,6 +21,9 @@ impl DnsMiddleware<Global, Local> for BlocklistMiddleware {
                     .with_response(DnsResponseCode::NxDomain)
                     .build()
                     .encode()?;
+
+                ctx.local_mut().blocked = true;
+
                 return Ok(Some(resp_bytes));
             }
         }

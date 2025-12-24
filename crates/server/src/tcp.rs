@@ -52,7 +52,14 @@ where
 
             let bytes = Bytes::from(buf);
 
-            let ctx = DnsRequestCtx::new(state.timeout, RequestType::TCP, bytes, global, L::default());
+            let ctx = DnsRequestCtx::new(
+                state.timeout,
+                client.into(),
+                RequestType::TCP,
+                bytes,
+                global,
+                L::default(),
+            );
 
             if let Ok(Some(resp)) = reso_context::run_middlewares(middlewares, &ctx).await {
                 let _ = write_tcp_response(&mut stream, &resp).await;

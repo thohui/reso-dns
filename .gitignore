@@ -1,6 +1,8 @@
 /target
 *.db
 *.db-wal
+*.db-shm
 config.toml
 *.pem
 stress.txt
+.env

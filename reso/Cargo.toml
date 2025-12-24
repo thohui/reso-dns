@@ -4,10 +4,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+serde.workspace = true
 anyhow.workspace = true
+rusqlite_migration = { version = "2.3.0", features = ["from-directory"] }
 arc-swap.workspace = true
 async-trait.workspace = true
 bytes.workspace = true
+chrono = "0.4.42"
+dashmap = "6.1.0"
 idna.workspace = true
 moka.workspace = true
 once_cell.workspace = true
@@ -16,15 +20,14 @@ rand = "0.9.2"
 reso-blocklist.workspace = true
 reso-cache.workspace = true
 reso-context.workspace = true
-reso-database.workspace = true
 reso-dns.workspace = true
 reso-resolver.workspace = true
 reso-server.workspace = true
-serde.workspace = true
 tokio.workspace = true
+tokio-rusqlite = { version = "0.7.0", features = ["bundled"] }
 toml.workspace = true
 tracing.workspace = true
 tracing-appender = "0.2.3"
 tracing-serde = "0.2.0"
 tracing-subscriber.workspace = true
-turso.workspace = true
+include_dir = { version = "0.7.4", features = ["metadata"] }

@@ -25,6 +25,9 @@ pub enum ResolveError {
     #[error("invalid response: {0}")]
     InvalidResponse(String),
 
+    #[error("malformed response: {0}")]
+    MalformedResponse(String),
+
     #[error("unexpected error: {0}")]
     Other(#[source] anyhow::Error),
 }
@@ -33,8 +36,9 @@ impl ResolveError {
     pub fn response_code(&self) -> DnsResponseCode {
         match self {
             ResolveError::Timeout => DnsResponseCode::ServerFailure,
-            ResolveError::InvalidRequest(_) => DnsResponseCode::FormatError,
+            ResolveError::InvalidRequest(_) => DnsResponseCode::Refused,
             ResolveError::InvalidResponse(_) => DnsResponseCode::ServerFailure,
+            ResolveError::MalformedResponse(_) => DnsResponseCode::ServerFailure,
             ResolveError::Other(_) => DnsResponseCode::ServerFailure,
         }
     }

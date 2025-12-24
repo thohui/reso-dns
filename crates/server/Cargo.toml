@@ -20,7 +20,6 @@ reso-dns.workspace = true
 reso-resolver.workspace = true
 reso-context.workspace = true
 tracing-subscriber.workspace = true
-turso.workspace = true
 futures.workspace = true
 hyper = { version = "1.7.0", features = ["full"] }
 http-body-util = "0.1.3"
