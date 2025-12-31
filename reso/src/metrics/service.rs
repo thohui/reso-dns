@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tokio::{
     sync::{
         RwLock,
@@ -9,20 +9,24 @@ use tokio::{
     time::{self, MissedTickBehavior},
 };
 
-use super::event::QueryLogEvent;
-use crate::database::{DatabaseConnection, models::query_log::DnsQueryLog};
+use super::event::{ErrorLogEvent, QueryLogEvent};
+use crate::database::{
+    DatabaseConnection,
+    models::{error_log::DnsErrorLog, query_log::DnsQueryLog},
+};
 
 pub enum MetricsMessage {
     Shutdown,
     Event(QueryLogEvent),
+    Error(ErrorLogEvent),
 }
 
 /// Service for handling metrics.
 pub struct MetricsService {
     connection: Arc<DatabaseConnection>,
     rx: Receiver<MetricsMessage>,
-    batch: Vec<QueryLogEvent>,
-
+    query_batch: Vec<QueryLogEvent>,
+    error_batch: Vec<ErrorLogEvent>,
     live_stats: Arc<RwLock<LiveStats>>,
 }
 
@@ -35,9 +39,16 @@ impl MetricsHandle {
         Ok(())
     }
 
-    pub fn record(&self, event: QueryLogEvent) -> anyhow::Result<()> {
-        let _ = self.0.try_send(MetricsMessage::Event(event));
-        Ok(())
+    pub fn event(&self, event: QueryLogEvent) {
+        if let Err(e) = self.0.try_send(MetricsMessage::Event(event)) {
+            tracing::error!("failed to record query metric: {}", e)
+        }
+    }
+
+    pub fn error(&self, error: ErrorLogEvent) {
+        if let Err(e) = self.0.try_send(MetricsMessage::Error(error)) {
+            tracing::error!("failed to record error metric: {}", e)
+        }
     }
 }
 
@@ -46,13 +57,18 @@ pub struct LiveStats {
     total: usize,
     blocked: usize,
     cached: usize,
+    errors: usize,
 }
 
 impl LiveStats {
-    fn apply(&mut self, stats: &QueryLogEvent) {
+    fn apply_event(&mut self, stats: &QueryLogEvent) {
         self.total += 1;
         self.blocked += if stats.blocked { 1 } else { 0 };
-        self.cached += if stats.cache_hit { 1 } else { 0 }
+        self.cached += if stats.cache_hit { 1 } else { 0 };
+    }
+    fn apply_error(&mut self) {
+        self.total += 1;
+        self.errors += 1;
     }
 }
 
@@ -73,6 +89,7 @@ impl MetricsService {
             blocked: 0,
             cached: 0,
             total: 0,
+            errors: 0,
         }));
 
         let (tx, rx) = mpsc::channel::<MetricsMessage>(buffer);
@@ -82,7 +99,8 @@ impl MetricsService {
             Self {
                 connection,
                 rx,
-                batch: Vec::with_capacity(buffer),
+                query_batch: Vec::with_capacity(buffer),
+                error_batch: Vec::with_capacity(buffer),
                 live_stats: live,
             },
         )
@@ -98,18 +116,16 @@ impl MetricsService {
 
         loop {
             tokio::select! {
-                _ = tick.tick() => {
-                    self.flush().await?;
-                }
-
+                _ = tick.tick() =>  self.flush_events().await,
                 msg = self.rx.recv() => {
                     match msg {
                         None | Some(MetricsMessage::Shutdown) => {
                             tracing::info!("shutting down metrics service");
-                            self.flush().await?;
+                            self.flush_events().await;
                             break;
-                        }
-                        Some(MetricsMessage::Event(ev)) => self.on_event(ev).await
+                        },
+                        Some(MetricsMessage::Event(ev)) => self.on_event(ev).await,
+                        Some(MetricsMessage::Error(ev)) => self.on_error(ev).await
                     }
                 }
             }
@@ -121,24 +137,51 @@ impl MetricsService {
     async fn on_event(&mut self, event: QueryLogEvent) {
         {
             let mut write = self.live_stats.write().await;
-            write.apply(&event);
+            write.apply_event(&event);
         }
-        self.batch.push(event);
+        self.query_batch.push(event);
     }
 
-    async fn flush(&mut self) -> anyhow::Result<()> {
-        if self.batch.is_empty() {
+    async fn on_error(&mut self, error: ErrorLogEvent) {
+        {
+            let mut write = self.live_stats.write().await;
+            write.apply_error();
+        }
+        self.error_batch.push(error);
+    }
+
+    async fn flush_events(&mut self) {
+        if let Err(e) = tokio::try_join!(self.flush_query_events(), self.flush_error_events()) {
+            tracing::error!("failed to flush events to db: {}", e);
+        }
+        self.error_batch.clear();
+        self.query_batch.clear();
+    }
+
+    async fn flush_query_events(&self) -> anyhow::Result<()> {
+        if self.query_batch.is_empty() {
             return Ok(());
         }
 
-        // swap out so we can keep receiving while writing
-        let rows = std::mem::take(&mut self.batch);
-
-        let db_rows: Vec<DnsQueryLog> = rows.into_iter().map(|r| r.into_db_model()).collect();
+        let db_rows: Vec<DnsQueryLog> = self.query_batch.iter().cloned().map(|r| r.into_db_model()).collect();
 
         DnsQueryLog::batch_insert(&self.connection, &db_rows).await?;
 
-        tracing::info!("flushed {} events to the database", db_rows.len());
+        tracing::debug!("flushed {} query events to the database", db_rows.len());
+
+        Ok(())
+    }
+
+    async fn flush_error_events(&self) -> anyhow::Result<()> {
+        if self.error_batch.is_empty() {
+            return Ok(());
+        }
+
+        let db_rows: Vec<DnsErrorLog> = self.error_batch.iter().cloned().map(|r| r.into_db_model()).collect();
+
+        DnsErrorLog::batch_insert(&self.connection, &db_rows).await?;
+
+        tracing::debug!("flushed {} error events to the database", db_rows.len());
 
         Ok(())
     }

@@ -1,6 +1,7 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwap;
+use bytes::Bytes;
 use doh::run_doh;
 use futures::future::BoxFuture;
 use reso_context::{DnsMiddleware, DnsRequestCtx};
@@ -14,10 +15,10 @@ mod udp;
 
 pub use crate::udp::DohConfig;
 
-pub type SuccessCallback<G, L> =
+pub type SuccessHandler<G, L> =
     Arc<dyn for<'a> Fn(&'a DnsRequestCtx<G, L>, &'a bytes::Bytes) -> BoxFuture<'a, anyhow::Result<()>> + Send + Sync>;
 
-pub type ErrorCallback<G, L> = Arc<
+pub type ErrorHandler<G, L> = Arc<
     dyn for<'a> Fn(&'a DnsRequestCtx<G, L>, &'a ResolveError) -> BoxFuture<'a, Result<(), ResolveError>> + Send + Sync,
 >;
 
@@ -26,8 +27,8 @@ pub type ServerMiddlewares<G, L> = Arc<Vec<Arc<dyn DnsMiddleware<G, L> + 'static
 pub struct ServerState<G, L> {
     pub resolver: Arc<DynResolver<G, L>>,
     pub middlewares: ServerMiddlewares<G, L>,
-    pub on_success: Option<SuccessCallback<G, L>>,
-    pub on_error: Option<ErrorCallback<G, L>>,
+    pub on_success: Option<SuccessHandler<G, L>>,
+    pub on_error: Option<ErrorHandler<G, L>>,
     pub global: Arc<G>,
     pub timeout: Duration,
 }

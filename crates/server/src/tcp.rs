@@ -37,7 +37,7 @@ where
         tokio::spawn(async move {
             let mut len_buf = [0u8; 2];
             if let Err(e) = stream.read_exact(&mut len_buf).await {
-                tracing::warn!("Failed to read length from client: {} {}", client, e);
+                tracing::debug!("failed to read length from client: {} {}", client, e);
                 return;
             }
 
@@ -46,7 +46,7 @@ where
             let mut buf = vec![0; buffer_length];
 
             if let Err(e) = stream.read_exact(&mut buf).await {
-                tracing::warn!("Failed to read data from client {}: {}", client, e);
+                tracing::debug!("failed to read data from client {}: {}", client, e);
                 return;
             }
 

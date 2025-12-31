@@ -42,6 +42,25 @@ impl ResolveError {
             ResolveError::Other(_) => DnsResponseCode::ServerFailure,
         }
     }
+
+    pub fn error_type(&self) -> ResolveErrorType {
+        match self {
+            Self::Timeout => ResolveErrorType::Timeout,
+            Self::InvalidRequest(_) => ResolveErrorType::InvalidRequest,
+            ResolveError::InvalidResponse(_) => ResolveErrorType::InvalidResponse,
+            ResolveError::MalformedResponse(_) => ResolveErrorType::MalformedResponse,
+            ResolveError::Other(_) => ResolveErrorType::Other,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum ResolveErrorType {
+    Timeout,
+    InvalidRequest,
+    InvalidResponse,
+    MalformedResponse,
+    Other,
 }
 
 pub mod forwarder;

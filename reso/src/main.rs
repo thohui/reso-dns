@@ -1,20 +1,23 @@
-use std::{env, net::SocketAddr, sync::Arc, time::Duration};
+use std::{env, fmt::format, net::SocketAddr, sync::Arc, time::Duration};
 
 use blocklist::service::BlocklistService;
 use bytes::Bytes;
 use config::{DEFAULT_CONFIG_PATH, ResolverConfig, load_config};
-use database::{connect, models::query_log::DnsQueryLog, run_migrations};
+use database::{connect, run_migrations};
 use global::Global;
 use local::Local;
-use metrics::{event::QueryLogEvent, service::MetricsService};
+use metrics::{
+    event::{ErrorLogEvent, QueryLogEvent},
+    service::MetricsService,
+};
 use middleware::{blocklist::BlocklistMiddleware, cache::CacheMiddleware};
 use moka::future::FutureExt;
 use reso_cache::DnsMessageCache;
 use reso_context::DnsRequestCtx;
-use reso_dns::{DnsMessage, domain_name::DomainName, helpers};
+use reso_dns::{DnsMessage, helpers};
 use reso_resolver::{ResolveError, forwarder::resolver::ForwardResolver};
-use reso_server::{DnsServer, ErrorCallback, ServerMiddlewares, ServerState, SuccessCallback};
-use tokio::{io::unix, signal, time};
+use reso_server::{DnsServer, ErrorHandler, ServerMiddlewares, ServerState, SuccessHandler};
+use tokio::signal;
 use tracing::level_filters::LevelFilter;
 use tracing_appender::non_blocking;
 use tracing_subscriber::{Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
@@ -67,17 +70,31 @@ async fn main() -> anyhow::Result<()> {
 
     let timeout_duration = Duration::from_secs(config.server.timeout);
 
-    let error_handler: ErrorCallback<Global, Local> =
+    let error_handler: ErrorHandler<Global, Local> =
         Arc::new(|ctx: &DnsRequestCtx<Global, Local>, err: &ResolveError| {
             async move {
-                let id = helpers::extract_transaction_id(&ctx.raw()).unwrap_or_default();
+                let ts_ms: i64 = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("failed to get the system time")
+                    .as_millis() as i64;
+
+                let _ = ctx.global().metrics.error(ErrorLogEvent {
+                    ts_ms,
+                    client: ctx.request_address().to_string(),
+                    transport: ctx.request_type(),
+                    message: format!("{err}"),
+                    r#type: err.error_type(),
+                });
+
+                let id = helpers::extract_transaction_id(&ctx.raw()).unwrap_or(0);
                 tracing::error!("error processing request: {}: {}", id, err);
+
                 Ok(())
             }
             .boxed()
         });
 
-    let success_handler: SuccessCallback<Global, Local> =
+    let success_handler: SuccessHandler<Global, Local> =
         Arc::new(|ctx: &DnsRequestCtx<Global, Local>, resp: &Bytes| {
             async move {
                 let message = ctx.message()?;
@@ -98,7 +115,7 @@ async fn main() -> anyhow::Result<()> {
 
                 let response = DnsMessage::decode(&resp)?;
 
-                ctx.global().metrics.record(QueryLogEvent {
+                ctx.global().metrics.event(QueryLogEvent {
                     ts_ms,
                     transport: ctx.request_type(),
                     client: ctx.request_address().to_string(),
@@ -108,7 +125,7 @@ async fn main() -> anyhow::Result<()> {
                     dur_us: ctx.budget().elapsed().as_micros() as u32,
                     cache_hit: local.cache_hit,
                     blocked: local.blocked,
-                })?;
+                });
 
                 Ok(())
             }
