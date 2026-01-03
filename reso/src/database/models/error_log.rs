@@ -1,4 +1,5 @@
 use anyhow::Context;
+use std::collections::HashSet;
 use tokio_rusqlite::{params, rusqlite};
 
 use crate::database::DatabaseConnection;
@@ -13,14 +14,8 @@ pub struct DnsErrorLog {
 }
 
 impl DnsErrorLog {
-    pub async fn insert(&self, conn: &DatabaseConnection) -> anyhow::Result<()> {
+    pub async fn insert(self, conn: &DatabaseConnection) -> anyhow::Result<()> {
         let conn = conn.conn().await;
-
-        let ts_ms = self.ts_ms;
-        let transport = self.transport;
-        let client = self.client.clone();
-        let message = self.message.clone();
-        let r#type = self.r#type.clone();
 
         conn.call(move |c| -> rusqlite::Result<()> {
             c.execute(
@@ -30,7 +25,7 @@ impl DnsErrorLog {
             VALUES
               (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
             "#,
-                params![ts_ms, transport, client, message, r#type],
+                params![self.ts_ms, self.transport, self.client, self.message, self.r#type],
             )?;
             Ok(())
         })

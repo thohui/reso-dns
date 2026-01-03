@@ -1,3 +1,4 @@
+use aes_gcm::aead::{OsRng, rand_core::RngCore};
 use reso_server::DohConfig;
 use serde::{Deserialize, Serialize};
 use std::{error::Error, net::SocketAddr};
@@ -33,8 +34,8 @@ impl From<LogLevel> for Level {
     }
 }
 
-impl From<LogLevel> for LevelFilter {
-    fn from(value: LogLevel) -> Self {
+impl From<&LogLevel> for LevelFilter {
+    fn from(value: &LogLevel) -> Self {
         match value {
             LogLevel::Trace => LevelFilter::TRACE,
             LogLevel::Debug => LevelFilter::DEBUG,
@@ -61,6 +62,12 @@ pub struct ServerConfig {
     pub timeout: u64,
     /// DNS-over-HTTPS (DoH) TLS configuration.
     pub doh: Option<DohConfig>,
+    #[serde(default = "default_http_ip")]
+    pub http_ip: String,
+    #[serde(default = "default_http_port")]
+    pub http_port: u64,
+    #[serde(default = "default_cookie_key", with = "base64_32")]
+    pub cookie_key: [u8; 32],
 }
 
 impl Default for ServerConfig {
@@ -71,6 +78,9 @@ impl Default for ServerConfig {
             log_level: default_log_level(),
             timeout: default_timeout(),
             doh: None,
+            http_ip: default_http_ip(),
+            http_port: default_http_port(),
+            cookie_key: default_cookie_key(),
         }
     }
 }
@@ -182,4 +192,50 @@ fn default_log_level() -> LogLevel {
 
 fn default_timeout() -> u64 {
     5
+}
+
+fn default_http_ip() -> String {
+    "0.0.0.0".into()
+}
+
+fn default_http_port() -> u64 {
+    80
+}
+
+fn default_cookie_key() -> [u8; 32] {
+    let mut key = [0u8; 32]; // AES-256 key
+    OsRng.fill_bytes(&mut key);
+    key
+}
+
+mod base64_32 {
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S>(key: &[u8; 32], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = STANDARD.encode(key);
+        serializer.serialize_str(&s)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<[u8; 32], D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let bytes = STANDARD.decode(s.trim()).map_err(serde::de::Error::custom)?;
+
+        if bytes.len() != 32 {
+            return Err(serde::de::Error::custom(format!(
+                "cookie_key must decode to 32 bytes, got {}",
+                bytes.len()
+            )));
+        }
+
+        let mut out = [0u8; 32];
+        out.copy_from_slice(&bytes);
+        Ok(out)
+    }
 }

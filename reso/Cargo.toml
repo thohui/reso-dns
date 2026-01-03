@@ -24,10 +24,19 @@ reso-dns.workspace = true
 reso-resolver.workspace = true
 reso-server.workspace = true
 tokio.workspace = true
-tokio-rusqlite = { version = "0.7.0", features = ["bundled"] }
+tokio-rusqlite = { version = "0.7.0", features = ["bundled", "chrono", "uuid"] }
 toml.workspace = true
 tracing.workspace = true
 tracing-appender = "0.2.3"
 tracing-serde = "0.2.0"
 tracing-subscriber.workspace = true
 include_dir = { version = "0.7.4", features = ["metadata"] }
+axum = "0.8.8"
+uuid = { version = "1.19.0", features = ["v7"] }
+argon2 = { version = "0.5.3", features = ["default", "std"] }
+axum-extra = { version = "0.12.5", features = ["cookie"] }
+aes-gcm = "0.10.3"
+base64 = "0.22.1"
+serde_json = "1.0.148"
+tower-http = "0.6.8"
+futures.workspace = true

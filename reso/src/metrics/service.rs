@@ -6,7 +6,7 @@ use tokio::{
         RwLock,
         mpsc::{self, Receiver, Sender},
     },
-    time::{self, MissedTickBehavior},
+    time::{self, MissedTickBehavior, sleep},
 };
 
 use super::event::{ErrorLogEvent, QueryLogEvent};
@@ -34,9 +34,10 @@ pub struct MetricsService {
 pub struct MetricsHandle(Sender<MetricsMessage>);
 
 impl MetricsHandle {
-    pub fn shutdown(&self) -> anyhow::Result<()> {
-        let _ = self.0.try_send(MetricsMessage::Shutdown);
-        Ok(())
+    pub fn shutdown(&self) {
+        if let Err(e) = self.0.try_send(MetricsMessage::Shutdown) {
+            tracing::error!("failed to send shutdown signal to metrics service {}", e)
+        }
     }
 
     pub fn event(&self, event: QueryLogEvent) {
@@ -184,5 +185,11 @@ impl MetricsService {
         tracing::debug!("flushed {} error events to the database", db_rows.len());
 
         Ok(())
+    }
+}
+
+impl Drop for MetricsService {
+    fn drop(&mut self) {
+        futures::executor::block_on(self.flush_events())
     }
 }

@@ -14,10 +14,9 @@ impl BlockedDomain {
 }
 
 impl BlockedDomain {
-    pub async fn insert(&self, db: &DatabaseConnection) -> anyhow::Result<()> {
+    pub async fn insert(self, db: &DatabaseConnection) -> anyhow::Result<()> {
         let conn = db.conn().await;
-        let str = self.0.to_string();
-        conn.call(move |c| c.execute("INSERT OR IGNORE INTO blocklist (domain) VALUES (?)", [str]))
+        conn.call(move |c| c.execute("INSERT OR IGNORE INTO blocklist (domain) VALUES (?)", [self.0.as_str()]))
             .await?;
         Ok(())
     }
@@ -46,11 +45,10 @@ impl BlockedDomain {
         }
     }
 
-    pub async fn delete(db: &DatabaseConnection, domain: &DomainName) -> anyhow::Result<()> {
+    pub async fn delete(self, db: &DatabaseConnection) -> anyhow::Result<()> {
         let conn = db.conn().await;
 
-        let str = domain.to_string();
-        conn.call(move |c| c.execute("DELETE FROM blocklist where domain = ?", params![str]))
+        conn.call(move |c| c.execute("DELETE FROM blocklist where domain = ?", params![self.0.as_str()]))
             .await?;
         Ok(())
     }

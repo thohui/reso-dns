@@ -1,10 +1,12 @@
 use std::{env, fmt::format, net::SocketAddr, sync::Arc, time::Duration};
 
+use aes_gcm::{AesGcm, KeyInit, aead::generic_array::GenericArray};
+use api::serve_web;
 use blocklist::service::BlocklistService;
 use bytes::Bytes;
 use config::{DEFAULT_CONFIG_PATH, ResolverConfig, load_config};
-use database::{connect, run_migrations};
-use global::Global;
+use database::{connect, models::user::User, run_migrations};
+use global::{Global, SharedGlobal};
 use local::Local;
 use metrics::{
     event::{ErrorLogEvent, QueryLogEvent},
@@ -21,7 +23,9 @@ use tokio::signal;
 use tracing::level_filters::LevelFilter;
 use tracing_appender::non_blocking;
 use tracing_subscriber::{Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+use utils::password::{generate_password, hash_password};
 
+mod api;
 mod blocklist;
 mod config;
 mod database;
@@ -29,8 +33,10 @@ mod global;
 mod local;
 mod metrics;
 mod middleware;
+pub mod utils;
 
 #[tokio::main]
+
 async fn main() -> anyhow::Result<()> {
     let (nb, _guard) = non_blocking(std::io::stdout());
 
@@ -38,12 +44,14 @@ async fn main() -> anyhow::Result<()> {
 
     let config = load_config(&dns_config_path)?;
 
+    let level_filter = LevelFilter::from(&config.server.log_level);
+
     tracing_subscriber::registry()
         .with(
             fmt::layer()
                 .with_writer(nb)
                 .with_target(false)
-                .with_filter(LevelFilter::from(config.server.log_level)),
+                .with_filter(level_filter),
         )
         .init();
 
@@ -52,15 +60,18 @@ async fn main() -> anyhow::Result<()> {
 
     let (handle, stats, metrics_service) = MetricsService::new(connection.clone(), 1024);
 
-    let global = Arc::new(Global {
+    let global: SharedGlobal = Arc::new(Global {
         cache: DnsMessageCache::new(50_000),
         blocklist: BlocklistService::new(connection.clone()),
         metrics: handle,
         stats,
+        database: connection,
+        cipher: AesGcm::new(&GenericArray::clone_from_slice(&config.server.cookie_key)),
+        config,
     });
 
     #[allow(irrefutable_let_patterns)]
-    let upstreams = if let ResolverConfig::Forwarder { upstreams } = config.resolver {
+    let upstreams = if let ResolverConfig::Forwarder { upstreams } = &global.config.resolver {
         upstreams
     } else {
         return Err(anyhow::anyhow!("Unsupported resolver configuration"));
@@ -68,7 +79,7 @@ async fn main() -> anyhow::Result<()> {
 
     let resolver = ForwardResolver::new(&upstreams).await?;
 
-    let timeout_duration = Duration::from_secs(config.server.timeout);
+    let timeout_duration = Duration::from_secs(global.config.server.timeout);
 
     let error_handler: ErrorHandler<Global, Local> =
         Arc::new(|ctx: &DnsRequestCtx<Global, Local>, err: &ResolveError| {
@@ -148,11 +159,29 @@ async fn main() -> anyhow::Result<()> {
 
     global.blocklist.load_matcher().await?;
 
-    let server_addr = format!("{}:{}", config.server.ip, config.server.port)
+    let server_addr = format!("{}:{}", global.config.server.ip, global.config.server.port)
         .parse::<SocketAddr>()
         .expect("invalid server address format");
 
+    let users = User::list(&global.database).await?;
+
+    // Generate admin account if there are no users
+    if users.len() == 0 {
+        let password = generate_password(16);
+        let hash = hash_password(&password)?;
+
+        const ADMIN_USERNAME: &str = "admin";
+        User::new(ADMIN_USERNAME, hash).insert(&global.database).await?;
+
+        tracing::info!("created an admin account with password: {}", password)
+    }
+
     tokio::select! {
+        r = serve_web(global.clone()) => {
+            if let Err(e) = r {
+                tracing::error!("API exited with error: {}", e);
+            }
+        }
         r = metrics_service.run() => {
             if let Err(e) = r {
                 tracing::error!("Metrics exited with error: {}", e);
@@ -173,8 +202,6 @@ async fn main() -> anyhow::Result<()> {
         },
 
     }
-
-    let _ = global.metrics.shutdown();
 
     Ok(())
 }

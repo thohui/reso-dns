@@ -28,7 +28,7 @@ impl BlocklistService {
 
     pub async fn remove_domain(&self, domain: &str) -> anyhow::Result<()> {
         let domain = DomainName::from_user(domain)?;
-        BlockedDomain::delete(&self.connection, &domain).await?;
+        BlockedDomain::new(domain).delete(&self.connection).await?;
         self.load_matcher().await?;
         Ok(())
     }

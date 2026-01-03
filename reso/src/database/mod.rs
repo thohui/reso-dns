@@ -1,5 +1,3 @@
-use std::ops::{Deref, DerefMut};
-
 use include_dir::{Dir, include_dir};
 use rusqlite_migration::MigrationsBuilder;
 use tokio_rusqlite::{Connection, OpenFlags};
@@ -7,6 +5,7 @@ use tokio_rusqlite::{Connection, OpenFlags};
 pub mod models;
 
 static MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations");
+
 pub struct DatabaseConnection(Connection);
 
 impl DatabaseConnection {
