@@ -1,5 +1,5 @@
 use anyhow::Context;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use tokio_rusqlite::{params, rusqlite};
 use uuid::Uuid;
 
@@ -11,26 +11,27 @@ use super::user::User;
 pub struct UserSession {
     pub id: EntityId<Self>,
     pub user_id: EntityId<User>,
-    pub created_at: DateTime<Utc>,
-    pub expires_at: DateTime<Utc>,
+    /// Time in ms.
+    pub created_at: i64,
+    /// Time in ms.
+    pub expires_at: i64,
 }
 
 /// The amount of days that a session can be inactive before it is considered expired.
-const INACTIVE_SESSION_TIMEOUT: chrono::Duration = chrono::Duration::days(7);
+const INACTIVE_SESSION_TIMEOUT: i64 = chrono::Duration::days(7).num_milliseconds();
 
-/// The amount days that must pass before a session's last active time is updated.
-pub const UPDATE_THRESHOLD: chrono::Duration = chrono::Duration::days(1);
+/// The amount of days that must pass before a session's last active time is updated.
+pub const UPDATE_THRESHOLD: i64 = chrono::Duration::days(1).num_milliseconds();
 
 impl UserSession {
     pub fn new(user_id: EntityId<User>) -> Self {
-        let now = Utc::now();
-        let created_at = DateTime::<Utc>::from_naive_utc_and_offset(now.naive_local(), *now.offset());
+        let now = Utc::now().timestamp_millis();
 
         Self {
             id: EntityId::from(Uuid::now_v7()),
             user_id,
-            created_at: created_at.clone(),
-            expires_at: created_at + INACTIVE_SESSION_TIMEOUT,
+            created_at: now,
+            expires_at: now + INACTIVE_SESSION_TIMEOUT,
         }
     }
 
@@ -96,8 +97,7 @@ impl UserSession {
     }
 
     pub fn is_expired(&self) -> bool {
-        let now = Utc::now();
-        let duration = now.signed_duration_since(self.expires_at);
-        duration > INACTIVE_SESSION_TIMEOUT
+        let now = Utc::now().timestamp_millis();
+        now.saturating_sub(self.expires_at) > INACTIVE_SESSION_TIMEOUT
     }
 }

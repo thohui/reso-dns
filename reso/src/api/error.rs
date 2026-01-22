@@ -1,11 +1,6 @@
 use std::borrow::Cow;
 
-use axum::{
-    Json,
-    body::Body,
-    http::{HeaderMap, Response, StatusCode},
-    response::IntoResponse,
-};
+use axum::{Json, http::StatusCode, response::IntoResponse};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Default, Serialize)]

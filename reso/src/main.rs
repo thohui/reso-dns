@@ -1,6 +1,7 @@
 use std::{env, fmt::format, net::SocketAddr, sync::Arc, time::Duration};
 
 use aes_gcm::{AesGcm, KeyInit, aead::generic_array::GenericArray};
+use anyhow::Context;
 use api::serve_web;
 use blocklist::service::BlocklistService;
 use bytes::Bytes;
@@ -163,17 +164,21 @@ async fn main() -> anyhow::Result<()> {
         .parse::<SocketAddr>()
         .expect("invalid server address format");
 
-    let users = User::list(&global.database).await?;
+    let users = User::list(&global.database).await.context("list users")?;
 
     // Generate admin account if there are no users
     if users.len() == 0 {
-        let password = generate_password(16);
-        let hash = hash_password(&password)?;
-
         const ADMIN_USERNAME: &str = "admin";
-        User::new(ADMIN_USERNAME, hash).insert(&global.database).await?;
+        let password = generate_password(16);
+        let password_hash = hash_password(&password)?;
+        let admin_user = User::new(ADMIN_USERNAME, password_hash);
+        admin_user.insert(&global.database).await.context("create admin user")?;
 
-        tracing::info!("created an admin account with password: {}", password)
+        tracing::info!(
+            "Created a user with username: {} and password: {}",
+            ADMIN_USERNAME,
+            password
+        )
     }
 
     tokio::select! {

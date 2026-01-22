@@ -1,5 +1,4 @@
-use argon2::Params;
-use chrono::{DateTime, Local, Utc};
+use chrono::Utc;
 use tokio_rusqlite::{params, rusqlite};
 use uuid::Uuid;
 
@@ -9,13 +8,13 @@ pub struct User {
     pub id: EntityId<Self>,
     pub name: String,
     pub password_hash: String,
-    pub created_at: chrono::DateTime<Utc>,
+    /// Time in ms.
+    pub created_at: i64,
 }
 
 impl User {
     pub fn new(name: impl Into<String>, password_hash: impl Into<String>) -> Self {
-        let now = Utc::now();
-        let created_at = DateTime::<Utc>::from_naive_utc_and_offset(now.naive_local(), *now.offset());
+        let created_at = Utc::now().timestamp_millis();
         User {
             id: EntityId::new(),
             name: name.into(),

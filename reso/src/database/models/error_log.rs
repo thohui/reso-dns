@@ -1,5 +1,4 @@
 use anyhow::Context;
-use std::collections::HashSet;
 use tokio_rusqlite::{params, rusqlite};
 
 use crate::database::DatabaseConnection;

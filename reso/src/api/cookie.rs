@@ -3,18 +3,14 @@ use aes_gcm::{
     aead::{Aead, OsRng, rand_core::RngCore},
 };
 use anyhow::anyhow;
-use axum_extra::extract::cookie::{Cookie, Expiration};
+use axum_extra::extract::cookie::Cookie;
 use base64::{
     Engine, alphabet,
     engine::{self, general_purpose},
 };
-use chrono::{DateTime, Offset, Utc};
 use uuid::Uuid;
 
-use crate::{
-    database::models::{user::User, user_session::UserSession},
-    utils::uuid::EntityId,
-};
+use crate::{database::models::user_session::UserSession, utils::uuid::EntityId};
 
 /// Identifier for the session cookie.
 pub const SESSION_COOKIE_KEY: &str = "RESO_SESSION";
