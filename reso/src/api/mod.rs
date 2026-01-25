@@ -4,13 +4,17 @@ use auth::create_auth_router;
 use axum::{
     Router,
     body::Body,
-    http::{HeaderValue, Response, StatusCode, Uri, header},
+    http::{
+        HeaderValue, Response, StatusCode, Uri,
+        header::{self, AUTHORIZATION, CONTENT_TYPE},
+    },
     response::IntoResponse,
     routing::get,
 };
 use mime_guess::from_path;
 use rust_embed::RustEmbed;
 use stats::create_stats_router;
+use tower_http::cors::{Any, CorsLayer};
 mod auth;
 mod cookie;
 mod error;
@@ -27,11 +31,20 @@ pub async fn serve_web(global: SharedGlobal) -> anyhow::Result<()> {
         .nest("/auth", create_auth_router())
         .nest("/stats", create_stats_router(global.clone()));
 
-    let app = Router::new()
+    let mut app = Router::new()
         .nest("/api", api)
         .route("/", get(static_handler))
         .route("/{*path}", get(static_handler))
         .with_state(global);
+
+    #[cfg(debug_assertions)]
+    {
+        let cors_layer = CorsLayer::new()
+            .allow_methods(Any)
+            .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap()) // vite dev server
+            .allow_headers([AUTHORIZATION, CONTENT_TYPE]);
+        app = app.layer(cors_layer)
+    }
 
     tracing::info!("HTTP listening on {}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await?;
