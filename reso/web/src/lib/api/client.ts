@@ -103,17 +103,18 @@ export class EventBus {
 	}
 
 	public off<T extends EventType>(event: T, listener: EventListener<T>) {
-		if (this.listeners.has(event)) {
-			const listeners = this.listeners
-				.get(event)!
-				.filter((l) => l !== listener);
+		const listeners = this.listeners.get(event);
+
+		if (listeners) {
+			listeners.filter((l) => l !== listener);
 			this.listeners.set(event, listeners);
 		}
 	}
 
 	public emit<T extends EventType>(event: T, payload: Events[T]) {
 		if (!this.listeners.has(event)) return;
-		for (const listener of this.listeners.get(event)!) {
+
+		for (const listener of this.listeners.get(event) ?? []) {
 			listener(payload);
 		}
 	}
