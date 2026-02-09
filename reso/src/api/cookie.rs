@@ -3,7 +3,7 @@ use aes_gcm::{
     aead::{Aead, OsRng, rand_core::RngCore},
 };
 use anyhow::anyhow;
-use axum_extra::extract::cookie::Cookie;
+use axum_extra::extract::cookie::{Cookie, SameSite};
 use base64::{
     Engine, alphabet,
     engine::{self, general_purpose},
@@ -15,11 +15,18 @@ use crate::{database::models::user_session::UserSession, utils::uuid::EntityId};
 /// Identifier for the session cookie.
 pub const SESSION_COOKIE_KEY: &str = "RESO_SESSION";
 
+#[cfg(debug_assertions)]
+const SAME_SITE: SameSite = SameSite::Lax;
+
+#[cfg(not(debug_assertions))]
+const SAME_SITE: SameSite = SameSite::Strict;
+
 pub fn build_session_cookie<'a>(session: String) -> Cookie<'a> {
     Cookie::build((SESSION_COOKIE_KEY, session))
         .http_only(true)
         .path("/")
         .secure(false)
+        .same_site(SAME_SITE)
         .build()
 }
 const BASE64_ENGINE: engine::GeneralPurpose = engine::GeneralPurpose::new(&alphabet::URL_SAFE, general_purpose::NO_PAD);

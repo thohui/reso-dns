@@ -1,5 +1,6 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 
+use activity::create_activity_router;
 use auth::create_auth_router;
 use axum::{
     Router,
@@ -9,15 +10,19 @@ use axum::{
         header::{self, AUTHORIZATION, CONTENT_TYPE},
     },
     response::IntoResponse,
-    routing::get,
 };
+use blocklist::create_blocklist_router;
 use mime_guess::from_path;
 use rust_embed::RustEmbed;
 use stats::create_stats_router;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowMethods, CorsLayer};
+
+mod activity;
 mod auth;
+mod blocklist;
 mod cookie;
 mod error;
+mod pagination;
 mod stats;
 
 use crate::global::SharedGlobal;
@@ -28,20 +33,23 @@ pub async fn serve_web(global: SharedGlobal) -> anyhow::Result<()> {
         .expect("invalid http server address format");
 
     let api = Router::new()
-        .nest("/auth", create_auth_router())
-        .nest("/stats", create_stats_router(global.clone()));
+        .nest("/auth", create_auth_router(global.clone()))
+        .nest("/stats", create_stats_router(global.clone()))
+        .nest("/activity", create_activity_router(global.clone()))
+        .nest("/blocklist", create_blocklist_router(global.clone()));
 
     let mut app = Router::new()
         .nest("/api", api)
-        .route("/", get(static_handler))
-        .route("/{*path}", get(static_handler))
+        .fallback(static_handler)
         .with_state(global);
 
+    // Add support for vite dev server in debug mode.
     #[cfg(debug_assertions)]
     {
         let cors_layer = CorsLayer::new()
-            .allow_methods(Any)
-            .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap()) // vite dev server
+            .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
+            .allow_credentials(true)
+            .allow_methods(AllowMethods::mirror_request())
             .allow_headers([AUTHORIZATION, CONTENT_TYPE]);
         app = app.layer(cors_layer)
     }
@@ -60,7 +68,9 @@ struct Assets;
 async fn static_handler(uri: Uri) -> Response<Body> {
     let mut path = uri.path().trim_start_matches('/');
 
-    if path.is_empty() {
+    let is_index_html = !uri.path().contains("/assets") && path.split(".").count() > 0;
+
+    if path.is_empty() || is_index_html {
         path = "index.html";
     }
 

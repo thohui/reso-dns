@@ -1,28 +1,38 @@
 {
-  "name": "web2",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "biome lint .",
-    "fmt": "biome format .",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "2.3.12",
-    "@eslint/js": "^9.39.1",
-    "@types/node": "^24.10.1",
-    "@types/react": "^19.2.5",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react-swc": "^4.2.2",
-    "globals": "^16.5.0",
-    "typescript": "~5.9.3",
-    "vite": "^7.2.4"
-  }
+	"name": "web2",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"build": "tsc -b && vite build",
+		"lint": "biome lint .",
+		"fmt": "biome format .",
+		"preview": "vite preview"
+	},
+	"dependencies": {
+		"@chakra-ui/react": "^3.31.0",
+		"@hookform/resolvers": "^5.2.2",
+		"@tanstack/react-query": "^5.90.20",
+		"ky": "^1.14.3",
+		"lucide-react": "^0.563.0",
+		"next-themes": "^0.4.6",
+		"react": "^19.2.0",
+		"react-dom": "^19.2.0",
+		"react-hook-form": "^7.71.1",
+		"react-icons": "^5.5.0",
+		"react-router-dom": "^7.13.0",
+		"zod": "^4.3.6"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.3.12",
+		"@eslint/js": "^9.39.1",
+		"@types/node": "^24.10.1",
+		"@types/react": "^19.2.5",
+		"@types/react-dom": "^19.2.3",
+		"@vitejs/plugin-react-swc": "^4.2.2",
+		"globals": "^16.5.0",
+		"typescript": "~5.9.3",
+		"vite": "^7.2.4"
+	}
 }

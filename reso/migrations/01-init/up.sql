@@ -9,7 +9,7 @@ CREATE TABLE
     rcode INTEGER NOT NULL,
     blocked BOOLEAN NOT NULL,
     cache_hit BOOLEAN NOT NULL,
-    dur_us INTEGER NOT NULL,
+    dur_ms INTEGER NOT NULL,
     -- enforce boolean-ness
     CHECK (blocked IN (0, 1)),
     CHECK (cache_hit IN (0, 1))
@@ -29,6 +29,9 @@ CREATE TABLE
     ts_ms INTEGER NOT NULL,
     transport INTEGER NOT NULL,
     client TEXT,
+    dur_ms INTEGER NOT NULL,
+    qname TEXT,
+    qtype INTEGER,
     message TEXT NOT NULL,
     type INTEGER NOT NULL
   );
@@ -38,4 +41,4 @@ CREATE INDEX IF NOT EXISTS idx_dns_error_log_ts ON dns_error_log (ts_ms);
 CREATE INDEX IF NOT EXISTS idx_dns_error_log_type ON dns_error_log (type);
 
 CREATE TABLE
-  IF NOT EXISTS blocklist (domain TEXT PRIMARY KEY);
+  IF NOT EXISTS blocklist (domain TEXT PRIMARY KEY, created_at INTEGER);

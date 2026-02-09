@@ -13,7 +13,7 @@ pub struct DnsQueryLog {
     pub rcode: i64,
     pub blocked: bool,
     pub cache_hit: bool,
-    pub dur_us: i64,
+    pub dur_ms: i64,
 }
 
 impl DnsQueryLog {
@@ -28,18 +28,18 @@ impl DnsQueryLog {
         let rcode = self.rcode;
         let blocked = self.blocked;
         let cache_hit = self.cache_hit;
-        let dur_us = self.dur_us;
+        let dur_ms = self.dur_ms;
 
         conn.call(move |c| -> rusqlite::Result<()> {
             c.execute(
                 r#"
             INSERT INTO dns_query_log
-              (ts_ms, transport, client, qname, qtype, rcode, blocked, cache_hit, dur_us)
+              (ts_ms, transport, client, qname, qtype, rcode, blocked, cache_hit, dur_ms)
             VALUES
               (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
             "#,
                 params![
-                    ts_ms, transport, client, qname, qtype, rcode, blocked, cache_hit, dur_us
+                    ts_ms, transport, client, qname, qtype, rcode, blocked, cache_hit, dur_ms
                 ],
             )?;
             Ok(())
@@ -67,7 +67,7 @@ impl DnsQueryLog {
             rcode: i64,
             blocked: bool,
             cache_hit: bool,
-            dur_us: i64,
+            dur_ms: i64,
         }
 
         let owned: Vec<RowOwned> = rows
@@ -81,7 +81,7 @@ impl DnsQueryLog {
                 rcode: r.rcode as i64,
                 blocked: r.blocked,
                 cache_hit: r.cache_hit,
-                dur_us: r.dur_us,
+                dur_ms: r.dur_ms,
             })
             .collect();
 
@@ -92,7 +92,7 @@ impl DnsQueryLog {
                 let mut stmt = tx.prepare(
                     r#"
                     INSERT INTO dns_query_log
-                      (ts_ms, transport, client, qname, qtype, rcode, blocked, cache_hit, dur_us)
+                      (ts_ms, transport, client, qname, qtype, rcode, blocked, cache_hit, dur_ms)
                     VALUES
                       (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
                     "#,
@@ -108,7 +108,7 @@ impl DnsQueryLog {
                         r.rcode,
                         r.blocked,
                         r.cache_hit,
-                        r.dur_us
+                        r.dur_ms
                     ])?;
                 }
             }
@@ -130,7 +130,7 @@ impl DnsQueryLog {
                 let mut stmt = c.prepare(
                     r#"
                     SELECT
-                      ts_ms, transport, client, qname, qtype, rcode, blocked, cache_hit, dur_us
+                      ts_ms, transport, client, qname, qtype, rcode, blocked, cache_hit, dur_ms
                     FROM dns_query_log
                     ORDER BY ts_ms DESC
                     LIMIT ?1 OFFSET ?2
@@ -147,7 +147,7 @@ impl DnsQueryLog {
                         rcode: row.get(5)?,
                         blocked: row.get(6)?,
                         cache_hit: row.get(7)?,
-                        dur_us: row.get(8)?,
+                        dur_ms: row.get(8)?,
                     })
                 })?;
 
