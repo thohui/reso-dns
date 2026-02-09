@@ -20,22 +20,24 @@ impl BlocklistService {
     }
 
     pub async fn add_domain(&self, domain: &str) -> anyhow::Result<()> {
+        // TODO: loading a matcher on demand is expensive, we should flush them periodically like we're doing with the metrics.
         let domain = DomainName::from_user(domain)?;
-        BlockedDomain::new(domain).insert(&self.connection).await?;
+        BlockedDomain::new(domain.to_string()).insert(&self.connection).await?;
         self.load_matcher().await?;
         Ok(())
     }
 
     pub async fn remove_domain(&self, domain: &str) -> anyhow::Result<()> {
         let domain = DomainName::from_user(domain)?;
-        BlockedDomain::new(domain).delete(&self.connection).await?;
+
+        BlockedDomain::new(domain.to_string()).delete(&self.connection).await?;
         self.load_matcher().await?;
         Ok(())
     }
 
     pub async fn load_matcher(&self) -> anyhow::Result<()> {
-        let domains = BlockedDomain::list(&self.connection).await?;
-        let updated_matcher = BlocklistMatcher::load(domains.iter().map(|d| d.0.as_str()))?;
+        let domains = BlockedDomain::list_all(&self.connection).await?;
+        let updated_matcher = BlocklistMatcher::load(domains.iter().map(|d| d.domain.as_str()))?;
         self.matcher.swap(updated_matcher.into());
         Ok(())
     }
@@ -44,3 +46,7 @@ impl BlocklistService {
         self.matcher.load().is_blocked(name)
     }
 }
+
+#[cfg(test)]
+#[path = "service_tests.rs"]
+mod service_tests;

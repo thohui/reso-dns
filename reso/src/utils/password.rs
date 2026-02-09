@@ -50,3 +50,7 @@ pub fn generate_password(length: usize) -> String {
 
     out
 }
+
+#[cfg(test)]
+#[path = "password_tests.rs"]
+mod password_tests;
