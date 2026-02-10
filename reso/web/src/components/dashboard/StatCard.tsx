@@ -18,21 +18,21 @@ interface Props {
 export function StatCard({ label, value, icon, color = 'green' }: Props) {
 	return (
 		<Box
-			bg="gray.900"
-			borderRadius="lg"
-			borderWidth="1px"
-			borderColor="gray.800"
-			p="6"
+			bg='gray.900'
+			borderRadius='lg'
+			borderWidth='1px'
+			borderColor='gray.800'
+			p='6'
 		>
-			<HStack justify="space-between" mb="4">
-				<Text color="gray.400" fontSize="sm">
+			<HStack justify='space-between' mb='4'>
+				<Text color='gray.400' fontSize='sm'>
 					{label}
 				</Text>
-				<Box p="2" bg={colorMap[color].bg} borderRadius="md">
-					<Icon as={icon} boxSize="4" color="white" />
+				<Box p='2' bg={colorMap[color].bg} borderRadius='md'>
+					<Icon as={icon} boxSize='4' color='white' />
 				</Box>
 			</HStack>
-			<Text color="white" fontSize="3xl" fontWeight="bold">
+			<Text color='white' fontSize='3xl' fontWeight='bold'>
 				{value}
 			</Text>
 		</Box>

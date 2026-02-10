@@ -40,8 +40,8 @@ export default function BlocklistPage() {
 			{showDialog && (
 				<BlocklistDialog onClose={handleClose} onSubmit={handleSubmit} />
 			)}
-			<Box display="flex" flexDirection="row-reverse">
-				<Button bgColor="green.600" mb={2} onClick={handleClick}>
+			<Box display='flex' flexDirection='row-reverse'>
+				<Button bgColor='green.600' mb={2} onClick={handleClick}>
 					Add
 				</Button>
 			</Box>

@@ -9,11 +9,11 @@ export function ProtectedRoute({ requiresAuthentication }: Props) {
 	const authenticated = useIsAuthenticated();
 
 	if (requiresAuthentication && !authenticated) {
-		return <Navigate to="/" replace />;
+		return <Navigate to='/' replace />;
 	}
 
 	if (!requiresAuthentication && authenticated) {
-		return <Navigate to="/home" replace />;
+		return <Navigate to='/home' replace />;
 	}
 
 	return <Outlet />;

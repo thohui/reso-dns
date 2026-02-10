@@ -88,42 +88,42 @@ function LogDetailRow({ activity }: { activity: Activity; }) {
 
 	return (
 		<Table.Row
-			bg="bg.panel"
-			borderColor="border"
+			bg='bg.panel'
+			borderColor='border'
 			_hover={{ bg: 'bg.subtle' }}
-			transition="background 0.15s"
+			transition='background 0.15s'
 		>
 			<Table.Cell
-				py="3"
-				px="4"
-				fontFamily="mono"
-				fontSize="sm"
-				color="fg.muted"
+				py='3'
+				px='4'
+				fontFamily='mono'
+				fontSize='sm'
+				color='fg.muted'
 			>
 				{formatTimestamp(activity.timestamp)}
 			</Table.Cell>
 
-			<Table.Cell py="3" px="4">
-				<HStack gap="2">
-					<Icon as={status.icon} boxSize="3.5" color={status.tokenColor} />
-					<Badge colorPalette={status.color} size="sm" variant="subtle">
+			<Table.Cell py='3' px='4'>
+				<HStack gap='2'>
+					<Icon as={status.icon} boxSize='3.5' color={status.tokenColor} />
+					<Badge colorPalette={status.color} size='sm' variant='subtle'>
 						{status.label}
 					</Badge>
 				</HStack>
 			</Table.Cell>
 
-			<Table.Cell py="3" px="4">
-				<HStack gap="2">
-					<Text fontFamily="mono" fontSize="sm">
+			<Table.Cell py='3' px='4'>
+				<HStack gap='2'>
+					<Text fontFamily='mono' fontSize='sm'>
 						{activity.qname || '-'}
 					</Text>
 					{activity.qtype !== null && (
 						<Badge
-							colorPalette="gray"
-							size="sm"
-							variant="outline"
-							color="white"
-							fontFamily="mono"
+							colorPalette='gray'
+							size='sm'
+							variant='outline'
+							color='white'
+							fontFamily='mono'
 						>
 							{RECORD_TYPES[activity.qtype] || 'Unknown'}
 						</Badge>
@@ -132,27 +132,27 @@ function LogDetailRow({ activity }: { activity: Activity; }) {
 			</Table.Cell>
 
 			<Table.Cell
-				py="3"
-				px="4"
-				fontFamily="mono"
-				fontSize="sm"
-				color="fg.muted"
+				py='3'
+				px='4'
+				fontFamily='mono'
+				fontSize='sm'
+				color='fg.muted'
 			>
 				{activity.client || 'unknown'}
 			</Table.Cell>
 
-			<Table.Cell py="3" px="4">
-				<Badge colorPalette="gray" size="sm" variant="subtle">
+			<Table.Cell py='3' px='4'>
+				<Badge colorPalette='gray' size='sm' variant='subtle'>
 					{TRANSPORT_LABELS[activity.transport] || `T:${activity.transport}`}
 				</Badge>
 			</Table.Cell>
 
-			<Table.Cell py="3" px="4" textAlign="right">
-				<HStack gap="1" justify="flex-end">
-					<Icon as={Clock} boxSize="3" color="fg.subtle" />
+			<Table.Cell py='3' px='4' textAlign='right'>
+				<HStack gap='1' justify='flex-end'>
+					<Icon as={Clock} boxSize='3' color='fg.subtle' />
 					<Text
-						fontFamily="mono"
-						fontSize="sm"
+						fontFamily='mono'
+						fontSize='sm'
 						color={
 							activity.duration > 1000
 								? 'status.error'
@@ -200,62 +200,62 @@ export function LogsGrid({ activities }: { activities: Activity[]; }) {
 
 	return (
 		<Box>
-			<HStack justify="space-between" mb="6" align="flex-end">
-				<VStack align="flex-start" gap="1">
-					<Heading size="lg">DNS Query Logs</Heading>
-					<Text color="fg.muted" fontSize="sm">
+			<HStack justify='space-between' mb='6' align='flex-end'>
+				<VStack align='flex-start' gap='1'>
+					<Heading size='lg'>DNS Query Logs</Heading>
+					<Text color='fg.muted' fontSize='sm'>
 						{activities.length} total entries
 					</Text>
 				</VStack>
 			</HStack>
 
 			<Tabs.Root
-				defaultValue="all"
-				mb="6"
+				defaultValue='all'
+				mb='6'
 				onValueChange={(e) => setFilter(e.value)}
 			>
-				<Tabs.List bg="bg.panel" borderRadius="lg" p="1" gap="1">
+				<Tabs.List bg='bg.panel' borderRadius='lg' p='1' gap='1'>
 					<Tabs.Trigger
-						value="all"
-						px="4"
-						py="2"
-						color="fg.muted"
+						value='all'
+						px='4'
+						py='2'
+						color='fg.muted'
 						_selected={{ bg: 'bg.subtle', color: 'fg' }}
 					>
 						All ({counts.all})
 					</Tabs.Trigger>
 					<Tabs.Trigger
-						value="queries"
-						px="4"
-						py="2"
-						color="fg.muted"
+						value='queries'
+						px='4'
+						py='2'
+						color='fg.muted'
 						_selected={{ bg: 'bg.subtle', color: 'fg' }}
 					>
 						Queries ({counts.queries})
 					</Tabs.Trigger>
 					<Tabs.Trigger
-						value="blocked"
-						px="4"
-						py="2"
-						color="fg.muted"
+						value='blocked'
+						px='4'
+						py='2'
+						color='fg.muted'
 						_selected={{ bg: 'bg.subtle', color: 'fg' }}
 					>
 						Blocked ({counts.blocked})
 					</Tabs.Trigger>
 					<Tabs.Trigger
-						value="cached"
-						px="4"
-						py="2"
-						color="fg.muted"
+						value='cached'
+						px='4'
+						py='2'
+						color='fg.muted'
 						_selected={{ bg: 'bg.subtle', color: 'fg' }}
 					>
 						Cached ({counts.cached})
 					</Tabs.Trigger>
 					<Tabs.Trigger
-						value="errors"
-						px="4"
-						py="2"
-						color="fg.muted"
+						value='errors'
+						px='4'
+						py='2'
+						color='fg.muted'
 						_selected={{ bg: 'bg.subtle', color: 'fg' }}
 					>
 						Errors ({counts.errors})
@@ -264,74 +264,74 @@ export function LogsGrid({ activities }: { activities: Activity[]; }) {
 			</Tabs.Root>
 
 			<Box
-				bg="bg.panel"
-				borderRadius="lg"
-				borderWidth="1px"
-				borderColor="border"
-				overflow="hidden"
+				bg='bg.panel'
+				borderRadius='lg'
+				borderWidth='1px'
+				borderColor='border'
+				overflow='hidden'
 			>
-				<Box overflowX="auto">
-					<Table.Root size="sm">
+				<Box overflowX='auto'>
+					<Table.Root size='sm'>
 						<Table.Header>
-							<Table.Row bg="bg.subtle">
+							<Table.Row bg='bg.subtle'>
 								<Table.ColumnHeader
-									color="fg.muted"
-									py="3"
-									px="4"
-									fontSize="xs"
-									textTransform="uppercase"
-									letterSpacing="wider"
+									color='fg.muted'
+									py='3'
+									px='4'
+									fontSize='xs'
+									textTransform='uppercase'
+									letterSpacing='wider'
 								>
 									Time
 								</Table.ColumnHeader>
 								<Table.ColumnHeader
-									color="fg.muted"
-									py="3"
-									px="4"
-									fontSize="xs"
-									textTransform="uppercase"
-									letterSpacing="wider"
+									color='fg.muted'
+									py='3'
+									px='4'
+									fontSize='xs'
+									textTransform='uppercase'
+									letterSpacing='wider'
 								>
 									Status
 								</Table.ColumnHeader>
 								<Table.ColumnHeader
-									color="fg.muted"
-									py="3"
-									px="4"
-									fontSize="xs"
-									textTransform="uppercase"
-									letterSpacing="wider"
+									color='fg.muted'
+									py='3'
+									px='4'
+									fontSize='xs'
+									textTransform='uppercase'
+									letterSpacing='wider'
 								>
 									Domain
 								</Table.ColumnHeader>
 								<Table.ColumnHeader
-									color="fg.muted"
-									py="3"
-									px="4"
-									fontSize="xs"
-									textTransform="uppercase"
-									letterSpacing="wider"
+									color='fg.muted'
+									py='3'
+									px='4'
+									fontSize='xs'
+									textTransform='uppercase'
+									letterSpacing='wider'
 								>
 									Client
 								</Table.ColumnHeader>
 								<Table.ColumnHeader
-									color="fg.muted"
-									py="3"
-									px="4"
-									fontSize="xs"
-									textTransform="uppercase"
-									letterSpacing="wider"
+									color='fg.muted'
+									py='3'
+									px='4'
+									fontSize='xs'
+									textTransform='uppercase'
+									letterSpacing='wider'
 								>
 									Protocol
 								</Table.ColumnHeader>
 								<Table.ColumnHeader
-									color="fg.muted"
-									py="3"
-									px="4"
-									fontSize="xs"
-									textTransform="uppercase"
-									letterSpacing="wider"
-									textAlign="right"
+									color='fg.muted'
+									py='3'
+									px='4'
+									fontSize='xs'
+									textTransform='uppercase'
+									letterSpacing='wider'
+									textAlign='right'
 								>
 									Duration
 								</Table.ColumnHeader>
@@ -345,12 +345,12 @@ export function LogsGrid({ activities }: { activities: Activity[]; }) {
 								/>
 							))}
 							{filteredActivities.length === 0 && (
-								<Table.Row bg="bg.panel">
+								<Table.Row bg='bg.panel'>
 									<Table.Cell
 										colSpan={6}
-										py="8"
-										textAlign="center"
-										color="fg.muted"
+										py='8'
+										textAlign='center'
+										color='fg.muted'
 									>
 										No entries match this filter
 									</Table.Cell>

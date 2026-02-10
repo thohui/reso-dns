@@ -20,16 +20,16 @@ export function RecentActivity() {
 
 	return (
 		<Box
-			bg="gray.900"
-			borderRadius="lg"
-			borderWidth="1px"
-			borderColor="gray.800"
-			p="6"
+			bg='gray.900'
+			borderRadius='lg'
+			borderWidth='1px'
+			borderColor='gray.800'
+			p='6'
 		>
-			<Heading size="md" color="white" mb="4">
+			<Heading size='md' color='white' mb='4'>
 				Recent Activity
 			</Heading>
-			<VStack gap="3" align="stretch">
+			<VStack gap='3' align='stretch'>
 				{activities?.items.map((activity) => (
 					<ActivityRow key={activity.timestamp} activity={activity} />
 				))}
@@ -70,29 +70,29 @@ function ActivityRow({ activity }: { activity: Activity; }) {
 
 	return (
 		<HStack
-			justify="space-between"
-			py="2"
-			borderBottomWidth="1px"
-			borderColor="border"
+			justify='space-between'
+			py='2'
+			borderBottomWidth='1px'
+			borderColor='border'
 			_last={{ border: 'none' }}
 		>
-			<HStack gap="3">
-				<Icon as={icon} boxSize="4" color={statusColor} />
-				<Text fontFamily="mono" fontSize="sm">
+			<HStack gap='3'>
+				<Icon as={icon} boxSize='4' color={statusColor} />
+				<Text fontFamily='mono' fontSize='sm'>
 					{activity.qname || '-'}
 				</Text>
-				<Badge colorPalette={badgePalette} size="sm">
+				<Badge colorPalette={badgePalette} size='sm'>
 					{statusLabel}
 				</Badge>
 			</HStack>
-			<HStack gap="4">
-				<Badge colorPalette="gray" size="sm" variant="subtle">
+			<HStack gap='4'>
+				<Badge colorPalette='gray' size='sm' variant='subtle'>
 					{TRANSPORT_LABELS[activity.transport] || '?'}
 				</Badge>
-				<Text color="fg.subtle" fontSize="sm">
+				<Text color='fg.subtle' fontSize='sm'>
 					{activity.client || 'unknown'}
 				</Text>
-				<Text color="fg.faint" fontSize="sm" fontFamily="mono">
+				<Text color='fg.faint' fontSize='sm' fontFamily='mono'>
 					{time}
 				</Text>
 			</HStack>

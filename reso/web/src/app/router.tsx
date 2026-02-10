@@ -11,13 +11,13 @@ export function AppRouter() {
 		<BrowserRouter>
 			<Routes>
 				<Route element={<ProtectedRoute requiresAuthentication={false} />}>
-					<Route path="/" element={<LoginPage />} />
+					<Route path='/' element={<LoginPage />} />
 				</Route>
 				<Route element={<ProtectedRoute requiresAuthentication />}>
 					<Route element={<DashboardLayout />}>
-						<Route path="/home" element={<HomePage />} />
-						<Route path="/blocklist" element={<BlocklistPage />} />
-						<Route path="/logs" element={<LogsPage />} />
+						<Route path='/home' element={<HomePage />} />
+						<Route path='/blocklist' element={<BlocklistPage />} />
+						<Route path='/logs' element={<LogsPage />} />
 					</Route>
 				</Route>
 			</Routes>

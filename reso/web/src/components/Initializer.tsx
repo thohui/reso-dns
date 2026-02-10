@@ -17,15 +17,15 @@ export function Initializer({ children }: React.PropsWithChildren) {
 	if (loading) {
 		return (
 			<Box
-				height="100vh"
-				width="100vw"
-				display="flex"
-				justifyContent="center"
-				alignItems="center"
+				height='100vh'
+				width='100vw'
+				display='flex'
+				justifyContent='center'
+				alignItems='center'
 			>
-				<VStack colorPalette="green">
-					<Spinner color="colorPalette.600" size="xl" />
-					<Text color="colorPalette.600">Loading...</Text>
+				<VStack colorPalette='green'>
+					<Spinner color='colorPalette.600' size='xl' />
+					<Text color='colorPalette.600'>Loading...</Text>
 				</VStack>
 			</Box>
 		);
