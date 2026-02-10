@@ -103,8 +103,7 @@ export class EventBus {
 		const listeners = this.listeners.get(event);
 
 		if (listeners) {
-			listeners.filter((l) => l !== listener);
-			this.listeners.set(event, listeners);
+			this.listeners.set(event, listeners.filter((l) => l !== listener));
 		}
 	}
 
