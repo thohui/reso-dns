@@ -1,12 +1,12 @@
 import { Box, Button } from '@chakra-ui/react';
 import { useState } from 'react';
-import { getApiError } from '../..//lib/api/error';
 import { BlocklistDialog } from '../../components/blocklist/BlocklistDialog';
 import { BlocklistGrid } from '../../components/blocklist/BlocklistGrid';
 import { toaster } from '../../components/Toaster';
 import { useBlocklist } from '../../hooks/useBlocklist';
 import { useCreateDomain } from '../../hooks/useCreateDomain';
 import { useRemoveDomain } from '../../hooks/useRemoveDomain';
+import { getApiError } from '../../lib/api/error';
 
 export default function BlocklistPage() {
 	const { data, refetch } = useBlocklist();

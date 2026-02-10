@@ -34,5 +34,3 @@ export async function getApiError(e: unknown): Promise<ApiError | undefined> {
 
 }
 
-
-}
