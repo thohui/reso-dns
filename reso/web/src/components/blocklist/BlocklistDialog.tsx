@@ -26,7 +26,7 @@ export function BlocklistDialog({ onClose, onSubmit }: BlocklistDialogProps) {
 	const {
 		register,
 		handleSubmit,
-		formState: { errors, isLoading },
+		formState: { errors, isSubmitting },
 	} = useForm({ resolver: zodResolver(schema) });
 
 	const handleClose = () => {
@@ -123,7 +123,7 @@ export function BlocklistDialog({ onClose, onSubmit }: BlocklistDialogProps) {
 								color="fg"
 								_hover={{ bg: 'accent.hover' }}
 								px="5"
-								loading={isLoading}
+								loading={isSubmitting}
 							>
 								Block Domain
 							</Button>
