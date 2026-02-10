@@ -27,7 +27,7 @@ pub struct PagedResponse<T: Serialize> {
 
 impl<T: Serialize> PagedResponse<T> {
     pub fn new(items: Vec<T>, total: usize, top: usize, skip: usize) -> Self {
-        let next_offset = skip + items.len();
+        let next_offset = skip.saturating_add(items.len());
         let has_more = next_offset < total;
 
         Self {
