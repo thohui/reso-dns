@@ -27,6 +27,7 @@ export function BlocklistDialog({ onClose, onSubmit }: BlocklistDialogProps) {
 	const {
 		register,
 		handleSubmit,
+		setError,
 		formState: { errors, isSubmitting },
 	} = useForm({ resolver: zodResolver(schema) });
 
@@ -35,7 +36,13 @@ export function BlocklistDialog({ onClose, onSubmit }: BlocklistDialogProps) {
 	};
 
 	const onSubmitHandler = handleSubmit(async ({ domain }) => {
-		await onSubmit(domain);
+		try {
+			await onSubmit(domain);
+		} catch (e) {
+			if (e instanceof Error) {
+				setError('root', { message: e.message });
+			}
+		}
 	});
 
 	return (
