@@ -1,8 +1,8 @@
 use axum::{
     extract::{Request, State},
     middleware::Next,
+    response::Response,
     response::Result,
-    response::{IntoResponse, Response},
 };
 use axum_extra::extract::CookieJar;
 

@@ -20,8 +20,8 @@ pub struct QueryLogEvent {
     pub qtype: RecordType,
     /// Response code
     pub rcode: DnsResponseCode,
-    /// Duration in microseconds.
-    pub dur_us: u32,
+    /// Duration in milliseconds.
+    pub dur_ms: u64,
     /// Cache hit
     pub cache_hit: bool,
     /// Blocked
@@ -36,7 +36,7 @@ impl QueryLogEvent {
             transport: self.transport as i64,
             client: self.client,
             cache_hit: self.cache_hit,
-            dur_us: self.dur_us as i64,
+            dur_ms: self.dur_ms as i64,
             qname: self.qname.to_string(),
             qtype: self.qtype as i64,
             rcode: self.rcode as i64,
@@ -56,6 +56,13 @@ pub struct ErrorLogEvent {
     pub message: String,
     /// Error Type
     pub r#type: ResolveErrorType,
+    /// Duration in milliseconds
+    pub dur_ms: u64,
+
+    /// Query name
+    pub qname: Option<String>,
+    /// Query type
+    pub qtype: Option<i64>,
 }
 
 impl ErrorLogEvent {
@@ -66,6 +73,9 @@ impl ErrorLogEvent {
             client: self.client,
             message: self.message,
             r#type: self.r#type as i64,
+            dur_ms: self.dur_ms,
+            qname: self.qname,
+            qtype: self.qtype,
         }
     }
 }

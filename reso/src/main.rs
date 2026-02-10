@@ -85,10 +85,20 @@ async fn main() -> anyhow::Result<()> {
     let error_handler: ErrorHandler<Global, Local> =
         Arc::new(|ctx: &DnsRequestCtx<Global, Local>, err: &ResolveError| {
             async move {
+                let local = ctx.local();
                 let ts_ms: i64 = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .expect("failed to get the system time")
                     .as_millis() as i64;
+
+                let mut qname = None;
+                let mut qtype = None;
+
+                // try to get qname and qtype
+                if let Ok(msg) = ctx.message() {
+                    qname = msg.questions().first().and_then(|q| Some(q.qname.to_string()));
+                    qtype = msg.questions().first().and_then(|q| Some(q.qtype as i64));
+                }
 
                 let _ = ctx.global().metrics.error(ErrorLogEvent {
                     ts_ms,
@@ -96,6 +106,9 @@ async fn main() -> anyhow::Result<()> {
                     transport: ctx.request_type(),
                     message: format!("{err}"),
                     r#type: err.error_type(),
+                    dur_ms: local.time_elapsed().as_millis() as u64,
+                    qname,
+                    qtype,
                 });
 
                 let id = helpers::extract_transaction_id(&ctx.raw()).unwrap_or(0);
@@ -127,14 +140,14 @@ async fn main() -> anyhow::Result<()> {
 
                 let response = DnsMessage::decode(&resp)?;
 
-                ctx.global().metrics.event(QueryLogEvent {
+                ctx.global().metrics.query(QueryLogEvent {
                     ts_ms,
                     transport: ctx.request_type(),
                     client: ctx.request_address().to_string(),
                     qname: question.qname.clone(),
                     qtype: question.qtype,
                     rcode: response.response_code()?,
-                    dur_us: ctx.budget().elapsed().as_micros() as u32,
+                    dur_ms: local.time_elapsed().as_millis() as u64,
                     cache_hit: local.cache_hit,
                     blocked: local.blocked,
                 });

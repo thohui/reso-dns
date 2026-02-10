@@ -95,7 +95,7 @@ impl User {
         let conn = db.conn().await;
 
         let raw: Vec<Self> = conn
-            .call(|c| -> rusqlite::Result<Vec<Self>> {
+            .call(|c| {
                 let mut stmt = c.prepare("SELECT id, name, password_hash, created_at FROM users")?;
                 let iter = stmt.query_map([], |r| {
                     Ok(Self {

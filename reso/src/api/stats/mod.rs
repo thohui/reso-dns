@@ -11,6 +11,5 @@ pub fn create_stats_router(global: SharedGlobal) -> Router<SharedGlobal> {
 }
 
 pub async fn live_stats(global: State<SharedGlobal>) -> Json<LiveStats> {
-    let stats = global.stats.live().await;
-    Json(stats)
+    Json(global.stats.live().await)
 }
