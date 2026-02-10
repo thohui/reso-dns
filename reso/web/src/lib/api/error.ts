@@ -23,10 +23,16 @@ export async function getApiError(e: unknown): Promise<ApiError | undefined> {
 
 	if (!isHTTPError(e)) return;
 
-	const jsonResp = await e.response.json<unknown>();
-
-	if (isApiError(jsonResp)) {
-		return jsonResp;
+	try {
+		const jsonResp = await e.response.json<unknown>();
+		if (isApiError(jsonResp)) {
+			return jsonResp;
+		}
+	} catch (error) {
+		console.log(error);
 	}
+
+}
+
 
 }
