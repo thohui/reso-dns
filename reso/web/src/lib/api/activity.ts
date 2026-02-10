@@ -31,7 +31,7 @@ export interface ActivityBase {
 export interface QueryActivity extends ActivityBase {
 	kind: 'query';
 	d: {
-		source_id: string;
+		source_id: number;
 		rcode: number;
 		blocked: boolean;
 		cache_hit: boolean;
@@ -41,7 +41,7 @@ export interface QueryActivity extends ActivityBase {
 export interface ErrorActivity extends ActivityBase {
 	kind: 'error';
 	d: {
-		source_id: string;
+		source_id: number;
 		error_type: number;
 		message: string;
 	};

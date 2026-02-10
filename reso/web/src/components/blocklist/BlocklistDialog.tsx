@@ -101,12 +101,11 @@ export function BlocklistDialog({ onClose, onSubmit }: BlocklistDialogProps) {
 								autoFocus
 								{...register('domain')}
 							/>
-							{errors.domain?.message ||
-								(errors.root?.message && (
-									<Field.ErrorText color="status.error" fontSize="xs" mt="1">
-										{errors?.domain?.message ?? errors.root.message}
-									</Field.ErrorText>
-								))}
+							{(errors.domain?.message || errors.root?.message) && (
+								<Field.ErrorText color="status.error" fontSize="xs" mt="1">
+									{errors.domain?.message ?? errors.root?.message}
+								</Field.ErrorText>
+							)}
 						</Field.Root>
 
 						<HStack justify="flex-end" gap="3">
@@ -132,6 +131,6 @@ export function BlocklistDialog({ onClose, onSubmit }: BlocklistDialogProps) {
 					</Box>
 				</Box>
 			</Box>
-		</form>
+		</form >
 	);
 }
