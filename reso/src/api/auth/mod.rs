@@ -63,12 +63,12 @@ pub async fn login(
 
     session.insert(&global.database).await.map_err(|e| {
         tracing::error!("failed to insert user session: {:?}", e);
-        ApiError::authentication_required()
+        ApiError::server_error()
     })?;
 
     let encrypted_cookie = cookie::encrypt_session_id(&global.cipher, session_id).map_err(|e| {
         tracing::error!("failed to encrypt the session id: {:?}", e);
-        ApiError::authentication_required()
+        ApiError::server_error()
     })?;
 
     let c = cookie::build_session_cookie(encrypted_cookie);
