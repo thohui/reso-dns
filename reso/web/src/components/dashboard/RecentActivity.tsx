@@ -5,7 +5,7 @@ import {
 	HStack,
 	Icon,
 	Text,
-	VStack,
+	VStack
 } from '@chakra-ui/react';
 import { CheckCircle, ShieldOff, XCircle } from 'lucide-react';
 import { useRecentActivity } from '../../hooks/useRecentActivity';

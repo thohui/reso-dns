@@ -1,9 +1,9 @@
-'use client';
-
 import { Box, Button } from '@chakra-ui/react';
 import { useState } from 'react';
+import { getApiError } from '../..//lib/api/error';
 import { BlocklistDialog } from '../../components/blocklist/BlocklistDialog';
 import { BlocklistGrid } from '../../components/blocklist/BlocklistGrid';
+import { toaster } from '../../components/Toaster';
 import { useBlocklist } from '../../hooks/useBlocklist';
 import { useCreateDomain } from '../../hooks/useCreateDomain';
 import { useRemoveDomain } from '../../hooks/useRemoveDomain';
@@ -25,7 +25,25 @@ export default function BlocklistPage() {
 	const removeDomain = useRemoveDomain();
 
 	const handleSubmit = async (domain: string) => {
-		await createDomain.mutateAsync(domain);
+		await createDomain.mutateAsync(domain, {
+			onError: async (e) => {
+
+				const error = await getApiError(e);
+
+				if (error) {
+					toaster.error({ title: 'Error', description: error.message, duration: 1000 });
+				}
+
+				else if (e instanceof Error) {
+					toaster.error({ title: 'Error', description: e.message, duration: 1000 });
+				}
+
+				else {
+					toaster.error({ title: 'Error', description: 'Something went wrong', duration: 1000 });
+				}
+
+			}
+		});
 		await refetch();
 		handleClose();
 	};
