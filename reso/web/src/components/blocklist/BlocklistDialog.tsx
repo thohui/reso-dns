@@ -5,6 +5,7 @@ import {
 	Heading,
 	HStack,
 	Icon,
+	IconButton,
 	Input,
 	Text,
 } from '@chakra-ui/react';
@@ -71,15 +72,17 @@ export function BlocklistDialog({ onClose, onSubmit }: BlocklistDialogProps) {
 							<Icon as={Plus} boxSize="5" color="accent.fg" />
 							<Heading size="md">Add Domain</Heading>
 						</HStack>
-						<Box
-							cursor="pointer"
-							p="1"
-							borderRadius="md"
-							_hover={{ bg: 'bg.subtle' }}
+						<IconButton
+							aria-label="Close dialog"
+							variant="ghost"
+							size="sm"
 							onClick={handleClose}
+							_hover={{
+								bg: 'bg.subtle'
+							}}
 						>
 							<Icon as={X} boxSize="4" color="fg.muted" />
-						</Box>
+						</IconButton>
 					</HStack>
 
 					<Box px="6" pb="6" pt="4">

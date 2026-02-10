@@ -1,5 +1,5 @@
-import { useApiClient } from '@/contexts/ApiClientContext';
 import { useQuery } from '@tanstack/react-query';
+import { useApiClient } from '../contexts/ApiClientContext';
 
 export function useActivities(top: number, skip: number) {
 	const apiClient = useApiClient();
