@@ -1,15 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
 import { LogsGrid } from '../../components/logs/LogsGrid';
-import { useApiClient } from '../../contexts/ApiClientContext';
+import { useActivities } from '../../hooks/useActivities';
 
 export default function LogsPage() {
-	const apiClient = useApiClient();
+	const activities = useActivities(100, 0);
 
-	const { data } = useQuery({
-		queryKey: ['actitivies'],
-		queryFn: async () => {
-			return apiClient.activities.list({ top: 100, skip: 0 });
-		},
-	});
-	return <LogsGrid activities={data?.items ?? []} />;
+	return <LogsGrid activities={activities?.data?.items ?? []} />;
 }

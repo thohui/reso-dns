@@ -38,7 +38,7 @@ export function RecentActivity() {
 	);
 }
 
-function ActivityRow({ activity }: { activity: Activity }) {
+function ActivityRow({ activity }: { activity: Activity; }) {
 	const isError = activity.kind === 'error';
 
 	const isBlocked =
@@ -70,7 +70,6 @@ function ActivityRow({ activity }: { activity: Activity }) {
 
 	return (
 		<HStack
-			key={`${activity.timestamp}`}
 			justify="space-between"
 			py="2"
 			borderBottomWidth="1px"
