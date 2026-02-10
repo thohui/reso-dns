@@ -26,13 +26,13 @@ export default function BlocklistPage() {
 
 	const handleSubmit = async (domain: string) => {
 		await createDomain.mutateAsync(domain);
-		refetch();
+		await refetch();
 		handleClose();
 	};
 
 	const handleRemove = async (domain: string) => {
 		await removeDomain.mutateAsync(domain);
-		refetch();
+		await refetch();
 	};
 
 	return (
