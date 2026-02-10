@@ -19,8 +19,8 @@ import z from 'zod';
 import { useApiClient } from '../../contexts/ApiClientContext';
 
 const loginSchema = z.object({
-	username: z.string().nonempty(),
-	password: z.string().nonempty(),
+	username: z.string().min(1),
+	password: z.string().min(1),
 });
 
 export default function LoginPage() {

@@ -20,7 +20,7 @@ interface BlocklistDialogProps {
 }
 
 const schema = z.object({
-	domain: z.string().nonempty(),
+	domain: z.string().min(1),
 });
 
 export function BlocklistDialog({ onClose, onSubmit }: BlocklistDialogProps) {
