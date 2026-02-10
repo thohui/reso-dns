@@ -25,7 +25,7 @@ impl DnsErrorLog {
             INSERT INTO dns_error_log
               (ts_ms, transport, client, message, type, dur_ms, qname, qtype)
             VALUES
-              (?1, ?2, ?3, ?4, ?5, ?6)
+              (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
             "#,
                 params![
                     self.ts_ms,
@@ -119,12 +119,12 @@ impl DnsErrorLog {
         let conn = conn.conn().await;
 
         let items = conn
-            .call(move |c| -> rusqlite::Result<Vec<Self>> {
+            .call(move |c| {
                 let mut stmt = c.prepare(
                     r#"
                     SELECT
                       ts_ms, transport, client, message, type, dur_ms, qname, qtype
-                    FROM dns_query_log
+                    FROM dns_error_log
                     ORDER BY ts_ms DESC
                     LIMIT ?1 OFFSET ?2
                     "#,

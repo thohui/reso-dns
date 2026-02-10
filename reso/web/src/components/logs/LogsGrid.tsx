@@ -117,7 +117,7 @@ function LogDetailRow({ activity }: { activity: Activity }) {
 					<Text fontFamily="mono" fontSize="sm">
 						{activity.qname || '-'}
 					</Text>
-					{activity.qtype && (
+					{activity.qtype !== null && (
 						<Badge
 							colorPalette="gray"
 							size="sm"

@@ -26,7 +26,7 @@ impl ActivityLog {
     pub async fn list(conn: &DatabaseConnection, limit: usize, offset: usize) -> anyhow::Result<Vec<Self>> {
         let conn = conn.conn().await;
         let rows: Vec<ActivityLog> = conn
-            .call(move |c| -> rusqlite::Result<Vec<ActivityLog>> {
+            .call(move |c| {
                 let mut stmt = c.prepare(
                     r#"
                     SELECT
@@ -75,11 +75,7 @@ impl ActivityLog {
             .await
             .context("list activity_log rows")?;
 
-        let mut out = Vec::with_capacity(rows.len());
-        for r in rows {
-            out.push(ActivityLog::try_from(r).context("parse activity_log row")?);
-        }
-        Ok(out)
+        Ok(rows)
     }
 
     pub async fn row_count(conn: &DatabaseConnection) -> anyhow::Result<usize> {

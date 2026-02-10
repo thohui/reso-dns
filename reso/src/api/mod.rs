@@ -68,7 +68,9 @@ struct Assets;
 async fn static_handler(uri: Uri) -> Response<Body> {
     let mut path = uri.path().trim_start_matches('/');
 
-    let is_index_html = !uri.path().contains("/assets") && path.split(".").count() > 0;
+    let has_extension = path.rsplit_once('.').is_some();
+
+    let is_index_html = !uri.path().contains("/assets") && !has_extension;
 
     if path.is_empty() || is_index_html {
         path = "index.html";

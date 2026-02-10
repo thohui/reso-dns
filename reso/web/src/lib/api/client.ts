@@ -3,11 +3,6 @@ import { Activities } from './activity';
 import { Blocklist } from './blocklist';
 import { Stats } from './stats';
 
-interface ApiError {
-	error?: string;
-	message?: string;
-}
-
 export class ApiClient {
 	private eventBus: EventBus;
 	private httpClient: KyInstance;
@@ -26,10 +21,7 @@ export class ApiClient {
 				afterResponse: [
 					async (_, __, resp) => {
 						if (resp.status === 401) {
-							const errorMessage = await resp.json<ApiError>();
-							if (errorMessage?.error === 'authentication_required') {
-								this.setAuthenticated(false);
-							}
+							this.setAuthenticated(false);
 						}
 					},
 				],
@@ -46,8 +38,7 @@ export class ApiClient {
 		try {
 			await this.httpClient.post('api/auth/check');
 			this.setAuthenticated(true);
-		} catch (e) {
-			console.log(e);
+		} catch {
 			this.setAuthenticated(false);
 		}
 	}
@@ -70,6 +61,12 @@ export class ApiClient {
 		});
 		this.setAuthenticated(true);
 	}
+
+	public async logout() {
+		await this.httpClient.post('api/auth/logout');
+		this.setAuthenticated(false);
+	}
+
 	public addEventListener<T extends EventType>(
 		event: T,
 		listener: EventListener<T>,

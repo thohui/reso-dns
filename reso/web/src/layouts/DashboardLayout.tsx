@@ -9,6 +9,7 @@ import {
 } from '@chakra-ui/react';
 import { Ban, FileText, Home, LogOut, Shield } from 'lucide-react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useLogout } from '../hooks/useLogout';
 
 const menuItems = [
 	{ path: '/home', label: 'Home', icon: Home },
@@ -19,6 +20,13 @@ const menuItems = [
 export function DashboardLayout() {
 	const location = useLocation();
 	const navigate = useNavigate();
+
+	const logout = useLogout();
+
+	const handleLogout = async () => {
+		await logout.mutateAsync();
+		navigate('/', { replace: true });
+	};
 
 	return (
 		<Flex minH="100vh" bg="gray.950">
@@ -74,9 +82,10 @@ export function DashboardLayout() {
 						justifyContent="flex-start"
 						color="gray.400"
 						_hover={{ bg: 'gray.800', color: 'white' }}
-						onClick={() => navigate('/')}
+						onClick={handleLogout}
 						px="4"
 						py="3"
+						loading={logout.isPending}
 					>
 						<Icon as={LogOut} boxSize="5" mr="3" />
 						Logout

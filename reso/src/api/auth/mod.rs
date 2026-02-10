@@ -4,9 +4,9 @@ use axum::{
     http::StatusCode,
     middleware as axum_middleware,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::post,
 };
-use axum_extra::extract::cookie::{Cookie, CookieJar};
+use axum_extra::extract::cookie::CookieJar;
 use serde::Deserialize;
 
 use crate::{
@@ -45,9 +45,14 @@ pub async fn login(
     jar: CookieJar,
     payload: Json<LoginPayload>,
 ) -> axum::response::Result<Response, ApiError> {
-    let user = User::find_by_name(&global.database, payload.username.clone())
-        .await
-        .map_err(|_| ApiError::invalid_credentials())?;
+    let user = match User::find_by_name(&global.database, payload.username.clone()).await {
+        Ok(user) => user,
+        Err(_) => {
+            // Simulate a slow response to prevent timing attacks.
+            let _ = password::hash_password(&payload.password);
+            return Err(ApiError::invalid_credentials());
+        }
+    };
 
     if password::verify_password(&payload.password, &user.password_hash).is_err() {
         return Err(ApiError::invalid_credentials());
@@ -87,6 +92,6 @@ pub async fn logout(
     Ok((jar, StatusCode::OK).into_response())
 }
 
-pub async fn check(global: State<SharedGlobal>) -> axum::response::Result<Response, ApiError> {
+pub async fn check() -> axum::response::Result<Response, ApiError> {
     return Ok(StatusCode::OK.into_response());
 }

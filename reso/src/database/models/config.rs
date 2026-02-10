@@ -21,9 +21,9 @@ impl Config {
         }
 
         let row = conn
-            .call(move |c| -> tokio_rusqlite::rusqlite::Result<ConfigRow> {
+            .call(move |c| {
                 c.query_one(
-                    "SELECT id, version, updated_at, data FROM config WHERE id=?1",
+                    "SELECT id, version, updated_at, data FROM config WHERE id=1",
                     params![],
                     |r| {
                         let id: i8 = r.get(0)?;

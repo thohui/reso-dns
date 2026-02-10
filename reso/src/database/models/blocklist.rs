@@ -44,7 +44,7 @@ impl BlockedDomain {
     pub async fn list(conn: &DatabaseConnection, limit: usize, offset: usize) -> anyhow::Result<Vec<Self>> {
         let conn = conn.conn().await;
 
-        let raw: Vec<String> = conn
+        let domains: Vec<BlockedDomain> = conn
             .call(move |c| {
                 let mut stmt = c.prepare(
                     r#"
@@ -55,24 +55,22 @@ impl BlockedDomain {
                     LIMIT ?1 OFFSET ?2
                     "#,
                 )?;
-                let iter = stmt.query_map(params![limit, offset], |r| r.get::<_, String>(0))?;
+                let iter = stmt.query_map(params![limit, offset], |r| {
+                    let domain = r.get(0)?;
+                    let created_at = r.get(1)?;
+                    Ok(BlockedDomain { domain, created_at })
+                })?;
                 iter.collect::<rusqlite::Result<Vec<_>>>()
             })
             .await?;
 
-        let mut out = Vec::with_capacity(raw.len());
-
-        for s in raw {
-            out.push(BlockedDomain::new(s))
-        }
-
-        Ok(out)
+        Ok(domains)
     }
 
     pub async fn list_all(conn: &DatabaseConnection) -> anyhow::Result<Vec<Self>> {
         let conn = conn.conn().await;
 
-        let raw: Vec<String> = conn
+        let domains: Vec<BlockedDomain> = conn
             .call(move |c| {
                 let mut stmt = c.prepare(
                     r#"
@@ -82,18 +80,16 @@ impl BlockedDomain {
                     ORDER BY created_at
                     "#,
                 )?;
-                let iter = stmt.query_map([], |r| r.get::<_, String>(0))?;
+                let iter = stmt.query_map([], |r| {
+                    let domain = r.get(0)?;
+                    let created_at = r.get(1)?;
+                    Ok(BlockedDomain { domain, created_at })
+                })?;
                 iter.collect::<rusqlite::Result<Vec<_>>>()
             })
             .await?;
 
-        let mut out = Vec::with_capacity(raw.len());
-
-        for s in raw {
-            out.push(BlockedDomain::new(s))
-        }
-
-        Ok(out)
+        Ok(domains)
     }
 
     pub async fn row_count(conn: &DatabaseConnection) -> anyhow::Result<usize> {

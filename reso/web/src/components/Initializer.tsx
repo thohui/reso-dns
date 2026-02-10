@@ -8,7 +8,10 @@ export function Initializer({ children }: React.PropsWithChildren) {
 
 	const apiClient = useApiClient();
 	useEffect(() => {
-		apiClient.initialize().then(() => setLoading(false));
+		apiClient
+			.initialize()
+			.catch((e) => console.log('initializing failed:', e))
+			.finally(() => setLoading(false));
 	}, [apiClient]);
 
 	if (loading) {

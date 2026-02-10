@@ -139,10 +139,6 @@ export default function LoginPage() {
 						</Button>
 					</VStack>
 				</form>
-
-				<Text color="gray.500" fontSize="xs" textAlign="center" mt="6">
-					resodns - v1.0.0
-				</Text>
 			</Box>
 		</Box>
 	);
