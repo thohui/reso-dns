@@ -41,4 +41,7 @@ CREATE INDEX IF NOT EXISTS idx_dns_error_log_ts ON dns_error_log (ts_ms);
 CREATE INDEX IF NOT EXISTS idx_dns_error_log_type ON dns_error_log (type);
 
 CREATE TABLE
-  IF NOT EXISTS blocklist (domain TEXT PRIMARY KEY, created_at INTEGER);
+  IF NOT EXISTS blocklist (
+    domain TEXT PRIMARY KEY,
+    created_at INTEGER NOT NULL
+  );
