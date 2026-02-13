@@ -52,12 +52,6 @@ impl Upstreams {
         Some(i)
     }
 
-    /// Pick an upstream in round-robin fashion.
-    pub fn pick(&self) -> Option<Arc<Upstream>> {
-        let index = self.pick_index()?;
-        Some(Arc::clone(&self.list[index]))
-    }
-
     /// Get the list of upstreams as a slice.
     pub fn as_slice(&self) -> &[Arc<Upstream>] {
         &self.list

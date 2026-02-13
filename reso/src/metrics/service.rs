@@ -16,6 +16,7 @@ use crate::database::{
 };
 
 pub enum MetricsMessage {
+    #[allow(clippy::code)]
     Shutdown,
     Query(QueryLogEvent),
     Error(ErrorLogEvent),
@@ -34,6 +35,7 @@ pub struct MetricsService {
 pub struct MetricsHandle(Sender<MetricsMessage>);
 
 impl MetricsHandle {
+    #[allow(dead_code)]
     pub fn shutdown(&self) {
         if let Err(e) = self.0.try_send(MetricsMessage::Shutdown) {
             tracing::error!("failed to send shutdown signal to metrics service {}", e)

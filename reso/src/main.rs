@@ -1,4 +1,4 @@
-use std::{env, fmt::format, net::SocketAddr, sync::Arc, time::Duration};
+use std::{env, net::SocketAddr, sync::Arc, time::Duration};
 
 use aes_gcm::{AesGcm, KeyInit, aead::generic_array::GenericArray};
 use anyhow::Context;
