@@ -46,8 +46,13 @@ pub async fn login(
     payload: Json<LoginPayload>,
 ) -> axum::response::Result<Response, ApiError> {
     let user = match User::find_by_name(&global.database, payload.username.clone()).await {
-        Ok(user) => user,
-        Err(_) => {
+        Ok(Some(user)) => user,
+        Ok(None) => {
+            let _ = password::hash_password(&payload.password);
+            return Err(ApiError::invalid_credentials());
+        }
+        Err(e) => {
+            tracing::error!("failed to find user by name {:?}", e);
             // Simulate a slow response to prevent timing attacks.
             let _ = password::hash_password(&payload.password);
             return Err(ApiError::invalid_credentials());

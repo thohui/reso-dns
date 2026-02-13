@@ -1,6 +1,6 @@
 use anyhow::Context;
 use chrono::Utc;
-use tokio_rusqlite::{params, rusqlite};
+use tokio_rusqlite::{OptionalExtension, params, rusqlite};
 use uuid::Uuid;
 
 use crate::{database::DatabaseConnection, utils::uuid::EntityId};
@@ -55,7 +55,7 @@ impl UserSession {
         Ok(())
     }
 
-    pub async fn find_by_id(db: &DatabaseConnection, id: EntityId<Self>) -> anyhow::Result<Self> {
+    pub async fn find_by_id(db: &DatabaseConnection, id: EntityId<Self>) -> anyhow::Result<Option<Self>> {
         let conn = db.conn().await;
 
         let user = conn
@@ -74,6 +74,7 @@ impl UserSession {
                         })
                     },
                 )
+                .optional()
             })
             .await
             .context("find user_session by id")?;

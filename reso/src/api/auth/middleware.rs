@@ -32,10 +32,15 @@ pub async fn auth_middleware(global: State<SharedGlobal>, mut req: Request, next
         return Err(ApiError::invalid_credentials());
     };
 
-    let session = if let Ok(session) = UserSession::find_by_id(&global.database, id).await {
-        session
-    } else {
-        return Err(ApiError::invalid_credentials());
+    let session = match UserSession::find_by_id(&global.database, id).await {
+        Ok(Some(session)) => session,
+        Ok(None) => {
+            return Err(ApiError::invalid_credentials());
+        }
+        Err(e) => {
+            tracing::error!("failed to find user session, {:?}", e);
+            return Err(ApiError::invalid_credentials());
+        }
     };
 
     if session.is_expired() {
