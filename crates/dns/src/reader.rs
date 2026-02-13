@@ -411,9 +411,7 @@ mod tests {
     fn test_read_qname_with_compression() {
         use super::DnsMessageReader;
         // "example.com" at offset 0, then "www.example.com" with pointer to offset 0
-        let mut data = vec![
-            7, b'e', b'x', b'a', b'm', b'p', b'l', b'e', 3, b'c', b'o', b'm', 0,
-        ];
+        let mut data = vec![7, b'e', b'x', b'a', b'm', b'p', b'l', b'e', 3, b'c', b'o', b'm', 0];
         let first_label_offset = 0;
         // Add "www" label then pointer to "example.com"
         data.extend_from_slice(&[3, b'w', b'w', b'w']);
@@ -550,15 +548,11 @@ mod tests {
         use super::DnsMessageReader;
         // "mail.example.com"
         let data = vec![
-            4, b'm', b'a', b'i', b'l',
-            7, b'e', b'x', b'a', b'm', b'p', b'l', b'e',
-            3, b'c', b'o', b'm',
-            0,
+            4, b'm', b'a', b'i', b'l', 7, b'e', b'x', b'a', b'm', b'p', b'l', b'e', 3, b'c', b'o', b'm', 0,
         ];
         let mut reader = DnsMessageReader::new(&data);
 
         let name = reader.read_qname().unwrap();
         assert_eq!(name.as_str(), "mail.example.com");
     }
-}
 }

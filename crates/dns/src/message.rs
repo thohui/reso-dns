@@ -1424,7 +1424,7 @@ mod tests {
     #[test]
     fn test_dns_flags_try_from_u16() {
         // Test all flags set
-        let flags_bytes: u16 = 0b1111111111111111;
+        let flags_bytes: u16 = 0b1000_0111_1111_1111;
         let flags = DnsFlags::try_from(flags_bytes).unwrap();
         assert!(flags.response);
         assert!(flags.authorative_answer);
