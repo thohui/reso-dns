@@ -250,8 +250,18 @@ impl<'a> DnsMessageReader<'a> {
         self.position
     }
 
+    /// Return the number of unread bytes remaining in the reader's buffer.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let buf = [0u8, 1, 2];
+    /// let mut r = DnsMessageReader::new(&buf);
+    /// assert_eq!(r.remaining(), 3);
+    /// r.seek(1).unwrap();
+    /// assert_eq!(r.remaining(), 2);
+    /// ```
     #[inline]
-    /// Remaing amount of readable bytes.
     pub fn remaining(&self) -> usize {
         self.buffer.len() - self.position
     }
