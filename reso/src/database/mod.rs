@@ -43,3 +43,24 @@ pub async fn run_migrations(connection: &DatabaseConnection) -> anyhow::Result<(
     conn.call(move |c| migrations.to_latest(c)).await?;
     Ok(())
 }
+
+#[cfg(test)]
+async fn setup_test_db() -> anyhow::Result<DatabaseConnection> {
+    use tempfile::NamedTempFile;
+
+    let temp_file = NamedTempFile::new()?;
+    let db_path = temp_file.path().to_str().unwrap();
+    let conn = connect(db_path).await?;
+    run_migrations(&conn).await?;
+    Ok(conn)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    pub async fn test_test_database() {
+        setup_test_db().await.unwrap();
+    }
+}

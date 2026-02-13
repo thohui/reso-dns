@@ -119,16 +119,8 @@ impl User {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::{connect, run_migrations};
+    use crate::database::{connect, run_migrations, setup_test_db};
     use tempfile::NamedTempFile;
-
-    async fn setup_test_db() -> anyhow::Result<DatabaseConnection> {
-        let temp_file = NamedTempFile::new()?;
-        let db_path = temp_file.path().to_str().unwrap();
-        let conn = connect(db_path).await?;
-        run_migrations(&conn).await?;
-        Ok(conn)
-    }
 
     #[tokio::test]
     async fn test_user_new() {
