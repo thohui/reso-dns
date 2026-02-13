@@ -11,6 +11,7 @@ use crate::{
     domain_name::DomainName,
     macros,
     reader::{DnsMessageReader, DnsReadable},
+    u16_enum_with_unknown,
     writer::{DnsMessageWriter, DnsWritable},
 };
 
@@ -1449,16 +1450,7 @@ mod tests {
 
     #[test]
     fn test_dns_flags_write_read_roundtrip() {
-        let flags = DnsFlags::new(
-            true,
-            DnsOpcode::Query,
-            false,
-            true,
-            true,
-            false,
-            true,
-            false,
-        );
+        let flags = DnsFlags::new(true, DnsOpcode::Query, false, true, true, false, true, false);
 
         let mut writer = DnsMessageWriter::new();
         flags.write_to(&mut writer).unwrap();
@@ -1491,14 +1483,7 @@ mod tests {
 
     #[test]
     fn test_dns_message_set_response_code() {
-        let mut message = DnsMessage::new(
-            1,
-            DnsFlags::default(),
-            vec![],
-            vec![],
-            vec![],
-            vec![],
-        );
+        let mut message = DnsMessage::new(1, DnsFlags::default(), vec![], vec![], vec![], vec![]);
 
         // Test low response code (fits in 4 bits)
         message.set_response_code(DnsResponseCode::NoError);
@@ -1686,14 +1671,7 @@ mod tests {
             data: DnsRecordData::Ipv4(Ipv4Addr::new(93, 184, 216, 34)),
         };
 
-        let message = DnsMessage::new(
-            54321,
-            DnsFlags::default(),
-            vec![question],
-            vec![answer],
-            vec![],
-            vec![],
-        );
+        let message = DnsMessage::new(54321, DnsFlags::default(), vec![question], vec![answer], vec![], vec![]);
 
         let encoded = message.encode().unwrap();
         let decoded = DnsMessage::decode(&encoded).unwrap();
@@ -1726,18 +1704,9 @@ mod tests {
 
     #[test]
     fn test_extended_dns_error_info_code() {
-        assert_eq!(
-            ExtendedDnsErrorInfoCode::from(0),
-            ExtendedDnsErrorInfoCode::OtherError
-        );
-        assert_eq!(
-            ExtendedDnsErrorInfoCode::from(6),
-            ExtendedDnsErrorInfoCode::DnssecBogus
-        );
-        assert_eq!(
-            ExtendedDnsErrorInfoCode::from(15),
-            ExtendedDnsErrorInfoCode::Blocked
-        );
+        assert_eq!(ExtendedDnsErrorInfoCode::from(0), ExtendedDnsErrorInfoCode::OtherError);
+        assert_eq!(ExtendedDnsErrorInfoCode::from(6), ExtendedDnsErrorInfoCode::DnssecBogus);
+        assert_eq!(ExtendedDnsErrorInfoCode::from(15), ExtendedDnsErrorInfoCode::Blocked);
 
         // Unknown code
         let unknown = ExtendedDnsErrorInfoCode::from(9999);

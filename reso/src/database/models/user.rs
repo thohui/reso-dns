@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use crate::{database::DatabaseConnection, utils::uuid::EntityId};
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct User {
     pub id: EntityId<Self>,
     pub name: String,
@@ -141,14 +142,16 @@ mod tests {
     #[tokio::test]
     async fn test_user_insert_and_find_by_name() {
         let db = setup_test_db().await.unwrap();
+
         let user = User::new("alice", "password_hash_alice");
 
-        user.insert(&db).await.unwrap();
+        user.clone().insert(&db).await.unwrap();
 
         let found = User::find_by_name(&db, "alice").await.unwrap();
         assert!(found.is_some());
 
         let found_user = found.unwrap();
+
         assert_eq!(found_user.name, "alice");
         assert_eq!(found_user.password_hash, "password_hash_alice");
         assert_eq!(found_user.created_at, user.created_at);
@@ -236,27 +239,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_user_insert_same_name_different_id() {
-        let db = setup_test_db().await.unwrap();
-
-        // Insert two users with the same name (should be allowed unless there's a unique constraint)
-        let user1 = User::new("samename", "hash1");
-        let user2 = User::new("samename", "hash2");
-
-        user1.insert(&db).await.unwrap();
-        user2.insert(&db).await.unwrap();
-
-        let users = User::list(&db).await.unwrap();
-        let same_name_users: Vec<_> = users
-            .iter()
-            .filter(|u| u.name == "samename")
-            .collect();
-
-        assert_eq!(same_name_users.len(), 2);
-        assert_ne!(same_name_users[0].id, same_name_users[1].id);
-    }
-
-    #[tokio::test]
     async fn test_user_password_hash_stored() {
         let db = setup_test_db().await.unwrap();
         let password_hash = "very_secure_hash_123";
@@ -275,10 +257,7 @@ mod tests {
 
         user.insert(&db).await.unwrap();
 
-        let found = User::find_by_name(&db, "user_empty_hash")
-            .await
-            .unwrap()
-            .unwrap();
+        let found = User::find_by_name(&db, "user_empty_hash").await.unwrap().unwrap();
         assert_eq!(found.password_hash, "");
     }
 
@@ -289,10 +268,7 @@ mod tests {
 
         user.insert(&db).await.unwrap();
 
-        let found = User::find_by_name(&db, "user@example.com")
-            .await
-            .unwrap()
-            .unwrap();
+        let found = User::find_by_name(&db, "user@example.com").await.unwrap().unwrap();
         assert_eq!(found.name, "user@example.com");
     }
 

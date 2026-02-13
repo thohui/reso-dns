@@ -88,7 +88,7 @@ mod tests {
     fn test_query_log_event_creation() {
         let event = QueryLogEvent {
             ts_ms: 1234567890,
-            transport: RequestType::Udp,
+            transport: RequestType::UDP,
             client: "192.168.1.1".to_string(),
             qname: DomainName::from_ascii("example.com").unwrap(),
             qtype: RecordType::A,
@@ -99,7 +99,7 @@ mod tests {
         };
 
         assert_eq!(event.ts_ms, 1234567890);
-        assert_eq!(event.transport, RequestType::Udp);
+        assert_eq!(event.transport, RequestType::UDP);
         assert_eq!(event.client, "192.168.1.1");
         assert_eq!(event.qname.as_str(), "example.com");
         assert_eq!(event.qtype, RecordType::A);
@@ -113,7 +113,7 @@ mod tests {
     fn test_query_log_event_into_db_model() {
         let event = QueryLogEvent {
             ts_ms: 1234567890,
-            transport: RequestType::Tcp,
+            transport: RequestType::TCP,
             client: "10.0.0.1".to_string(),
             qname: DomainName::from_ascii("test.com").unwrap(),
             qtype: RecordType::AAAA,
@@ -126,7 +126,7 @@ mod tests {
         let db_model = event.into_db_model();
 
         assert_eq!(db_model.ts_ms, 1234567890);
-        assert_eq!(db_model.transport, RequestType::Tcp as i64);
+        assert_eq!(db_model.transport, RequestType::TCP as i64);
         assert_eq!(db_model.client, "10.0.0.1");
         assert_eq!(db_model.qname, "test.com");
         assert_eq!(db_model.qtype, RecordType::AAAA.to_u16() as i64);
@@ -140,7 +140,7 @@ mod tests {
     fn test_query_log_event_with_cache_hit() {
         let event = QueryLogEvent {
             ts_ms: 1000,
-            transport: RequestType::Udp,
+            transport: RequestType::UDP,
             client: "127.0.0.1".to_string(),
             qname: DomainName::from_ascii("cached.example.com").unwrap(),
             qtype: RecordType::A,
@@ -159,7 +159,7 @@ mod tests {
     fn test_query_log_event_with_blocked() {
         let event = QueryLogEvent {
             ts_ms: 2000,
-            transport: RequestType::Udp,
+            transport: RequestType::UDP,
             client: "192.168.1.100".to_string(),
             qname: DomainName::from_ascii("blocked.example.com").unwrap(),
             qtype: RecordType::A,
@@ -178,7 +178,7 @@ mod tests {
     fn test_error_log_event_creation() {
         let event = ErrorLogEvent {
             ts_ms: 9876543210,
-            transport: RequestType::Tcp,
+            transport: RequestType::TCP,
             client: "172.16.0.1".to_string(),
             message: "Connection timeout".to_string(),
             r#type: ResolveErrorType::Timeout,
@@ -188,7 +188,7 @@ mod tests {
         };
 
         assert_eq!(event.ts_ms, 9876543210);
-        assert_eq!(event.transport, RequestType::Tcp);
+        assert_eq!(event.transport, RequestType::TCP);
         assert_eq!(event.client, "172.16.0.1");
         assert_eq!(event.message, "Connection timeout");
         assert_eq!(event.r#type, ResolveErrorType::Timeout);
@@ -201,10 +201,10 @@ mod tests {
     fn test_error_log_event_into_db_model() {
         let event = ErrorLogEvent {
             ts_ms: 1111111111,
-            transport: RequestType::Udp,
+            transport: RequestType::UDP,
             client: "8.8.8.8".to_string(),
             message: "DNS server error".to_string(),
-            r#type: ResolveErrorType::ServerFailure,
+            r#type: ResolveErrorType::InvalidRequest,
             dur_ms: 200,
             qname: Some("fail.example.com".to_string()),
             qtype: Some(28),
@@ -213,10 +213,10 @@ mod tests {
         let db_model = event.into_db_model();
 
         assert_eq!(db_model.ts_ms, 1111111111);
-        assert_eq!(db_model.transport, RequestType::Udp as i64);
+        assert_eq!(db_model.transport, RequestType::UDP as i64);
         assert_eq!(db_model.client, "8.8.8.8");
         assert_eq!(db_model.message, "DNS server error");
-        assert_eq!(db_model.r#type, ResolveErrorType::ServerFailure as i64);
+        assert_eq!(db_model.r#type, ResolveErrorType::InvalidRequest as i64);
         assert_eq!(db_model.dur_ms, 200);
         assert_eq!(db_model.qname, Some("fail.example.com".to_string()));
         assert_eq!(db_model.qtype, Some(28));
@@ -226,7 +226,7 @@ mod tests {
     fn test_error_log_event_without_qname() {
         let event = ErrorLogEvent {
             ts_ms: 3000,
-            transport: RequestType::Tcp,
+            transport: RequestType::TCP,
             client: "1.1.1.1".to_string(),
             message: "Malformed request".to_string(),
             r#type: ResolveErrorType::InvalidRequest,
@@ -245,7 +245,7 @@ mod tests {
     fn test_query_log_event_clone() {
         let event = QueryLogEvent {
             ts_ms: 5000,
-            transport: RequestType::Udp,
+            transport: RequestType::UDP,
             client: "127.0.0.1".to_string(),
             qname: DomainName::from_ascii("test.com").unwrap(),
             qtype: RecordType::A,
@@ -266,7 +266,7 @@ mod tests {
     fn test_error_log_event_clone() {
         let event = ErrorLogEvent {
             ts_ms: 6000,
-            transport: RequestType::Tcp,
+            transport: RequestType::TCP,
             client: "192.168.1.1".to_string(),
             message: "Error".to_string(),
             r#type: ResolveErrorType::Timeout,
@@ -285,7 +285,7 @@ mod tests {
     fn test_query_log_event_debug() {
         let event = QueryLogEvent {
             ts_ms: 7000,
-            transport: RequestType::Udp,
+            transport: RequestType::UDP,
             client: "127.0.0.1".to_string(),
             qname: DomainName::from_ascii("debug.com").unwrap(),
             qtype: RecordType::A,
@@ -303,7 +303,7 @@ mod tests {
     fn test_error_log_event_debug() {
         let event = ErrorLogEvent {
             ts_ms: 8000,
-            transport: RequestType::Tcp,
+            transport: RequestType::TCP,
             client: "127.0.0.1".to_string(),
             message: "Debug test".to_string(),
             r#type: ResolveErrorType::Timeout,
@@ -329,7 +329,7 @@ mod tests {
         for rtype in record_types {
             let event = QueryLogEvent {
                 ts_ms: 1000,
-                transport: RequestType::Udp,
+                transport: RequestType::UDP,
                 client: "127.0.0.1".to_string(),
                 qname: DomainName::from_ascii("test.com").unwrap(),
                 qtype: rtype,
@@ -357,7 +357,7 @@ mod tests {
         for rcode in rcodes {
             let event = QueryLogEvent {
                 ts_ms: 1000,
-                transport: RequestType::Udp,
+                transport: RequestType::UDP,
                 client: "127.0.0.1".to_string(),
                 qname: DomainName::from_ascii("test.com").unwrap(),
                 qtype: RecordType::A,
@@ -377,7 +377,7 @@ mod tests {
         let long_message = "a".repeat(1000);
         let event = ErrorLogEvent {
             ts_ms: 9000,
-            transport: RequestType::Tcp,
+            transport: RequestType::TCP,
             client: "127.0.0.1".to_string(),
             message: long_message.clone(),
             r#type: ResolveErrorType::Timeout,
@@ -394,7 +394,7 @@ mod tests {
     fn test_query_log_event_with_zero_duration() {
         let event = QueryLogEvent {
             ts_ms: 10000,
-            transport: RequestType::Udp,
+            transport: RequestType::UDP,
             client: "127.0.0.1".to_string(),
             qname: DomainName::from_ascii("instant.com").unwrap(),
             qtype: RecordType::A,

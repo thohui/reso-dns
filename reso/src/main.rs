@@ -97,7 +97,7 @@ async fn main() -> anyhow::Result<()> {
                 // try to get qname and qtype
                 if let Ok(msg) = ctx.message() {
                     qname = msg.questions().first().and_then(|q| Some(q.qname.to_string()));
-                    qtype = msg.questions().first().and_then(|q| Some(q.qtype as i64));
+                    qtype = msg.questions().first().and_then(|q| Some(q.qtype.to_u16() as i64));
                 }
 
                 let _ = ctx.global().metrics.error(ErrorLogEvent {

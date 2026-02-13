@@ -43,7 +43,6 @@ macro_rules! u16_enum_with_unknown {
 mod tests {
     // Test enum using the macro
     u16_enum_with_unknown! {
-        #[derive(Default)]
         pub enum TestEnum {
             First = 1,
             Second = 2,
