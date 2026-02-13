@@ -4,8 +4,7 @@ pub fn main() {
     println!("cargo:rerun-if-env-changed=SKIP_FRONTEND_BUILD");
 
     // Prevent the frontend from building in the github pipeline
-    if std::env::var_os("SKIP_FRONTEND_BUILD").is_some() {
-        println!("cargo:warning=Skipping frontend build (SKIP_FRONTEND_BUILD set)");
+    if std::env::var_os("IS_PIPELINE").is_some() {
         return;
     }
 
