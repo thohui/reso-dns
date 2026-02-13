@@ -4,14 +4,12 @@ use std::{
     sync::Arc,
 };
 
+use anyhow::anyhow;
 use bytes::Bytes;
-use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use crate::{
     domain_name::DomainName,
-    macros,
     reader::{DnsMessageReader, DnsReadable},
-    u16_enum_with_unknown,
     writer::{DnsMessageWriter, DnsWritable},
 };
 
@@ -370,7 +368,7 @@ u16_enum_with_unknown! {
     }
 }
 
-#[derive(Debug, Copy, Clone, Default, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[derive(Debug, Copy, Clone, Default, PartialEq)]
 #[repr(u8)]
 pub enum DnsOpcode {
     /// Standard query
@@ -380,6 +378,19 @@ pub enum DnsOpcode {
     IQuery = 1,
     /// Server status request, obsolete
     Status = 2,
+}
+
+impl TryFrom<u8> for DnsOpcode {
+    type Error = anyhow::Error;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Query),
+            1 => Ok(Self::IQuery),
+            2 => Ok(Self::Status),
+            _ => Err(anyhow!("invalid opcode: {}", value)),
+        }
+    }
 }
 
 /// Represents a DNS question in a DNS message.
