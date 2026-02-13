@@ -561,3 +561,4 @@ mod tests {
         assert_eq!(name.as_str(), "mail.example.com");
     }
 }
+}
