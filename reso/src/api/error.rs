@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use axum::{Json, http::StatusCode, response::IntoResponse};
+use axum::{http::StatusCode, response::IntoResponse};
 use axum_extra::extract::CookieJar;
 use serde::Serialize;
 

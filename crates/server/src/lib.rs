@@ -1,7 +1,6 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwap;
-use bytes::Bytes;
 use doh::run_doh;
 use futures::future::BoxFuture;
 use reso_context::{DnsMiddleware, DnsRequestCtx};
