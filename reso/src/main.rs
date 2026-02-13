@@ -39,6 +39,7 @@ pub mod utils;
 #[tokio::main]
 
 async fn main() -> anyhow::Result<()> {
+    
     let (nb, _guard) = non_blocking(std::io::stdout());
 
     let dns_config_path = env::var("RESO_DNS_CONFIG").unwrap_or(DEFAULT_CONFIG_PATH.to_string());

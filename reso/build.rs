@@ -1,6 +1,13 @@
 use std::{env, path::PathBuf, process::Command};
 
 pub fn main() {
+    println!("cargo:rerun-if-env-changed=SKIP_FRONTEND_BUILD");
+
+    // Prevent the frontend from building in the github pipeline
+    if std::env::var_os("IS_PIPELINE").is_some() {
+        return;
+    }
+
     println!("cargo:rerun-if-changed=web/pnpm-lock.yaml");
     println!("cargo:rerun-if-changed=web/package.json");
     println!("cargo:rerun-if-changed=web/src");
