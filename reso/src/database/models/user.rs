@@ -64,7 +64,6 @@ impl User {
                 )
                 .optional()
             })
-            .context("find user by name")
             .await?;
         Ok(user)
     }
@@ -113,5 +112,196 @@ impl User {
             .await?;
 
         Ok(raw)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::{connect, run_migrations};
+    use tempfile::NamedTempFile;
+
+    async fn setup_test_db() -> anyhow::Result<DatabaseConnection> {
+        let temp_file = NamedTempFile::new()?;
+        let db_path = temp_file.path().to_str().unwrap();
+        let conn = connect(db_path).await?;
+        run_migrations(&conn).await?;
+        Ok(conn)
+    }
+
+    #[tokio::test]
+    async fn test_user_new() {
+        let user = User::new("testuser", "hash123");
+
+        assert_eq!(user.name, "testuser");
+        assert_eq!(user.password_hash, "hash123");
+        assert!(user.created_at > 0);
+    }
+
+    #[tokio::test]
+    async fn test_user_insert_and_find_by_name() {
+        let db = setup_test_db().await.unwrap();
+        let user = User::new("alice", "password_hash_alice");
+
+        user.insert(&db).await.unwrap();
+
+        let found = User::find_by_name(&db, "alice").await.unwrap();
+        assert!(found.is_some());
+
+        let found_user = found.unwrap();
+        assert_eq!(found_user.name, "alice");
+        assert_eq!(found_user.password_hash, "password_hash_alice");
+        assert_eq!(found_user.created_at, user.created_at);
+    }
+
+    #[tokio::test]
+    async fn test_user_find_by_name_not_found() {
+        let db = setup_test_db().await.unwrap();
+
+        let result = User::find_by_name(&db, "nonexistent").await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_user_insert_and_find_by_id() {
+        let db = setup_test_db().await.unwrap();
+        let user = User::new("bob", "password_hash_bob");
+        let user_id = user.id.clone();
+
+        user.insert(&db).await.unwrap();
+
+        let found = User::find_by_id(&db, &user_id).await.unwrap();
+        assert!(found.is_some());
+
+        let found_user = found.unwrap();
+        assert_eq!(found_user.id, user_id);
+        assert_eq!(found_user.name, "bob");
+        assert_eq!(found_user.password_hash, "password_hash_bob");
+    }
+
+    #[tokio::test]
+    async fn test_user_find_by_id_not_found() {
+        let db = setup_test_db().await.unwrap();
+        let random_id = EntityId::<User>::new();
+
+        let result = User::find_by_id(&db, &random_id).await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_user_list_empty() {
+        let db = setup_test_db().await.unwrap();
+
+        let users = User::list(&db).await.unwrap();
+        assert_eq!(users.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_user_list_multiple() {
+        let db = setup_test_db().await.unwrap();
+
+        let user1 = User::new("user1", "hash1");
+        let user2 = User::new("user2", "hash2");
+        let user3 = User::new("user3", "hash3");
+
+        user1.insert(&db).await.unwrap();
+        user2.insert(&db).await.unwrap();
+        user3.insert(&db).await.unwrap();
+
+        let users = User::list(&db).await.unwrap();
+        assert_eq!(users.len(), 3);
+
+        let names: Vec<String> = users.iter().map(|u| u.name.clone()).collect();
+        assert!(names.contains(&"user1".to_string()));
+        assert!(names.contains(&"user2".to_string()));
+        assert!(names.contains(&"user3".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_user_unique_ids() {
+        let user1 = User::new("user1", "hash1");
+        let user2 = User::new("user2", "hash2");
+
+        assert_ne!(user1.id, user2.id);
+    }
+
+    #[tokio::test]
+    async fn test_user_created_at_timestamp() {
+        let before = chrono::Utc::now().timestamp_millis();
+        let user = User::new("testuser", "hash");
+        let after = chrono::Utc::now().timestamp_millis();
+
+        assert!(user.created_at >= before);
+        assert!(user.created_at <= after);
+    }
+
+    #[tokio::test]
+    async fn test_user_insert_same_name_different_id() {
+        let db = setup_test_db().await.unwrap();
+
+        // Insert two users with the same name (should be allowed unless there's a unique constraint)
+        let user1 = User::new("samename", "hash1");
+        let user2 = User::new("samename", "hash2");
+
+        user1.insert(&db).await.unwrap();
+        user2.insert(&db).await.unwrap();
+
+        let users = User::list(&db).await.unwrap();
+        let same_name_users: Vec<_> = users
+            .iter()
+            .filter(|u| u.name == "samename")
+            .collect();
+
+        assert_eq!(same_name_users.len(), 2);
+        assert_ne!(same_name_users[0].id, same_name_users[1].id);
+    }
+
+    #[tokio::test]
+    async fn test_user_password_hash_stored() {
+        let db = setup_test_db().await.unwrap();
+        let password_hash = "very_secure_hash_123";
+        let user = User::new("secure_user", password_hash);
+
+        user.insert(&db).await.unwrap();
+
+        let found = User::find_by_name(&db, "secure_user").await.unwrap().unwrap();
+        assert_eq!(found.password_hash, password_hash);
+    }
+
+    #[tokio::test]
+    async fn test_user_with_empty_password_hash() {
+        let db = setup_test_db().await.unwrap();
+        let user = User::new("user_empty_hash", "");
+
+        user.insert(&db).await.unwrap();
+
+        let found = User::find_by_name(&db, "user_empty_hash")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(found.password_hash, "");
+    }
+
+    #[tokio::test]
+    async fn test_user_with_special_characters_in_name() {
+        let db = setup_test_db().await.unwrap();
+        let user = User::new("user@example.com", "hash");
+
+        user.insert(&db).await.unwrap();
+
+        let found = User::find_by_name(&db, "user@example.com")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(found.name, "user@example.com");
+    }
+
+    #[tokio::test]
+    async fn test_user_entity_id_conversion() {
+        let user = User::new("test", "hash");
+        let uuid = user.id.id().clone();
+
+        let new_entity_id = EntityId::<User>::from(uuid);
+        assert_eq!(user.id, new_entity_id);
     }
 }
