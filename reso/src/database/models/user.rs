@@ -64,7 +64,6 @@ impl User {
                 )
                 .optional()
             })
-            .context("find user by name")
             .await?;
         Ok(user)
     }

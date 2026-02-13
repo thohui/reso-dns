@@ -5,11 +5,11 @@ use std::{
 };
 
 use bytes::Bytes;
-
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use crate::{
     domain_name::DomainName,
+    macros,
     reader::{DnsMessageReader, DnsReadable},
     writer::{DnsMessageWriter, DnsWritable},
 };
@@ -192,7 +192,7 @@ impl DnsMessage {
 
     // Set the response code
     pub fn set_response_code(&mut self, response_code: DnsResponseCode) {
-        let full: u16 = response_code.into();
+        let full: u16 = response_code.to_u16();
         self.flags.rcode_low = (full & 0x0F) as u8;
 
         // handle higher part.
@@ -300,7 +300,7 @@ impl DnsReadable for DnsFlags {
 
 impl DnsWritable for DnsFlags {
     fn write_to(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
-        let opcode: u8 = self.opcode.into();
+        let opcode: u8 = self.opcode as u8;
         writer.write_u16(
             ((self.response as u16) << 15)
                 | ((opcode as u16) << 11)
@@ -317,56 +317,56 @@ impl DnsWritable for DnsFlags {
     }
 }
 
+u16_enum_with_unknown! {
 /// Dns response code
 ///
 /// Based on: https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml#dns-parameters-6
-#[derive(Debug, Copy, Clone, Default, PartialEq, TryFromPrimitive, IntoPrimitive)]
-#[repr(u16)]
-pub enum DnsResponseCode {
-    /// No error, the request was successful
-    #[default]
-    NoError = 0,
-    /// Format error, the request was malformed
-    FormatError = 1,
-    /// Server failure, the server encountered an error while processing the request
-    ServerFailure = 2,
-    /// Non-existent domain, the requested domain does not exist
-    NxDomain = 3,
-    /// Not Implemented
-    NotImp = 4,
-    /// Query refused
-    Refused = 5,
-    /// Name Exists when it should not
-    YXDomain = 6,
-    /// RR Set Exists when it should not
-    YXRRSet = 7,
-    /// RR Set that should exist does not
-    NXRRSet = 8,
-    /// Server Not Authoritative for zone
-    ///
-    /// Not Authorized
-    NotAuth = 9,
-    /// Name not contained in zone
-    NotZone = 10,
-    /// DSO-TYPE Not Implemented
-    DSOTYPENI = 11,
-    /// Bad OPT Version
-    /// TSIG Signature Failure
-    BADVERS = 16,
-    /// Key not recognized
-    BADKEY = 17,
-    /// Signature out of time window
-    BADTIME = 18,
-    /// Bad TKEY Mode
-    BADMODE = 19,
-    /// Duplicate key name
-    BADNAME = 20,
-    /// Algorithm not supported
-    BADALG = 21,
-    /// Bad Truncation
-    BADTRUNC = 22,
-    /// Bad/missing Server Cookie
-    BADCOOKIE = 23,
+    pub enum DnsResponseCode {
+        /// No error, the request was successful
+        NoError = 0,
+        /// Format error, the request was malformed
+        FormatError = 1,
+        /// Server failure, the server encountered an error while processing the request
+        ServerFailure = 2,
+        /// Non-existent domain, the requested domain does not exist
+        NxDomain = 3,
+        /// Not Implemented
+        NotImp = 4,
+        /// Query refused
+        Refused = 5,
+        /// Name Exists when it should not
+        YXDomain = 6,
+        /// RR Set Exists when it should not
+        YXRRSet = 7,
+        /// RR Set that should exist does not
+        NXRRSet = 8,
+        /// Server Not Authoritative for zone
+        ///
+        /// Not Authorized
+        NotAuth = 9,
+        /// Name not contained in zone
+        NotZone = 10,
+        /// DSO-TYPE Not Implemented
+        DSOTYPENI = 11,
+        /// Bad OPT Version
+        ///
+        /// TSIG Signature Failure
+        BADVERS = 16,
+        /// Key not recognized
+        BADKEY = 17,
+        /// Signature out of time window
+        BADTIME = 18,
+        /// Bad TKEY Mode
+        BADMODE = 19,
+        /// Duplicate key name
+        BADNAME = 20,
+        /// Algorithm not supported
+        BADALG = 21,
+        /// Bad Truncation
+        BADTRUNC = 22,
+        /// Bad/missing Server Cookie
+        BADCOOKIE = 23,
+    }
 }
 
 #[derive(Debug, Copy, Clone, Default, PartialEq, TryFromPrimitive, IntoPrimitive)]
@@ -411,17 +411,19 @@ impl DnsReadable for DnsQuestion {
 impl DnsWritable for DnsQuestion {
     fn write_to(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
         writer.write_qname(&self.qname)?;
-        writer.write_u16(self.qtype as u16)?;
-        writer.write_u16(self.qclass as u16)?;
+        if let RecordType::Unknown(unknown_record) = self.qtype {
+            writer.write_u16(unknown_record)?;
+        } else {
+            writer.write_u16(self.qtype.to_u16());
+        }
+        writer.write_u16(self.qclass.to_u16())?;
         Ok(())
     }
 }
 
+u16_enum_with_unknown! {
 /// DNS record types.
-///
 /// Based on: https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml#dns-parameters-4
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, IntoPrimitive, TryFromPrimitive)]
-#[repr(u16)]
 pub enum RecordType {
     /// IPv4
     A = 1,
@@ -613,20 +615,20 @@ pub enum RecordType {
     CLA = 263,
     /// BP Node Number
     IPN = 264,
-}
+}}
 
-/// DNS class types.
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, TryFromPrimitive)]
-#[repr(u16)]
-pub enum ClassType {
-    /// Internet
-    IN = 1,
-    /// Chaosnet
-    CH = 3,
-    /// Hesoid (MIT Athena)
-    HS = 4,
-    /// Any
-    ANY = 255,
+u16_enum_with_unknown! {
+    /// DNS class types.
+    pub enum ClassType {
+        /// Internet
+        IN = 1,
+        /// Chaosnet
+        CH = 3,
+        /// Hesoid (MIT Athena)
+        HS = 4,
+        /// Any
+        ANY = 255,
+    }
 }
 
 /// Associated data for a DNS record.
@@ -856,8 +858,8 @@ impl DnsReadable for DnsRecord {
 impl DnsWritable for DnsRecord {
     fn write_to(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
         writer.write_qname(&self.name)?;
-        writer.write_u16(self.record_type as u16)?;
-        writer.write_u16(self.class as u16)?;
+        writer.write_u16(self.record_type.to_u16())?;
+        writer.write_u16(self.class.to_u16())?;
         writer.write_u32(self.ttl)?;
 
         let rdlen_pos = writer.position();
@@ -965,7 +967,7 @@ impl DnsWritable for Edns {
     fn write_to(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
         // NAME = root, TYPE = OPT
         writer.write_qname(&DomainName::root())?;
-        writer.write_u16(RecordType::OPT as u16)?;
+        writer.write_u16(RecordType::OPT.to_u16())?;
 
         // CLASS = UDP payload size
         writer.write_u16(self.udp_payload_size)?;
@@ -1001,11 +1003,9 @@ pub struct EdnsOption {
     data: Option<EdnsOptionData>,
 }
 
-/// EDNS Option codes
-///
-/// Based on: https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml#dns-parameters-11
-#[derive(Debug, Copy, Clone, PartialEq, TryFromPrimitive)]
-#[repr(u16)]
+u16_enum_with_unknown! {
+// EDNS Option codes
+// Based on: https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml#dns-parameters-11
 pub enum EdnsOptionCode {
     /// Apple's DNS Long-Lived Queries Protocol (RFC 8764)
     LLQ = 1,
@@ -1039,10 +1039,7 @@ pub enum EdnsOptionCode {
     ReportChannel = 18,
     /// Zone version (RFC 9660)
     ZONEVERSION = 19,
-
-    /// Unknown or reserved/unassigned
-    #[num_enum(alternatives = [16, 17, 21..=65536])]
-    Unknown,
+}
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1114,7 +1111,7 @@ impl DnsWritable for EdnsOptionData {
             EdnsOptionData::Padding(padding) => writer.write_u16(*padding),
             EdnsOptionData::DomainName(domain_name) => writer.write_qname_uncompressed(domain_name),
             EdnsOptionData::ExtendedError { info_code, extra_text } => {
-                writer.write_u16(*info_code as u16)?;
+                writer.write_u16(info_code.to_u16())?;
                 if let Some(extra_text) = extra_text {
                     writer.write_string(extra_text)?;
                 };
@@ -1234,7 +1231,7 @@ impl DnsReadable for EdnsOption {
 
 impl DnsWritable for EdnsOption {
     fn write_to(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
-        writer.write_u16(self.code as u16)?;
+        writer.write_u16(self.code.to_u16())?;
         writer.write_u16(self.len)?;
         if let Some(data) = &self.data {
             data.write_to(writer)?;
@@ -1243,60 +1240,60 @@ impl DnsWritable for EdnsOption {
     }
 }
 
-/// Extended DNS error info code
-#[derive(Debug, Clone, Copy, TryFromPrimitive, PartialEq)]
-#[repr(u16)]
-pub enum ExtendedDnsErrorInfoCode {
-    /// The error in question falls into a category that does not match known extended error codes.
-    OtherError = 0,
-    /// The resolver attempted to perform DNSSEC validation, but a DNSKEY RRset contained only unsupported DNSSEC algorithms.
-    UnsupportedDnskeyAlgorithm = 1,
-    ///The resolver attempted to perform DNSSEC validation, but a DS RRset contained only unsupported Digest Types.
-    UnsupportedDsDigestType = 2,
-    /// The resolver was unable to resolve the answer within its time limits and decided to answer with previously cached data instead of answering with an error. This is typically caused by problems communicating with an authoritative server, possibly as result of a denial of service (DoS) attack against another network.
-    StaleAnswer = 3,
-    /// For policy reasons (legal obligation or malware filtering, for instance), an answer was forged. Note that this should be used when an answer is still provided, not when failure codes are returned instead.
-    ForgedAnswer = 4,
-    /// The resolver attempted to perform DNSSEC validation, but validation ended in the Indeterminate state
-    DnssecIndeterminate = 5,
-    /// The resolver attempted to perform DNSSEC validation, but validation ended in the Bogus state.
-    DnssecBogus = 6,
-    /// The resolver attempted to perform DNSSEC validation, but no signatures are presently valid and some (often all) are expired.
-    SignatureExpired = 7,
-    /// The resolver attempted to perform DNSSEC validation, but no signatures are presently valid and at least some are not yet valid.
-    SignatureNotYetValid = 8,
-    /// A DS record existed at a parent, but no supported matching DNSKEY record could be found for the child.
-    DnsKeyMissing = 9,
-    /// The resolver attempted to perform DNSSEC validation, but no RRSIGs could be found for at least one RRset where RRSIGs were expected.
-    RrSigsMissing = 10,
-    /// The resolver attempted to perform DNSSEC validation, but no Zone Key Bit was set in a DNSKEY.
-    NoZoneKeyBitSet = 11,
-    /// The resolver attempted to perform DNSSEC validation, but the requested data was missing and a covering NSEC or NSEC3 was not provided.
-    NSecMissing = 12,
-    /// The resolver is returning the SERVFAIL RCODE from its cache.
-    CachedError = 13,
-    /// The server is unable to answer the query, as it was not fully functional when the query was received.
-    NotReady = 14,
-    /// The server is unable to respond to the request because the domain is on a blocklist due to an internal security policy imposed by the operator of the server resolving or forwarding the query.
-    Blocked = 15,
-    /// The server is unable to respond to the request because the domain is on a blocklist due to an external requirement imposed by an entity other than the operator of the server resolving or forwarding the query. Note that how the imposed policy is applied is irrelevant (in-band DNS filtering, court order, etc.).
-    Censored = 16,
-    /// The server is unable to respond to the request because the domain is on a blocklist as requested by the client. Functionally, this amounts to "you requested that we filter domains like this one."
-    Filtered = 17,
-    /// An authoritative server or recursive resolver that receives a query from an "unauthorized" client can annotate its REFUSED message with this code. Examples of "unauthorized" clients are recursive queries from IP addresses outside the network, blocklisted IP addresses, local policy, etc.
-    Prohibited = 18,
-    /// The resolver was unable to resolve an answer within its configured time limits and decided to answer with a previously cached NXDOMAIN answer instead of answering with an error. This may be caused, for example, by problems communicating with an authoritative server, possibly as result of a denial of service (DoS) attack against another network.
-    StaleNxDomainAnswer = 19,
-    /// An authoritative server that receives a query with the Recursion Desired (RD) bit clear, or when it is not configured for recursion for a domain for which it is not authoritative, SHOULD include this EDE code in the REFUSED response. A resolver that receives a query with the RD bit clear SHOULD include this EDE code in the REFUSED response.
-    NotAuthorative = 20,
-    /// The requested operation or query is not supported.
-    NotSupported = 21,
-    /// The resolver could not reach any of the authoritative name servers (or they potentially refused to reply).
-    NoReachableAuthority = 22,
-    /// An unrecoverable error occurred while communicating with another server.
-    NetworkError = 23,
-    /// The authoritative server cannot answer with data for a zone it is otherwise configured to support. Examples of this include its most recent zone being too old or having expired.
-    InvalidData = 24,
+u16_enum_with_unknown! {
+    /// Extended DNS error info code
+    pub enum ExtendedDnsErrorInfoCode {
+        /// The error in question falls into a category that does not match known extended error codes.
+        OtherError = 0,
+        /// The resolver attempted to perform DNSSEC validation, but a DNSKEY RRset contained only unsupported DNSSEC algorithms.
+        UnsupportedDnskeyAlgorithm = 1,
+        ///The resolver attempted to perform DNSSEC validation, but a DS RRset contained only unsupported Digest Types.
+        UnsupportedDsDigestType = 2,
+        /// The resolver was unable to resolve the answer within its time limits and decided to answer with previously cached data instead of answering with an error. This is typically caused by problems communicating with an authoritative server, possibly as result of a denial of service (DoS) attack against another network.
+        StaleAnswer = 3,
+        /// For policy reasons (legal obligation or malware filtering, for instance), an answer was forged. Note that this should be used when an answer is still provided, not when failure codes are returned instead.
+        ForgedAnswer = 4,
+        /// The resolver attempted to perform DNSSEC validation, but validation ended in the Indeterminate state
+        DnssecIndeterminate = 5,
+        /// The resolver attempted to perform DNSSEC validation, but validation ended in the Bogus state.
+        DnssecBogus = 6,
+        /// The resolver attempted to perform DNSSEC validation, but no signatures are presently valid and some (often all) are expired.
+        SignatureExpired = 7,
+        /// The resolver attempted to perform DNSSEC validation, but no signatures are presently valid and at least some are not yet valid.
+        SignatureNotYetValid = 8,
+        /// A DS record existed at a parent, but no supported matching DNSKEY record could be found for the child.
+        DnsKeyMissing = 9,
+        /// The resolver attempted to perform DNSSEC validation, but no RRSIGs could be found for at least one RRset where RRSIGs were expected.
+        RrSigsMissing = 10,
+        /// The resolver attempted to perform DNSSEC validation, but no Zone Key Bit was set in a DNSKEY.
+        NoZoneKeyBitSet = 11,
+        /// The resolver attempted to perform DNSSEC validation, but the requested data was missing and a covering NSEC or NSEC3 was not provided.
+        NSecMissing = 12,
+        /// The resolver is returning the SERVFAIL RCODE from its cache.
+        CachedError = 13,
+        /// The server is unable to answer the query, as it was not fully functional when the query was received.
+        NotReady = 14,
+        /// The server is unable to respond to the request because the domain is on a blocklist due to an internal security policy imposed by the operator of the server resolving or forwarding the query.
+        Blocked = 15,
+        /// The server is unable to respond to the request because the domain is on a blocklist due to an external requirement imposed by an entity other than the operator of the server resolving or forwarding the query. Note that how the imposed policy is applied is irrelevant (in-band DNS filtering, court order, etc.).
+        Censored = 16,
+        /// The server is unable to respond to the request because the domain is on a blocklist as requested by the client. Functionally, this amounts to "you requested that we filter domains like this one."
+        Filtered = 17,
+        /// An authoritative server or recursive resolver that receives a query from an "unauthorized" client can annotate its REFUSED message with this code. Examples of "unauthorized" clients are recursive queries from IP addresses outside the network, blocklisted IP addresses, local policy, etc.
+        Prohibited = 18,
+        /// The resolver was unable to resolve an answer within its configured time limits and decided to answer with a previously cached NXDOMAIN answer instead of answering with an error. This may be caused, for example, by problems communicating with an authoritative server, possibly as result of a denial of service (DoS) attack against another network.
+        StaleNxDomainAnswer = 19,
+        /// An authoritative server that receives a query with the Recursion Desired (RD) bit clear, or when it is not configured for recursion for a domain for which it is not authoritative, SHOULD include this EDE code in the REFUSED response. A resolver that receives a query with the RD bit clear SHOULD include this EDE code in the REFUSED response.
+        NotAuthorative = 20,
+        /// The requested operation or query is not supported.
+        NotSupported = 21,
+        /// The resolver could not reach any of the authoritative name servers (or they potentially refused to reply).
+        NoReachableAuthority = 22,
+        /// An unrecoverable error occurred while communicating with another server.
+        NetworkError = 23,
+        /// The authoritative server cannot answer with data for a zone it is otherwise configured to support. Examples of this include its most recent zone being too old or having expired.
+        InvalidData = 24,
+    }
 }
 
 #[cfg(test)]

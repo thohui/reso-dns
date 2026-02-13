@@ -38,8 +38,8 @@ impl QueryLogEvent {
             cache_hit: self.cache_hit,
             dur_ms: self.dur_ms as i64,
             qname: self.qname.to_string(),
-            qtype: self.qtype as i64,
-            rcode: self.rcode as i64,
+            qtype: self.qtype.to_u16() as i64,
+            rcode: self.rcode.to_u16() as i64,
         }
     }
 }

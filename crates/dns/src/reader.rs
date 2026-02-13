@@ -255,6 +255,8 @@ impl<'a> DnsMessageReader<'a> {
     /// # Examples
     ///
     /// ```
+    ///
+    /// use reso_dns::reader::DnsMessageReader;
     /// let buf = [0u8, 1, 2];
     /// let mut r = DnsMessageReader::new(&buf);
     /// assert_eq!(r.remaining(), 3);
