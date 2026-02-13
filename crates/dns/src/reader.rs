@@ -293,4 +293,266 @@ mod tests {
 
         assert!(dname.as_str() == decoded.as_str());
     }
+
+    #[test]
+    fn test_read_u8() {
+        use super::DnsMessageReader;
+        let data = [42u8, 100, 255];
+        let mut reader = DnsMessageReader::new(&data);
+
+        assert_eq!(reader.read_u8().unwrap(), 42);
+        assert_eq!(reader.read_u8().unwrap(), 100);
+        assert_eq!(reader.read_u8().unwrap(), 255);
+        assert!(reader.read_u8().is_err()); // Buffer underflow
+    }
+
+    #[test]
+    fn test_read_u16() {
+        use super::DnsMessageReader;
+        let data = [0x12, 0x34, 0xFF, 0xFF];
+        let mut reader = DnsMessageReader::new(&data);
+
+        assert_eq!(reader.read_u16().unwrap(), 0x1234);
+        assert_eq!(reader.read_u16().unwrap(), 0xFFFF);
+        assert!(reader.read_u16().is_err()); // Buffer underflow
+    }
+
+    #[test]
+    fn test_read_u32() {
+        use super::DnsMessageReader;
+        let data = [0x12, 0x34, 0x56, 0x78, 0xFF, 0xFF, 0xFF, 0xFF];
+        let mut reader = DnsMessageReader::new(&data);
+
+        assert_eq!(reader.read_u32().unwrap(), 0x12345678);
+        assert_eq!(reader.read_u32().unwrap(), 0xFFFFFFFF);
+        assert!(reader.read_u32().is_err()); // Buffer underflow
+    }
+
+    #[test]
+    fn test_read_bytes() {
+        use super::DnsMessageReader;
+        let data = [1, 2, 3, 4, 5];
+        let mut reader = DnsMessageReader::new(&data);
+
+        let bytes = reader.read_bytes(3).unwrap();
+        assert_eq!(bytes, &[1, 2, 3]);
+        assert_eq!(reader.position(), 3);
+
+        let bytes = reader.read_bytes(2).unwrap();
+        assert_eq!(bytes, &[4, 5]);
+        assert_eq!(reader.position(), 5);
+
+        assert!(reader.read_bytes(1).is_err()); // Buffer underflow
+    }
+
+    #[test]
+    fn test_seek() {
+        use super::DnsMessageReader;
+        let data = [1, 2, 3, 4, 5];
+        let mut reader = DnsMessageReader::new(&data);
+
+        assert_eq!(reader.position(), 0);
+
+        reader.seek(3).unwrap();
+        assert_eq!(reader.position(), 3);
+        assert_eq!(reader.read_u8().unwrap(), 4);
+
+        reader.seek(0).unwrap();
+        assert_eq!(reader.position(), 0);
+        assert_eq!(reader.read_u8().unwrap(), 1);
+
+        reader.seek(5).unwrap(); // At end is ok
+        assert_eq!(reader.position(), 5);
+
+        assert!(reader.seek(6).is_err()); // Out of bounds
+    }
+
+    #[test]
+    fn test_remaining() {
+        use super::DnsMessageReader;
+        let data = [1, 2, 3, 4, 5];
+        let mut reader = DnsMessageReader::new(&data);
+
+        assert_eq!(reader.remaining(), 5);
+
+        reader.read_u8().unwrap();
+        assert_eq!(reader.remaining(), 4);
+
+        reader.read_u16().unwrap();
+        assert_eq!(reader.remaining(), 2);
+
+        reader.seek(5).unwrap();
+        assert_eq!(reader.remaining(), 0);
+    }
+
+    #[test]
+    fn test_read_qname_simple() {
+        use super::DnsMessageReader;
+        // "example.com" encoded: 7 "example" 3 "com" 0
+        let data = vec![7, b'e', b'x', b'a', b'm', b'p', b'l', b'e', 3, b'c', b'o', b'm', 0];
+        let mut reader = DnsMessageReader::new(&data);
+
+        let name = reader.read_qname().unwrap();
+        assert_eq!(name.as_str(), "example.com");
+    }
+
+    #[test]
+    fn test_read_qname_root() {
+        use super::DnsMessageReader;
+        // Root domain is just a single 0 byte
+        let data = vec![0];
+        let mut reader = DnsMessageReader::new(&data);
+
+        let name = reader.read_qname().unwrap();
+        assert_eq!(name, DomainName::root());
+    }
+
+    #[test]
+    fn test_read_qname_with_compression() {
+        use super::DnsMessageReader;
+        // "example.com" at offset 0, then "www.example.com" with pointer to offset 0
+        let mut data = vec![7, b'e', b'x', b'a', b'm', b'p', b'l', b'e', 3, b'c', b'o', b'm', 0];
+        let first_label_offset = 0;
+        // Add "www" label then pointer to "example.com"
+        data.extend_from_slice(&[3, b'w', b'w', b'w']);
+        data.push(0xC0); // Compression marker
+        data.push(first_label_offset);
+
+        let mut reader = DnsMessageReader::new(&data);
+
+        // Read first name
+        let name1 = reader.read_qname().unwrap();
+        assert_eq!(name1.as_str(), "example.com");
+
+        // Read second name with compression
+        let name2 = reader.read_qname().unwrap();
+        assert_eq!(name2.as_str(), "www.example.com");
+    }
+
+    #[test]
+    fn test_read_qname_compression_loop_detection() {
+        use super::DnsMessageReader;
+        // Create a compression pointer that points to itself
+        let data = vec![0xC0, 0x00]; // Points to offset 0 (itself)
+        let mut reader = DnsMessageReader::new(&data);
+
+        // Should detect the loop and return an error
+        assert!(reader.read_qname().is_err());
+    }
+
+    #[test]
+    fn test_read_qname_out_of_bounds() {
+        use super::DnsMessageReader;
+        // Label length claims more bytes than available
+        let data = vec![10, b'a', b'b', b'c']; // Says 10 bytes but only 3 follow
+        let mut reader = DnsMessageReader::new(&data);
+
+        assert!(reader.read_qname().is_err());
+    }
+
+    #[test]
+    fn test_read_qname_compression_out_of_bounds() {
+        use super::DnsMessageReader;
+        // Compression pointer to invalid offset
+        let data = vec![0xC0, 0xFF]; // Points way out of bounds
+        let mut reader = DnsMessageReader::new(&data);
+
+        assert!(reader.read_qname().is_err());
+    }
+
+    #[test]
+    fn test_read_qname_uncompressed_with_compression_error() {
+        use super::DnsMessageReader;
+        // Try to use compression in uncompressed context
+        let data = vec![0xC0, 0x00, 0x00]; // Compression pointer
+        let mut reader = DnsMessageReader::new(&data);
+
+        // Should error because compression is not allowed
+        assert!(reader.read_qname_uncompressed(3).is_err());
+    }
+
+    #[test]
+    fn test_read_qname_uncompressed_unterminated() {
+        use super::DnsMessageReader;
+        // Missing root label (0 byte)
+        let data = vec![3, b'c', b'o', b'm'];
+        let mut reader = DnsMessageReader::new(&data);
+
+        assert!(reader.read_qname_uncompressed(4).is_err());
+    }
+
+    #[test]
+    fn test_read_qname_uncompressed_extra_bytes() {
+        use super::DnsMessageReader;
+        // Has proper termination but extra bytes beyond the specified length
+        let data = vec![3, b'c', b'o', b'm', 0, 99]; // Extra byte
+        let mut reader = DnsMessageReader::new(&data);
+
+        // Read only the 5-byte qname (should fail because of extra byte check)
+        // Actually, this should succeed and then we check extra bytes
+        let result = reader.read_qname_uncompressed(6);
+        // This should error due to extra bytes
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_position_tracking() {
+        use super::DnsMessageReader;
+        let data = [1, 2, 3, 4, 5, 6, 7, 8];
+        let mut reader = DnsMessageReader::new(&data);
+
+        assert_eq!(reader.position(), 0);
+
+        reader.read_u8().unwrap();
+        assert_eq!(reader.position(), 1);
+
+        reader.read_u16().unwrap();
+        assert_eq!(reader.position(), 3);
+
+        reader.read_u32().unwrap();
+        assert_eq!(reader.position(), 7);
+
+        reader.read_u8().unwrap();
+        assert_eq!(reader.position(), 8);
+    }
+
+    #[test]
+    fn test_buffer_underflow_errors() {
+        use super::DnsMessageReader;
+        let data = [1, 2];
+        let mut reader = DnsMessageReader::new(&data);
+
+        // Try to read more than available
+        assert!(reader.read_u32().is_err());
+
+        // Position should not have changed
+        assert_eq!(reader.position(), 0);
+
+        // Should still be able to read what's available
+        assert_eq!(reader.read_u16().unwrap(), 0x0102);
+    }
+
+    #[test]
+    fn test_read_bytes_zero_length() {
+        use super::DnsMessageReader;
+        let data = [1, 2, 3];
+        let mut reader = DnsMessageReader::new(&data);
+
+        let bytes = reader.read_bytes(0).unwrap();
+        assert_eq!(bytes.len(), 0);
+        assert_eq!(reader.position(), 0); // Position should not change
+    }
+
+    #[test]
+    fn test_multiple_labels_in_qname() {
+        use super::DnsMessageReader;
+        // "mail.example.com"
+        let data = vec![
+            4, b'm', b'a', b'i', b'l', 7, b'e', b'x', b'a', b'm', b'p', b'l', b'e', 3, b'c', b'o', b'm', 0,
+        ];
+        let mut reader = DnsMessageReader::new(&data);
+
+        let name = reader.read_qname().unwrap();
+        assert_eq!(name.as_str(), "mail.example.com");
+    }
 }

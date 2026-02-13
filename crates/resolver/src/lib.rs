@@ -54,7 +54,7 @@ impl ResolveError {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ResolveErrorType {
     Timeout,
     InvalidRequest,

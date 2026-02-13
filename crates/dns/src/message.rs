@@ -11,6 +11,7 @@ use crate::{
     domain_name::DomainName,
     macros,
     reader::{DnsMessageReader, DnsReadable},
+    u16_enum_with_unknown,
     writer::{DnsMessageWriter, DnsWritable},
 };
 
@@ -1418,5 +1419,326 @@ mod tests {
         let encoded = message.encode().unwrap();
         let decoded = DnsMessage::decode(&encoded).unwrap();
         assert!(message == decoded);
+    }
+
+    #[test]
+    fn test_dns_flags_try_from_u16() {
+        // Test all flags set
+        let flags_bytes: u16 = 0b1000_0111_1111_1111;
+        let flags = DnsFlags::try_from(flags_bytes).unwrap();
+        assert!(flags.response);
+        assert!(flags.authorative_answer);
+        assert!(flags.truncated);
+        assert!(flags.recursion_desired);
+        assert!(flags.recursion_available);
+        assert!(flags.z);
+        assert!(flags.authentic_data);
+        assert!(flags.checking_disabled);
+
+        // Test no flags set
+        let flags_bytes: u16 = 0;
+        let flags = DnsFlags::try_from(flags_bytes).unwrap();
+        assert!(!flags.response);
+        assert!(!flags.authorative_answer);
+        assert!(!flags.truncated);
+        assert!(!flags.recursion_desired);
+        assert!(!flags.recursion_available);
+        assert!(!flags.z);
+        assert!(!flags.authentic_data);
+        assert!(!flags.checking_disabled);
+    }
+
+    #[test]
+    fn test_dns_flags_write_read_roundtrip() {
+        let flags = DnsFlags::new(true, DnsOpcode::Query, false, true, true, false, true, false);
+
+        let mut writer = DnsMessageWriter::new();
+        flags.write_to(&mut writer).unwrap();
+        let bytes = writer.into_bytes();
+
+        let mut reader = DnsMessageReader::new(&bytes);
+        let decoded_flags = DnsFlags::read_from(&mut reader).unwrap();
+
+        assert_eq!(flags, decoded_flags);
+    }
+
+    #[test]
+    fn test_dns_response_code_conversions() {
+        // Test known response codes
+        assert_eq!(DnsResponseCode::from(0), DnsResponseCode::NoError);
+        assert_eq!(DnsResponseCode::from(1), DnsResponseCode::FormatError);
+        assert_eq!(DnsResponseCode::from(2), DnsResponseCode::ServerFailure);
+        assert_eq!(DnsResponseCode::from(3), DnsResponseCode::NxDomain);
+
+        // Test to_u16
+        assert_eq!(DnsResponseCode::NoError.to_u16(), 0);
+        assert_eq!(DnsResponseCode::FormatError.to_u16(), 1);
+        assert_eq!(DnsResponseCode::NxDomain.to_u16(), 3);
+
+        // Test unknown code
+        let unknown = DnsResponseCode::from(9999);
+        assert_eq!(unknown, DnsResponseCode::Unknown(9999));
+        assert_eq!(unknown.to_u16(), 9999);
+    }
+
+    #[test]
+    fn test_dns_message_set_response_code() {
+        let mut message = DnsMessage::new(1, DnsFlags::default(), vec![], vec![], vec![], vec![]);
+
+        // Test low response code (fits in 4 bits)
+        message.set_response_code(DnsResponseCode::NoError);
+        assert_eq!(message.response_code().unwrap(), DnsResponseCode::NoError);
+
+        message.set_response_code(DnsResponseCode::NxDomain);
+        assert_eq!(message.response_code().unwrap(), DnsResponseCode::NxDomain);
+
+        // Test extended response code (requires EDNS)
+        message.set_response_code(DnsResponseCode::BADVERS);
+        assert_eq!(message.response_code().unwrap(), DnsResponseCode::BADVERS);
+        assert!(message.edns.is_some());
+    }
+
+    #[test]
+    fn test_record_type_conversions() {
+        assert_eq!(RecordType::from(1), RecordType::A);
+        assert_eq!(RecordType::from(28), RecordType::AAAA);
+        assert_eq!(RecordType::from(5), RecordType::CNAME);
+        assert_eq!(RecordType::from(2), RecordType::NS);
+        assert_eq!(RecordType::from(15), RecordType::MX);
+
+        assert_eq!(RecordType::A.to_u16(), 1);
+        assert_eq!(RecordType::AAAA.to_u16(), 28);
+        assert_eq!(RecordType::CNAME.to_u16(), 5);
+
+        // Unknown type
+        let unknown = RecordType::from(9999);
+        assert_eq!(unknown, RecordType::Unknown(9999));
+        assert_eq!(unknown.to_u16(), 9999);
+    }
+
+    #[test]
+    fn test_class_type_conversions() {
+        assert_eq!(ClassType::from(1), ClassType::IN);
+        assert_eq!(ClassType::from(3), ClassType::CH);
+        assert_eq!(ClassType::from(255), ClassType::ANY);
+
+        assert_eq!(ClassType::IN.to_u16(), 1);
+        assert_eq!(ClassType::CH.to_u16(), 3);
+        assert_eq!(ClassType::ANY.to_u16(), 255);
+
+        // Unknown class
+        let unknown = ClassType::from(9999);
+        assert_eq!(unknown, ClassType::Unknown(9999));
+    }
+
+    #[test]
+    fn test_dns_message_accessors() {
+        let question = DnsQuestion::new(
+            DomainName::from_ascii("example.com").unwrap(),
+            RecordType::A,
+            ClassType::IN,
+        );
+
+        let message = DnsMessage::new(
+            12345,
+            DnsFlags::default(),
+            vec![question.clone()],
+            vec![],
+            vec![],
+            vec![],
+        );
+
+        assert_eq!(message.questions().len(), 1);
+        assert_eq!(message.questions()[0], question);
+        assert_eq!(message.answers().len(), 0);
+        assert_eq!(message.authority_records().len(), 0);
+        assert_eq!(message.additional_records().len(), 0);
+        assert!(message.edns().is_none());
+    }
+
+    #[test]
+    fn test_dns_record_data_ipv4() {
+        use std::net::Ipv4Addr;
+        let ip = Ipv4Addr::new(192, 168, 1, 1);
+        let data = DnsRecordData::Ipv4(ip);
+
+        let mut writer = DnsMessageWriter::new();
+        data.write(&mut writer).unwrap();
+        let bytes = writer.into_bytes();
+
+        assert_eq!(bytes.len(), 4);
+        assert_eq!(&bytes[..], &[192, 168, 1, 1]);
+    }
+
+    #[test]
+    fn test_dns_record_data_ipv6() {
+        use std::net::Ipv6Addr;
+        let ip = Ipv6Addr::new(0x2001, 0x0db8, 0, 0, 0, 0, 0, 1);
+        let data = DnsRecordData::Ipv6(ip);
+
+        let mut writer = DnsMessageWriter::new();
+        data.write(&mut writer).unwrap();
+        let bytes = writer.into_bytes();
+
+        assert_eq!(bytes.len(), 16);
+    }
+
+    #[test]
+    fn test_dns_record_data_text() {
+        let chunks = vec![Arc::from("hello"), Arc::from("world")];
+        let data = DnsRecordData::Text(chunks);
+
+        let mut writer = DnsMessageWriter::new();
+        data.write(&mut writer).unwrap();
+        let bytes = writer.into_bytes();
+
+        // Should be: len(5) + "hello" + len(5) + "world"
+        assert_eq!(bytes[0], 5);
+        assert_eq!(&bytes[1..6], b"hello");
+        assert_eq!(bytes[6], 5);
+        assert_eq!(&bytes[7..12], b"world");
+    }
+
+    #[test]
+    fn test_dns_record_data_domain_name() {
+        let domain = DomainName::from_ascii("example.com").unwrap();
+        let data = DnsRecordData::DomainName(domain.clone());
+
+        let mut writer = DnsMessageWriter::new();
+        data.write(&mut writer).unwrap();
+        let bytes = writer.into_bytes();
+
+        let mut reader = DnsMessageReader::new(&bytes);
+        let decoded_domain = reader.read_qname().unwrap();
+        assert_eq!(decoded_domain, domain);
+    }
+
+    #[test]
+    fn test_dns_record_data_mx() {
+        let host = DomainName::from_ascii("mail.example.com").unwrap();
+        let data = DnsRecordData::MX {
+            priority: 10,
+            host: host.clone(),
+        };
+
+        let mut writer = DnsMessageWriter::new();
+        data.write(&mut writer).unwrap();
+        let bytes = writer.into_bytes();
+
+        let mut reader = DnsMessageReader::new(&bytes);
+        assert_eq!(reader.read_u16().unwrap(), 10);
+        let decoded_host = reader.read_qname().unwrap();
+        assert_eq!(decoded_host, host);
+    }
+
+    #[test]
+    fn test_edns_do_bit() {
+        let mut edns = Edns::default();
+        assert!(!edns.do_bit());
+
+        edns.set_do_bit(true);
+        assert!(edns.do_bit());
+
+        edns.set_do_bit(false);
+        assert!(!edns.do_bit());
+    }
+
+    #[test]
+    fn test_edns_default() {
+        let edns = Edns::default();
+        assert_eq!(edns.udp_payload_size, 4096);
+        assert_eq!(edns.extended_rcode, 0);
+        assert_eq!(edns.version, 0);
+        assert_eq!(edns.z_flags, 0);
+        assert_eq!(edns.options.len(), 0);
+    }
+
+    #[test]
+    fn test_dns_message_with_answers() {
+        use std::net::Ipv4Addr;
+
+        let question = DnsQuestion::new(
+            DomainName::from_ascii("example.com").unwrap(),
+            RecordType::A,
+            ClassType::IN,
+        );
+
+        let answer = DnsRecord {
+            name: DomainName::from_ascii("example.com").unwrap(),
+            record_type: RecordType::A,
+            class: ClassType::IN,
+            ttl: 300,
+            data: DnsRecordData::Ipv4(Ipv4Addr::new(93, 184, 216, 34)),
+        };
+
+        let message = DnsMessage::new(54321, DnsFlags::default(), vec![question], vec![answer], vec![], vec![]);
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        assert_eq!(decoded.id, 54321);
+        assert_eq!(decoded.questions().len(), 1);
+        assert_eq!(decoded.answers().len(), 1);
+        assert_eq!(decoded.answers()[0].name(), "example.com");
+        assert_eq!(decoded.answers()[0].record_type(), RecordType::A);
+        assert_eq!(decoded.answers()[0].ttl(), 300);
+    }
+
+    #[test]
+    fn test_dns_question_write_unknown_record_type() {
+        let question = DnsQuestion::new(
+            DomainName::from_ascii("test.com").unwrap(),
+            RecordType::Unknown(9999),
+            ClassType::IN,
+        );
+
+        let mut writer = DnsMessageWriter::new();
+        question.write_to(&mut writer).unwrap();
+        let bytes = writer.into_bytes();
+
+        let mut reader = DnsMessageReader::new(&bytes);
+        let decoded = DnsQuestion::read_from(&mut reader).unwrap();
+
+        assert_eq!(decoded.qtype, RecordType::Unknown(9999));
+    }
+
+    #[test]
+    fn test_extended_dns_error_info_code() {
+        assert_eq!(ExtendedDnsErrorInfoCode::from(0), ExtendedDnsErrorInfoCode::OtherError);
+        assert_eq!(ExtendedDnsErrorInfoCode::from(6), ExtendedDnsErrorInfoCode::DnssecBogus);
+        assert_eq!(ExtendedDnsErrorInfoCode::from(15), ExtendedDnsErrorInfoCode::Blocked);
+
+        // Unknown code
+        let unknown = ExtendedDnsErrorInfoCode::from(9999);
+        assert_eq!(unknown, ExtendedDnsErrorInfoCode::Unknown(9999));
+    }
+
+    #[test]
+    fn test_edns_option_code() {
+        assert_eq!(EdnsOptionCode::from(3), EdnsOptionCode::NSID);
+        assert_eq!(EdnsOptionCode::from(8), EdnsOptionCode::ClientSubnet);
+        assert_eq!(EdnsOptionCode::from(10), EdnsOptionCode::Cookie);
+
+        // Unknown code
+        let unknown = EdnsOptionCode::from(9999);
+        assert_eq!(unknown, EdnsOptionCode::Unknown(9999));
+    }
+
+    #[test]
+    fn test_dns_opcode_default() {
+        let opcode = DnsOpcode::default();
+        assert_eq!(opcode, DnsOpcode::Query);
+    }
+
+    #[test]
+    fn test_dns_message_empty() {
+        let message = DnsMessage::new(0, DnsFlags::default(), vec![], vec![], vec![], vec![]);
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        assert_eq!(decoded.id, 0);
+        assert_eq!(decoded.questions().len(), 0);
+        assert_eq!(decoded.answers().len(), 0);
     }
 }
