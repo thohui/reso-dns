@@ -2,6 +2,7 @@ use std::{env, path::PathBuf, process::Command};
 
 pub fn main() {
     println!("cargo:rerun-if-env-changed=SKIP_FRONTEND_BUILD");
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_EMBED_FRONTEND");
 
     let skip = env::var_os("CARGO_FEATURE_EMBED_FRONTEND").is_none() || env::var_os("SKIP_FRONTEND_BUILD").is_some();
 

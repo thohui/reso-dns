@@ -41,7 +41,7 @@ pub async fn serve_web(global: SharedGlobal) -> anyhow::Result<()> {
 
     #[cfg(feature = "embed-frontend")]
     {
-        app = app.fallback(static_handler)
+        app = app.fallback(static_handler);
     }
 
     // Add support for vite dev server in debug mode.
@@ -52,7 +52,7 @@ pub async fn serve_web(global: SharedGlobal) -> anyhow::Result<()> {
             .allow_credentials(true)
             .allow_methods(AllowMethods::mirror_request())
             .allow_headers([AUTHORIZATION, CONTENT_TYPE]);
-        app = app.layer(cors_layer)
+        app = app.layer(cors_layer);
     }
 
     tracing::info!("HTTP listening on {}", addr);
