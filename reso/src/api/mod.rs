@@ -12,7 +12,6 @@ use axum::{
     response::IntoResponse,
 };
 use blocklist::create_blocklist_router;
-use mime_guess::from_path;
 use stats::create_stats_router;
 use tower_http::cors::{AllowMethods, CorsLayer};
 
@@ -66,6 +65,9 @@ pub async fn serve_web(global: SharedGlobal) -> anyhow::Result<()> {
 #[derive(rust_embed::RustEmbed)]
 #[folder = "web/dist"]
 pub struct Assets;
+
+#[cfg(feature = "embed-frontend")]
+use mime_guess::from_path;
 
 #[cfg(feature = "embed-frontend")]
 async fn static_handler(uri: Uri) -> Response<Body> {
