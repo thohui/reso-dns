@@ -119,8 +119,7 @@ impl User {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::{connect, run_migrations, setup_test_db};
-    use tempfile::NamedTempFile;
+    use crate::database::setup_test_db;
 
     #[tokio::test]
     async fn test_user_new() {

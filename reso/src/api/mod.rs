@@ -12,8 +12,6 @@ use axum::{
     response::IntoResponse,
 };
 use blocklist::create_blocklist_router;
-use mime_guess::from_path;
-use rust_embed::RustEmbed;
 use stats::create_stats_router;
 use tower_http::cors::{AllowMethods, CorsLayer};
 
@@ -38,10 +36,12 @@ pub async fn serve_web(global: SharedGlobal) -> anyhow::Result<()> {
         .nest("/activity", create_activity_router(global.clone()))
         .nest("/blocklist", create_blocklist_router(global.clone()));
 
-    let mut app = Router::new()
-        .nest("/api", api)
-        .fallback(static_handler)
-        .with_state(global);
+    let mut app = Router::new().nest("/api", api).with_state(global);
+
+    #[cfg(feature = "embed-frontend")]
+    {
+        app = app.fallback(static_handler);
+    }
 
     // Add support for vite dev server in debug mode.
     #[cfg(debug_assertions)]
@@ -51,7 +51,7 @@ pub async fn serve_web(global: SharedGlobal) -> anyhow::Result<()> {
             .allow_credentials(true)
             .allow_methods(AllowMethods::mirror_request())
             .allow_headers([AUTHORIZATION, CONTENT_TYPE]);
-        app = app.layer(cors_layer)
+        app = app.layer(cors_layer);
     }
 
     tracing::info!("HTTP listening on {}", addr);
@@ -61,10 +61,15 @@ pub async fn serve_web(global: SharedGlobal) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[derive(RustEmbed)]
+#[cfg(feature = "embed-frontend")]
+#[derive(rust_embed::RustEmbed)]
 #[folder = "web/dist"]
-struct Assets;
+pub struct Assets;
 
+#[cfg(feature = "embed-frontend")]
+use mime_guess::from_path;
+
+#[cfg(feature = "embed-frontend")]
 async fn static_handler(uri: Uri) -> Response<Body> {
     let mut path = uri.path().trim_start_matches('/');
 
