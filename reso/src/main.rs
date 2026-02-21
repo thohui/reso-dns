@@ -32,8 +32,6 @@ mod utils;
 async fn main() -> anyhow::Result<()> {
     let (nb, _guard) = non_blocking(std::io::stdout());
 
-    dotenvy::dotenv().ok();
-
     let config = EnvConfig::from_env()?;
 
     tracing_subscriber::registry()

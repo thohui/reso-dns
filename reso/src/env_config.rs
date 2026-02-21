@@ -1,75 +1,10 @@
-use aes_gcm::{
-    aead::{OsRng, rand_core::RngCore},
-    aes::Aes256,
-};
-use axum_extra::extract::cookie;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use std::{
     env::{self, VarError},
-    error::Error,
     net::SocketAddr,
     str::FromStr,
 };
 use tracing::Level;
-
-/// Errors that can occur when loading the config.
-#[derive(Debug)]
-pub enum ConfigError {
-    /// Config file not found.
-    NotFound,
-    /// Failed to decode config file.
-    Decode(String),
-}
-
-impl std::fmt::Display for ConfigError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::NotFound => f.write_str("config file not found"),
-            Self::Decode(e) => f.write_str(e),
-        }
-    }
-}
-
-impl Error for ConfigError {}
-
-/// Cookie encryption key
-fn generate_cookie_key() -> [u8; 32] {
-    let mut key = [0u8; 32]; // AES-256 key
-    OsRng.fill_bytes(&mut key);
-    key
-}
-
-mod base64_32 {
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
-    use serde::{Deserialize, Deserializer, Serializer};
-
-    pub fn serialize<S>(key: &[u8; 32], serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let s = STANDARD.encode(key);
-        serializer.serialize_str(&s)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<[u8; 32], D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        let bytes = STANDARD.decode(s.trim()).map_err(serde::de::Error::custom)?;
-
-        if bytes.len() != 32 {
-            return Err(serde::de::Error::custom(format!(
-                "cookie_key must decode to 32 bytes, got {}",
-                bytes.len()
-            )));
-        }
-
-        let mut out = [0u8; 32];
-        out.copy_from_slice(&bytes);
-        Ok(out)
-    }
-}
 
 pub struct EnvConfig {
     pub log_level: Level,
