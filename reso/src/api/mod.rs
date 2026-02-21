@@ -25,11 +25,7 @@ mod stats;
 
 use crate::global::SharedGlobal;
 
-pub async fn serve_web(global: SharedGlobal) -> anyhow::Result<()> {
-    let addr = format!("{}:{}", global.config.server.http_ip, global.config.server.http_port)
-        .parse::<SocketAddr>()
-        .expect("invalid http server address format");
-
+pub async fn serve_web(address: SocketAddr, global: SharedGlobal) -> anyhow::Result<()> {
     let api = Router::new()
         .nest("/auth", create_auth_router(global.clone()))
         .nest("/stats", create_stats_router(global.clone()))
@@ -54,8 +50,8 @@ pub async fn serve_web(global: SharedGlobal) -> anyhow::Result<()> {
         app = app.layer(cors_layer);
     }
 
-    tracing::info!("HTTP listening on {}", addr);
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    tracing::info!("HTTP listening on {}", address);
+    let listener = tokio::net::TcpListener::bind(address).await?;
     axum::serve(listener, app).await?;
 
     Ok(())

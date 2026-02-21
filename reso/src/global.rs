@@ -4,10 +4,9 @@ use aes_gcm::Aes256Gcm;
 use reso_cache::DnsMessageCache;
 
 use crate::{
-    blocklist::service::BlocklistService,
-    config::Config,
     database::DatabaseConnection,
     metrics::service::{MetricsHandle, Stats},
+    services::{blocklist::BlocklistService, config::ConfigService},
 };
 
 /// Global state shared across all requests.
@@ -17,8 +16,8 @@ pub struct Global {
     pub cache: DnsMessageCache,
     pub blocklist: BlocklistService,
     pub metrics: MetricsHandle,
+    pub config_service: ConfigService,
     pub stats: Stats,
-    pub config: Config,
     pub database: Arc<DatabaseConnection>,
     pub cipher: Aes256Gcm,
 }

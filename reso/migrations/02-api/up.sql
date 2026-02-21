@@ -66,7 +66,7 @@ OR IGNORE INTO config (id, version, updated_at, data)
 VALUES
 	(
 		1,
-		1,
+		0,
 		(CAST(strftime ('%s', 'now') AS INTEGER) * 1000),
 		'{}'
 	);

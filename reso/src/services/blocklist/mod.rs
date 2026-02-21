@@ -12,11 +12,13 @@ pub struct BlocklistService {
 }
 
 impl BlocklistService {
-    pub fn new(connection: Arc<DatabaseConnection>) -> Self {
-        Self {
-            matcher: ArcSwap::new(BlocklistMatcher::default().into()),
+    pub async fn initialize(connection: Arc<DatabaseConnection>) -> anyhow::Result<Self> {
+        let domains = BlockedDomain::list_all(&connection).await?;
+        let matcher = BlocklistMatcher::load(domains.iter().map(|d| d.domain.as_str()))?;
+        Ok(Self {
+            matcher: ArcSwap::new(matcher.into()),
             connection,
-        }
+        })
     }
 
     pub async fn add_domain(&self, domain: &str) -> anyhow::Result<()> {
