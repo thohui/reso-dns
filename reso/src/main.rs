@@ -28,7 +28,6 @@ mod services;
 mod utils;
 
 #[tokio::main]
-
 async fn main() -> anyhow::Result<()> {
     let (nb, _guard) = non_blocking(std::io::stdout());
 
