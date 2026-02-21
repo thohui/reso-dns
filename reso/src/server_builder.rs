@@ -108,7 +108,7 @@ async fn create_server_state(
     };
 
     Ok(ServerState {
-        timeout: Duration::from_secs(config.dns.timeout),
+        timeout: Duration::from_millis(config.dns.timeout),
         global: global.clone(),
         middlewares: server_middlewares(),
         on_error: Some(error_handler()),
