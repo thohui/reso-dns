@@ -1,4 +1,3 @@
-import { getApiError } from '@/lib/api/error';
 import {
 	Toaster as ChakraToaster,
 	createToaster,
@@ -7,6 +6,7 @@ import {
 	Stack,
 	Toast,
 } from '@chakra-ui/react';
+import { getApiError } from '../lib/api/error';
 
 export const toaster = createToaster({
 	placement: 'bottom-end',
