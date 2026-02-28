@@ -26,23 +26,29 @@ export default function BlocklistPage() {
 
 	const handleSubmit = async (domain: string) => {
 		await createDomain.mutateAsync(domain, {
-
 			onError: async (e) => {
-
 				const error = await getApiError(e);
 
 				if (error) {
-					toaster.error({ title: 'Error', description: error.message, duration: 1000 });
+					toaster.error({
+						title: 'Error',
+						description: error.message,
+						duration: 1000,
+					});
+				} else if (e instanceof Error) {
+					toaster.error({
+						title: 'Error',
+						description: e.message,
+						duration: 1000,
+					});
+				} else {
+					toaster.error({
+						title: 'Error',
+						description: 'Something went wrong',
+						duration: 1000,
+					});
 				}
-				else if (e instanceof Error) {
-					toaster.error({ title: 'Error', description: e.message, duration: 1000 });
-				}
-				else {
-					toaster.error({ title: 'Error', description: 'Something went wrong', duration: 1000 });
-				}
-
-
-			}
+			},
 		});
 		await refetch();
 		handleClose();
@@ -51,21 +57,28 @@ export default function BlocklistPage() {
 	const handleRemove = async (domain: string) => {
 		await removeDomain.mutateAsync(domain, {
 			onError: async (e) => {
-
 				const error = await getApiError(e);
 
 				if (error) {
-					toaster.error({ title: 'Error', description: error.message, duration: 1000 });
+					toaster.error({
+						title: 'Error',
+						description: error.message,
+						duration: 1000,
+					});
+				} else if (e instanceof Error) {
+					toaster.error({
+						title: 'Error',
+						description: e.message,
+						duration: 1000,
+					});
+				} else {
+					toaster.error({
+						title: 'Error',
+						description: 'Something went wrong',
+						duration: 1000,
+					});
 				}
-				else if (e instanceof Error) {
-					toaster.error({ title: 'Error', description: e.message, duration: 1000 });
-				}
-				else {
-					toaster.error({ title: 'Error', description: 'Something went wrong', duration: 1000 });
-				}
-
-			}
-
+			},
 		});
 		await refetch();
 	};

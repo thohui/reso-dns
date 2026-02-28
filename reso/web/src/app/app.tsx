@@ -21,7 +21,7 @@ function App() {
 					</Initializer>
 				</ApiClientContext.Provider>
 			</QueryClientProvider>
-		</ChakraProvider >
+		</ChakraProvider>
 	);
 }
 

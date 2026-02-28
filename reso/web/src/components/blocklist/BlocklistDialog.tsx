@@ -86,7 +86,7 @@ export function BlocklistDialog({ onClose, onSubmit }: BlocklistDialogProps) {
 							type='button'
 							onClick={handleClose}
 							_hover={{
-								bg: 'bg.subtle'
+								bg: 'bg.subtle',
 							}}
 						>
 							<Icon as={X} boxSize='4' color='fg.muted' />
@@ -144,6 +144,6 @@ export function BlocklistDialog({ onClose, onSubmit }: BlocklistDialogProps) {
 					</Box>
 				</Box>
 			</Box>
-		</form >
+		</form>
 	);
 }

@@ -8,7 +8,6 @@ export function useActivities(top: number, skip: number) {
 		queryKey: ['activities', top, skip],
 		queryFn: async () => {
 			return apiClient.activities.list({ top: top, skip: skip });
-		}
+		},
 	});
-
 }

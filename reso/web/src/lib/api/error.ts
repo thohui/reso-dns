@@ -1,13 +1,11 @@
-import { isHTTPError } from "ky";
+import { isHTTPError } from 'ky';
 
 export interface ApiError {
 	error: string;
 	message: string;
 }
 
-
 export function isApiError(e: unknown): e is ApiError {
-
 	if (!(typeof e === 'object' && e !== null)) return false;
 
 	return (
@@ -16,11 +14,9 @@ export function isApiError(e: unknown): e is ApiError {
 		typeof e.error === 'string' &&
 		typeof e.message === 'string'
 	);
-
 }
 
 export async function getApiError(e: unknown): Promise<ApiError | undefined> {
-
 	if (!isHTTPError(e)) return;
 
 	try {
@@ -31,6 +27,4 @@ export async function getApiError(e: unknown): Promise<ApiError | undefined> {
 	} catch (error) {
 		console.log(error);
 	}
-
 }
-

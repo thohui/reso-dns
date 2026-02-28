@@ -21,7 +21,7 @@ export function StatCard({ label, value, icon, color = 'green' }: Props) {
 			bg='gray.900'
 			borderRadius='lg'
 			borderWidth='1px'
-			borderColor='gray.800'
+			borderColor='bg.panel'
 			p='6'
 		>
 			<HStack justify='space-between' mb='4'>

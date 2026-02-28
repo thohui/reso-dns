@@ -8,7 +8,7 @@ use env_config::EnvConfig;
 use global::{Global, SharedGlobal};
 use metrics::service::MetricsService;
 use reso_cache::DnsMessageCache;
-use server_builder::{create_dns_server, update_server_state_on_config_changes};
+use server_builder::{build_dns_server, update_server_state_on_config_changes};
 use services::{blocklist::BlocklistService, config::ConfigService};
 use tokio::signal;
 use tracing::level_filters::LevelFilter;
@@ -74,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
         )
     }
 
-    let server = create_dns_server(global.clone()).await?;
+    let server = build_dns_server(global.clone()).await?;
 
     let global_clone = global.clone();
     let server_clone = server.clone();

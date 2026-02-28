@@ -83,7 +83,7 @@ function getStatusInfo(activity: Activity) {
 	};
 }
 
-function LogDetailRow({ activity }: { activity: Activity; }) {
+function LogDetailRow({ activity }: { activity: Activity }) {
 	const status = getStatusInfo(activity);
 
 	return (
@@ -169,7 +169,7 @@ function LogDetailRow({ activity }: { activity: Activity; }) {
 	);
 }
 
-export function LogsGrid({ activities }: { activities: Activity[]; }) {
+export function LogsGrid({ activities }: { activities: Activity[] }) {
 	const [filter, setFilter] = useState('all');
 
 	const filteredActivities = activities.filter((a) => {

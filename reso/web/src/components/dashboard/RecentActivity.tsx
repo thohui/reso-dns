@@ -5,7 +5,7 @@ import {
 	HStack,
 	Icon,
 	Text,
-	VStack
+	VStack,
 } from '@chakra-ui/react';
 import { CheckCircle, ShieldOff, XCircle } from 'lucide-react';
 import { useRecentActivity } from '../../hooks/useRecentActivity';
@@ -38,7 +38,7 @@ export function RecentActivity() {
 	);
 }
 
-function ActivityRow({ activity }: { activity: Activity; }) {
+function ActivityRow({ activity }: { activity: Activity }) {
 	const isError = activity.kind === 'error';
 
 	const isBlocked =

@@ -13,7 +13,10 @@ use crate::{
     local::Local,
     metrics::event::{ErrorLogEvent, QueryLogEvent},
     middleware::{blocklist::BlocklistMiddleware, cache::CacheMiddleware},
-    services::{self, config::model::ActiveResolver},
+    services::{
+        self,
+        config::model::{ActiveResolver, Upstream},
+    },
 };
 
 pub fn success_handler() -> SuccessHandler<Global, Local> {
@@ -99,12 +102,25 @@ pub fn server_middlewares() -> ServerMiddlewares<Global, Local> {
     middlewares
 }
 
+/// Creates the new server state from a `services::config::model::Config`.
 async fn create_server_state(
     global: &SharedGlobal,
     config: &services::config::model::Config,
 ) -> anyhow::Result<ServerState<Global, Local>> {
+    let upstreams = config
+        .dns
+        .forwarder
+        .upstreams()?
+        .iter()
+        .filter_map(|u| match u {
+            // TODO: implement the rest.
+            Upstream::Plain { endpoint } => endpoint.socket_addr().ok(),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+
     let resolver = match &config.dns.active {
-        ActiveResolver::Forwarder => ForwardResolver::new(&config.dns.forwarder.upstreams).await?,
+        ActiveResolver::Forwarder => ForwardResolver::new(&upstreams).await?,
     };
 
     Ok(ServerState {
@@ -117,6 +133,7 @@ async fn create_server_state(
     })
 }
 
+/// Starts a background task that updates the server state based on configuration change events.
 pub async fn update_server_state_on_config_changes(global: SharedGlobal, server: Arc<DnsServer<Global, Local>>) {
     let mut rx = global.config_service.subscribe();
 
@@ -137,7 +154,7 @@ pub async fn update_server_state_on_config_changes(global: SharedGlobal, server:
     }
 }
 
-pub async fn create_dns_server(global: SharedGlobal) -> anyhow::Result<Arc<DnsServer<Global, Local>>> {
+pub async fn build_dns_server(global: SharedGlobal) -> anyhow::Result<Arc<DnsServer<Global, Local>>> {
     let config = global.config_service.get_config();
     let server_state = create_server_state(&global, &config).await?;
     Ok(Arc::new(DnsServer::new(server_state)))
