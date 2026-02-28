@@ -1,4 +1,3 @@
-import { toastError } from '@/components/Toaster';
 import {
 	Box,
 	Button,
@@ -23,6 +22,7 @@ import {
 	PROTOCOL_COLORS,
 	UpstreamPicker,
 } from '../../components/config/UpstreamPicker';
+import { toastError } from '../../components/Toaster';
 import { useConfig, useConfigQueryKey } from '../../hooks/useConfig';
 import type { ConfigModel, Upstream } from '../../lib/api/config';
 import { detectProtocol, getProviderGroup } from '../../lib/config/providers';
