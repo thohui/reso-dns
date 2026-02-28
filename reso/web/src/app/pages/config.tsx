@@ -25,6 +25,7 @@ import {
 import { useConfig, useConfigQueryKey } from '../../hooks/useConfig';
 import type { ConfigModel, Upstream } from '../../lib/api/config';
 import { detectProtocol, getProviderGroup } from '../../lib/config/providers';
+import { hexToRgba } from '../../lib/theme';
 
 const schema = z.object({
 	upstreams: z.array(UpstreamSpecSchema),
@@ -51,10 +52,19 @@ export default function ConfigPage() {
 	console.log(form.formState.errors);
 
 	const handleSave = form.handleSubmit(async (data) => {
-		const updatedConfig: ConfigModel = { ...config.data };
 
-		updatedConfig.dns.forwarder.upstreams = data.upstreams;
-		updatedConfig.dns.timeout = data.timeout;
+		const updatedConfig: ConfigModel = {
+			...config.data,
+			dns: {
+				...config.data.dns,
+				timeout: data.timeout,
+				forwarder: {
+					...config.data.dns.forwarder,
+					upstreams: data.upstreams,
+				},
+			},
+		};
+
 
 		await updateConfig.mutateAsync(updatedConfig, {
 			onSuccess: (data) => {
@@ -170,9 +180,9 @@ export default function ConfigPage() {
 											w='8'
 											h='8'
 											borderRadius='md'
-											bg={`${providerBadgeColor}15`}
+											bg={hexToRgba(providerBadgeColor, 0.1)}
 											borderWidth='1px'
-											borderColor={`${providerBadgeColor}25`}
+											borderColor={hexToRgba(providerBadgeColor, 0.3)}
 											display='flex'
 											alignItems='center'
 											justifyContent='center'

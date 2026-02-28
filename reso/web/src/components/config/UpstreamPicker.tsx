@@ -5,8 +5,9 @@ import {
 	Heading,
 	HStack,
 	Icon,
+	IconButton,
 	Input,
-	Text,
+	Text
 } from '@chakra-ui/react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, Check, ChevronRight, Plus, X } from 'lucide-react';
@@ -101,8 +102,10 @@ export function UpstreamPicker({
 				>
 					<HStack gap='3'>
 						{view !== 'providers' && (
-							<Box
+							<IconButton
 								cursor='pointer'
+								size='xs'
+								variant='ghost'
 								p='1'
 								borderRadius='md'
 								_hover={{ bg: 'bg.elevated' }}
@@ -111,7 +114,7 @@ export function UpstreamPicker({
 								alignItems='center'
 							>
 								<Icon as={ArrowLeft} boxSize='4' color='fg.muted' />
-							</Box>
+							</IconButton>
 						)}
 						<Heading size='sm' fontWeight='500'>
 							{view === 'providers'
@@ -121,15 +124,17 @@ export function UpstreamPicker({
 									: 'Custom Server'}
 						</Heading>
 					</HStack>
-					<Box
+					<IconButton
 						cursor='pointer'
+						variant='ghost'
+						size='xs'
 						p='1'
 						borderRadius='md'
 						_hover={{ bg: 'bg.elevated' }}
 						onClick={onClose}
 					>
 						<Icon as={X} boxSize='4' color='fg.muted' />
-					</Box>
+					</IconButton>
 				</HStack>
 
 				<Box maxH='480px' overflowY='auto'>
@@ -164,6 +169,7 @@ export function ServersView({
 	existingUpstreams: Upstream[];
 	handleSelectProvider: (provider: ProviderGroup | 'custom') => void;
 }) {
+
 	return (
 		<Box>
 			{providerGroups.map((group, i) => {
@@ -190,9 +196,9 @@ export function ServersView({
 									w='10'
 									h='10'
 									borderRadius='lg'
-									bg={hexToRgba(group.color, 15)}
+									bg={hexToRgba(group.color, 0.1)}
 									borderWidth='1px'
-									borderColor={hexToRgba(group.color, 30)}
+									borderColor={hexToRgba(group.color, 0.3)}
 									display='flex'
 									alignItems='center'
 									justifyContent='center'
@@ -290,7 +296,7 @@ function ProviderGroupView({
 
 				const protocolColor = PROTOCOL_COLORS[protocol] ?? '#71717a';
 
-				const backgroundColor = hexToRgba(protocolColor, 18);
+				const backgroundColor = hexToRgba(protocolColor, 0.1);
 
 				return (
 					<HStack

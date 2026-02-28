@@ -76,6 +76,9 @@ impl Config {
     }
 
     pub async fn update_data(conn: &DatabaseConnection, data: String) -> anyhow::Result<()> {
+        serde_json::from_str::<serde_json::Value>(&data)
+            .map_err(|e| anyhow::anyhow!("data must be valid JSON: {e}"))?;
+
         let conn = conn.conn().await;
 
         let updated_at_ts_ms: i64 = std::time::SystemTime::now()

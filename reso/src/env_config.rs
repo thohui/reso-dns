@@ -22,8 +22,8 @@ impl EnvConfig {
             Err(_) => Level::INFO,
         };
         let db_path = env::var("RESO_DATABASE_PATH").unwrap_or("reso.db".to_owned());
-        let dns_server_address = env::var("RESO_DNS_SERVER_ADDRESS").unwrap_or("0.0.0.0:53".to_owned());
-        let http_server_address = env::var("RESO_HTTP_SERVER_ADDRESS").unwrap_or("0.0.0.0:80".to_owned());
+        let dns_server_address = env::var("RESO_DNS_SERVER_ADDRESS").unwrap_or("127.0.0.1:53".to_owned());
+        let http_server_address = env::var("RESO_HTTP_SERVER_ADDRESS").unwrap_or("127.0.0.1:80".to_owned());
 
         // we cannot provide a default for this environment variable.
         let cookie_secret = env::var("RESO_COOKIE_SECRET").map_err(|e| match e {

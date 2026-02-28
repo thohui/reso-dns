@@ -20,7 +20,7 @@ export function RecentActivity() {
 
 	return (
 		<Box
-			bg='gray.900'
+			bg='bg.panel'
 			borderRadius='lg'
 			borderWidth='1px'
 			borderColor='gray.800'
@@ -38,7 +38,7 @@ export function RecentActivity() {
 	);
 }
 
-function ActivityRow({ activity }: { activity: Activity }) {
+function ActivityRow({ activity }: { activity: Activity; }) {
 	const isError = activity.kind === 'error';
 
 	const isBlocked =
