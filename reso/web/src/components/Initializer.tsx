@@ -24,8 +24,8 @@ export function Initializer({ children }: React.PropsWithChildren) {
 				alignItems='center'
 			>
 				<VStack>
-					<Spinner color='accent.DEFAULT' size='xl' />
-					<Text color='colorPalette.600'>Loading...</Text>
+					<Spinner color='accent' size='xl' />
+					<Text>Loading...</Text>
 				</VStack>
 			</Box>
 		);
