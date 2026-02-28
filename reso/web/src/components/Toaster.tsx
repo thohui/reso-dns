@@ -1,3 +1,4 @@
+import { getApiError } from '@/lib/api/error';
 import {
 	Toaster as ChakraToaster,
 	createToaster,
@@ -11,6 +12,35 @@ export const toaster = createToaster({
 	placement: 'bottom-end',
 	pauseOnPageIdle: true,
 });
+
+export async function toastError(e: unknown) {
+
+	const toasterDuration = 3000;
+
+	const error = await getApiError(e);
+
+	if (error) {
+		toaster.error({
+			title: 'Error',
+			description: error.message,
+			duration: toasterDuration
+		});
+	} else if (e instanceof Error) {
+		toaster.error({
+			title: 'Error',
+			description: e.message,
+			duration: toasterDuration,
+		});
+
+	} else {
+		toaster.error({
+			title: 'Error',
+			description: 'Something went wrong',
+			duration: toasterDuration,
+		});
+	}
+
+}
 
 export const Toaster = () => {
 	return (

@@ -1,3 +1,4 @@
+import { toastError } from '@/components/Toaster';
 import {
 	Box,
 	Button,
@@ -33,6 +34,7 @@ const schema = z.object({
 });
 
 export default function ConfigPage() {
+
 	const config = useConfig();
 
 	const [pickerOpen, setPickerOpen] = useState(false);
@@ -49,9 +51,7 @@ export default function ConfigPage() {
 
 	const queryClient = useQueryClient();
 
-	console.log(form.formState.errors);
-
-	const handleSave = form.handleSubmit(async (data) => {
+	const handleSave = form.handleSubmit((data) => {
 
 		const updatedConfig: ConfigModel = {
 			...config.data,
@@ -65,8 +65,7 @@ export default function ConfigPage() {
 			},
 		};
 
-
-		await updateConfig.mutateAsync(updatedConfig, {
+		updateConfig.mutate(updatedConfig, {
 			onSuccess: (data) => {
 				// Mark the current values as the new base, needed to reset the save and reset buttons.
 				form.reset({
@@ -76,27 +75,34 @@ export default function ConfigPage() {
 				// Update cache
 				queryClient.setQueryData(useConfigQueryKey, () => data);
 			},
+			onError: (e) => toastError(e)
 		});
 	});
 
 	const handleAddUpstream = (upstream: Upstream) => {
+
 		const currentUpstreams = form.getValues('upstreams');
+
 		form.setValue('upstreams', [...currentUpstreams, upstream], {
 			shouldDirty: true,
 			shouldValidate: true,
 			shouldTouch: true,
 		});
+
 	};
 
 	const handleRemoveUpstream = (upstream: Upstream) => {
+
 		const updatedUpStreams = form
 			.getValues('upstreams')
 			.filter((v) => v !== upstream);
+
 		form.setValue('upstreams', updatedUpStreams, {
 			shouldDirty: true,
 			shouldValidate: true,
 			shouldTouch: true,
 		});
+
 	};
 
 	const upstreams = form.watch('upstreams');
