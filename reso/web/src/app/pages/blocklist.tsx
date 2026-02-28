@@ -38,30 +38,30 @@ export default function BlocklistPage() {
 				await Promise.all([toastError(e), refetch()]);
 			}
 		});
-
-		return (
-			<Box>
-				<HStack justify='space-between' mb='8'>
-					<Heading size='lg'>Blocklist</Heading>
-					<Button
-						bg='accent'
-						color='fg'
-						_hover={{ bg: 'accent.hover' }}
-						h='9'
-						fontSize='sm'
-						onClick={handleClick}
-					>
-						<Icon as={Plus} boxSize='3.5' mr='2' />
-						Add
-					</Button>
-				</HStack>
-				{showDialog && (
-					<BlocklistDialog onClose={handleClose} onSubmit={handleSubmit} />
-				)}
-				<Box display='flex' flexDirection='row-reverse'>
-				</Box>
-				<BlocklistGrid blocklist={data?.items ?? []} onRemove={handleRemove} />
-			</Box>
-		);
 	};
-}
+
+	return (
+		<Box>
+			<HStack justify='space-between' mb='8'>
+				<Heading size='lg'>Blocklist</Heading>
+				<Button
+					bg='accent'
+					color='fg'
+					_hover={{ bg: 'accent.hover' }}
+					h='9'
+					fontSize='sm'
+					onClick={handleClick}
+				>
+					<Icon as={Plus} boxSize='3.5' mr='2' />
+					Add
+				</Button>
+			</HStack>
+			{showDialog && (
+				<BlocklistDialog onClose={handleClose} onSubmit={handleSubmit} />
+			)}
+			<Box display='flex' flexDirection='row-reverse'>
+			</Box>
+			<BlocklistGrid blocklist={data?.items ?? []} onRemove={handleRemove} />
+		</Box>
+	);
+};

@@ -16,21 +16,31 @@ const isValidIPv4 = (s: string) => {
 };
 
 const isValidHostname = (s: string) => {
-	if (s.length < 1 || s.length > 253) return false;
-	if (s.endsWith('.')) s = s.slice(0, -1); // allow trailing dot
+	let hostname = s;
+
+	if (hostname.length < 1 || hostname.length > 253) return false;
+
+	// allow trailing dot
+	if (s.endsWith('.')) {
+		hostname = hostname.slice(0, -1);
+	}
+
 	if (s.length < 1) return false;
-	const labels = s.split('.');
+
+	const labels = hostname.split('.');
+
 	return labels.every((label) => {
 		if (label.length < 1 || label.length > 63) return false;
 		if (!/^[a-zA-Z0-9-]+$/.test(label)) return false;
 		if (label.startsWith('-') || label.endsWith('-')) return false;
 		return true;
 	});
+
 };
 
 const isLikelyIPv6 = (s: string) => /:/.test(s) && /^[0-9a-fA-F:]+$/.test(s);
 
-function parseHostPort(input: string): { host: string; port?: string } | null {
+function parseHostPort(input: string): { host: string; port?: string; } | null {
 	const s = input.trim();
 	if (!s) return null;
 
@@ -52,7 +62,6 @@ function parseHostPort(input: string): { host: string; port?: string } | null {
 	}
 
 	// Non-bracket form: host or host:port
-	// If it contains multiple ':' we reject (unbracketed IPv6).
 
 	const colonCount = (s.match(/:/g) || []).length;
 	if (colonCount > 1) return null;
@@ -72,6 +81,7 @@ export const UpstreamSpecSchema = z
 	.min(1, 'Address is empty')
 	.superRefine((val, ctx) => {
 		// DoH
+		// TODO: uncomment when server supports DOH.
 		if (val.startsWith('https://') || val.startsWith('http://')) {
 			ctx.addIssue({
 				code: 'custom',
