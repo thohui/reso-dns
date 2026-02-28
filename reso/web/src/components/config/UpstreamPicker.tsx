@@ -190,9 +190,9 @@ export function ServersView({
 									w='10'
 									h='10'
 									borderRadius='lg'
-									bg={`${group.color}15`}
+									bg={hexToRgba(group.color, 15)}
 									borderWidth='1px'
-									borderColor={`${group.color}30`}
+									borderColor={hexToRgba(group.color, 30)}
 									display='flex'
 									alignItems='center'
 									justifyContent='center'
