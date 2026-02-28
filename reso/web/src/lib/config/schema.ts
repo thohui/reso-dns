@@ -37,8 +37,15 @@ const isValidHostname = (s: string) => {
 	});
 
 };
+const isValidIPv6 = (s: string) => {
+	try {
+		new URL(`http://[${s}]`);
+		return true;
+	} catch {
+		return false;
+	}
+};
 
-const isLikelyIPv6 = (s: string) => /:/.test(s) && /^[0-9a-fA-F:]+$/.test(s);
 
 function parseHostPort(input: string): { host: string; port?: string; } | null {
 	const s = input.trim();
@@ -51,7 +58,7 @@ function parseHostPort(input: string): { host: string; port?: string; } | null {
 		const host = s.slice(1, end);
 		const rest = s.slice(end + 1);
 
-		if (!isLikelyIPv6(host)) return null;
+		if (!isValidIPv6(host)) return null;
 
 		if (!rest) return { host };
 		if (!rest.startsWith(':')) return null;
@@ -135,7 +142,7 @@ export const UpstreamSpecSchema = z
 		}
 
 		const hostOk =
-			isValidIPv4(hp.host) || isValidHostname(hp.host) || isLikelyIPv6(hp.host);
+			isValidIPv4(hp.host) || isValidHostname(hp.host) || isValidIPv6(hp.host);
 		if (!hostOk) {
 			ctx.addIssue({ code: 'custom', message: 'Invalid host' });
 			return;
