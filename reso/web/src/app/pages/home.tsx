@@ -74,7 +74,7 @@ export default function HomePage() {
 				mb='8'
 			>
 				<Box
-					bg='gray.900'
+					bg='bg.panel'
 					borderRadius='lg'
 					borderWidth='1px'
 					borderColor='gray.800'

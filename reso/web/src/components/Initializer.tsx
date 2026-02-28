@@ -23,9 +23,9 @@ export function Initializer({ children }: React.PropsWithChildren) {
 				justifyContent='center'
 				alignItems='center'
 			>
-				<VStack colorPalette='green'>
-					<Spinner color='colorPalette.600' size='xl' />
-					<Text color='colorPalette.600'>Loading...</Text>
+				<VStack>
+					<Spinner color='accent' size='xl' />
+					<Text>Loading...</Text>
 				</VStack>
 			</Box>
 		);

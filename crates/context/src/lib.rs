@@ -84,7 +84,7 @@ impl<G, L> DnsRequestCtx<G, L> {
     }
 
     /// Local context
-    pub fn local(&self) -> RwLockReadGuard<L> {
+    pub fn local(&self) -> RwLockReadGuard<'_, L> {
         self.local.read()
     }
 

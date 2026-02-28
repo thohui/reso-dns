@@ -7,14 +7,29 @@ import {
 	Text,
 	VStack,
 } from '@chakra-ui/react';
-import { Ban, FileText, Home, LogOut, Shield } from 'lucide-react';
+import {
+	Ban,
+	FileText,
+	Home,
+	LogOut,
+	type LucideIcon,
+	Settings,
+} from 'lucide-react';
+import { Suspense } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useLogout } from '../hooks/useLogout';
 
-const menuItems = [
+interface MenuItem {
+	path: string;
+	label: string;
+	icon?: LucideIcon;
+}
+
+const menuItems: MenuItem[] = [
 	{ path: '/home', label: 'Home', icon: Home },
 	{ path: '/blocklist', label: 'Blocklist', icon: Ban },
 	{ path: '/logs', label: 'Logs', icon: FileText },
+	{ path: '/config', label: 'Config', icon: Settings },
 ];
 
 export function DashboardLayout() {
@@ -29,72 +44,103 @@ export function DashboardLayout() {
 	};
 
 	return (
-		<Flex minH='100vh' bg='gray.950'>
+		<Flex minH='100vh'>
 			<Box
-				w='64'
-				bg='gray.900'
+				w='240px'
+				minW='240px'
+				bg='bg.panel'
 				borderRightWidth='1px'
-				borderColor='gray.800'
-				p='4'
+				borderColor='border'
+				py='5'
+				px='3'
+				display='flex'
+				flexDirection='column'
 			>
-				<VStack gap='6' align='stretch' h='full'>
-					<HStack gap='3' px='2' py='4'>
-						<Box p='2' bg='green.600' borderRadius='lg'>
-							<Icon as={Shield} boxSize='6' color='white' />
-						</Box>
-						<Box>
-							<Text fontWeight='bold' color='white'>
-								Reso
-							</Text>
-							<Text fontSize='xs' color='gray.500'>
-								Admin Panel
-							</Text>
-						</Box>
-					</HStack>
+				<HStack gap='3' px='3' mb='8'>
+					<Box>
+						<Text fontWeight='600' fontSize='sm' letterSpacing='-0.01em'>
+							ResoDNS
+						</Text>
+						<Text fontSize='xs' color='fg.faint' lineHeight='1'>
+							v1.0.0
+						</Text>
+					</Box>
+				</HStack>
 
-					<VStack gap='1' align='stretch' flex='1'>
-						{menuItems.map((item) => {
-							const isActive = location.pathname === item.path;
-							return (
-								<Button
-									key={item.path}
-									variant={isActive ? 'solid' : 'ghost'}
-									justifyContent='flex-start'
-									bg={isActive ? 'green.600' : 'transparent'}
-									color={isActive ? 'white' : 'gray.400'}
-									_hover={{
-										bg: isActive ? 'green.700' : 'gray.800',
-										color: 'white',
-									}}
-									onClick={() => navigate(item.path)}
-									px='4'
-									py='3'
-								>
-									<Icon as={item.icon} boxSize='5' mr='3' />
-									{item.label}
-								</Button>
-							);
-						})}
-					</VStack>
+				{/* Navigation */}
+				<VStack gap='0.5' align='stretch' flex='1'>
+					<Text
+						fontSize='xs'
+						color='fg.faint'
+						fontWeight='500'
+						textTransform='uppercase'
+						letterSpacing='0.05em'
+						px='3'
+						mb='2'
+					>
+						Navigation
+					</Text>
+					{menuItems.map((item) => {
+						const isActive = location.pathname === item.path;
+						return (
+							<Button
+								key={item.path}
+								variant='ghost'
+								justifyContent='flex-start'
+								bg={isActive ? 'accent.muted' : 'transparent'}
+								color={isActive ? 'accent.fg' : 'fg.muted'}
+								borderWidth='1px'
+								borderColor={
+									isActive ? 'rgba(233, 30, 120, 0.15)' : 'transparent'
+								}
+								_hover={{
+									bg: isActive ? 'accent.muted' : 'bg.subtle',
+									color: isActive ? 'accent.fg' : 'fg',
+								}}
+								onClick={() => navigate(item.path)}
+								px='3'
+								py='2'
+								h='auto'
+								fontSize='sm'
+								fontWeight={isActive ? '500' : '400'}
+								borderRadius='lg'
+								transition='all 0.15s ease'
+							>
+								<Icon as={item.icon} boxSize='4' mr='3' />
+								{item.label}
+							</Button>
+						);
+					})}
+				</VStack>
 
+				<Box borderTopWidth='1px' borderColor='border' pt='3' mt='3'>
 					<Button
 						variant='ghost'
 						justifyContent='flex-start'
-						color='gray.400'
-						_hover={{ bg: 'gray.800', color: 'white' }}
+						color='fg.faint'
+						_hover={{ bg: 'bg.subtle', color: 'status.error' }}
 						onClick={handleLogout}
-						px='4'
-						py='3'
 						loading={logout.isPending}
+						px='3'
+						py='2'
+						h='auto'
+						fontSize='sm'
+						fontWeight='400'
+						borderRadius='lg'
+						w='full'
+						transition='all 0.15s ease'
 					>
-						<Icon as={LogOut} boxSize='5' mr='3' />
-						Logout
+						<Icon as={LogOut} boxSize='4' mr='3' />
+						Log out
 					</Button>
-				</VStack>
+				</Box>
 			</Box>
 
-			<Box flex='1' p='8' overflowY='auto'>
-				<Outlet />
+			{/* Main Content */}
+			<Box flex='1' p='8' overflowY='auto' maxH='100vh'>
+				<Suspense fallback={<h1>loading...</h1>}>
+					<Outlet />
+				</Suspense>
 			</Box>
 		</Flex>
 	);

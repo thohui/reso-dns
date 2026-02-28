@@ -12,12 +12,14 @@ use axum::{
     response::IntoResponse,
 };
 use blocklist::create_blocklist_router;
+use config::create_config_router;
 use stats::create_stats_router;
 use tower_http::cors::{AllowMethods, CorsLayer};
 
 mod activity;
 mod auth;
 mod blocklist;
+mod config;
 mod cookie;
 mod error;
 mod pagination;
@@ -25,16 +27,13 @@ mod stats;
 
 use crate::global::SharedGlobal;
 
-pub async fn serve_web(global: SharedGlobal) -> anyhow::Result<()> {
-    let addr = format!("{}:{}", global.config.server.http_ip, global.config.server.http_port)
-        .parse::<SocketAddr>()
-        .expect("invalid http server address format");
-
+pub async fn serve_web(address: SocketAddr, global: SharedGlobal) -> anyhow::Result<()> {
     let api = Router::new()
         .nest("/auth", create_auth_router(global.clone()))
         .nest("/stats", create_stats_router(global.clone()))
         .nest("/activity", create_activity_router(global.clone()))
-        .nest("/blocklist", create_blocklist_router(global.clone()));
+        .nest("/blocklist", create_blocklist_router(global.clone()))
+        .nest("/config", create_config_router(global.clone()));
 
     let mut app = Router::new().nest("/api", api).with_state(global);
 
@@ -54,8 +53,8 @@ pub async fn serve_web(global: SharedGlobal) -> anyhow::Result<()> {
         app = app.layer(cors_layer);
     }
 
-    tracing::info!("HTTP listening on {}", addr);
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    tracing::info!("HTTP listening on {}", address);
+    let listener = tokio::net::TcpListener::bind(address).await?;
     axum::serve(listener, app).await?;
 
     Ok(())

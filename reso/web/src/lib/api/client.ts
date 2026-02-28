@@ -1,6 +1,7 @@
 import ky, { type KyInstance } from 'ky';
 import { Activities } from './activity';
 import { Blocklist } from './blocklist';
+import { Config } from './config';
 import { Stats } from './stats';
 
 export class ApiClient {
@@ -11,6 +12,7 @@ export class ApiClient {
 	public activities: Activities;
 	public stats: Stats;
 	public blocklist: Blocklist;
+	public config: Config;
 
 	constructor() {
 		this.eventBus = new EventBus();
@@ -32,6 +34,7 @@ export class ApiClient {
 		this.activities = new Activities(this.httpClient);
 		this.stats = new Stats(this.httpClient);
 		this.blocklist = new Blocklist(this.httpClient);
+		this.config = new Config(this.httpClient);
 	}
 
 	public async initialize() {
@@ -103,7 +106,10 @@ export class EventBus {
 		const listeners = this.listeners.get(event);
 
 		if (listeners) {
-			this.listeners.set(event, listeners.filter((l) => l !== listener));
+			this.listeners.set(
+				event,
+				listeners.filter((l) => l !== listener),
+			);
 		}
 	}
 

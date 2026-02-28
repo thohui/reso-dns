@@ -2,11 +2,12 @@ use tokio_rusqlite::{params, rusqlite};
 
 use crate::database::DatabaseConnection;
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Config {
-    id: i8,
+    pub id: i8,
     version: i64,
-    updated_at: i64,
-    data: serde_json::Value,
+    pub updated_at: i64,
+    pub data: String,
 }
 
 impl Config {
@@ -45,7 +46,7 @@ impl Config {
             id: row.id,
             version: row.version,
             updated_at: row.updated_at,
-            data: serde_json::to_value(row.data_string)?,
+            data: row.data_string,
         })
     }
 
@@ -74,9 +75,11 @@ impl Config {
         Ok(())
     }
 
-    pub async fn update_data(conn: &DatabaseConnection, data: &serde_json::Value) -> anyhow::Result<()> {
+    pub async fn update_data(conn: &DatabaseConnection, data: String) -> anyhow::Result<()> {
+        serde_json::from_str::<serde_json::Value>(&data)
+            .map_err(|e| anyhow::anyhow!("data must be valid JSON: {e}"))?;
+
         let conn = conn.conn().await;
-        let data_str = data.to_string();
 
         let updated_at_ts_ms: i64 = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)?
@@ -85,12 +88,16 @@ impl Config {
         conn.call(move |c| -> rusqlite::Result<()> {
             c.execute(
                 "UPDATE config SET version=version+1, updated_at=?1, data=?2 WHERE id=1",
-                params![updated_at_ts_ms, data_str],
+                params![updated_at_ts_ms, data],
             )?;
             Ok(())
         })
         .await?;
 
         Ok(())
+    }
+
+    pub fn version(&self) -> i64 {
+        self.version
     }
 }

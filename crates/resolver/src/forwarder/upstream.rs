@@ -103,11 +103,7 @@ mod tests {
     #[tokio::test]
     async fn test_upstreams_creation_multiple() {
         let limits = create_test_limits();
-        let addrs = vec![
-            create_test_addr(53),
-            create_test_addr(5353),
-            create_test_addr(8853),
-        ];
+        let addrs = vec![create_test_addr(53), create_test_addr(5353), create_test_addr(8853)];
 
         let upstreams = Upstreams::new(&addrs, limits).await.unwrap();
 
@@ -133,11 +129,7 @@ mod tests {
     #[tokio::test]
     async fn test_pick_index_round_robin() {
         let limits = create_test_limits();
-        let addrs = vec![
-            create_test_addr(53),
-            create_test_addr(5353),
-            create_test_addr(8853),
-        ];
+        let addrs = vec![create_test_addr(53), create_test_addr(5353), create_test_addr(8853)];
 
         let upstreams = Upstreams::new(&addrs, limits).await.unwrap();
 
@@ -187,10 +179,7 @@ mod tests {
         let cloned = limits.clone();
 
         assert_eq!(limits.max_tcp_connections, cloned.max_tcp_connections);
-        assert_eq!(
-            limits.max_idle_tcp_connections,
-            cloned.max_idle_tcp_connections
-        );
+        assert_eq!(limits.max_idle_tcp_connections, cloned.max_idle_tcp_connections);
         assert_eq!(limits.connect_timeout, cloned.connect_timeout);
         assert_eq!(limits.tcp_ttl, cloned.tcp_ttl);
     }

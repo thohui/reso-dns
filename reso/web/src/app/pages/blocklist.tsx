@@ -1,12 +1,12 @@
-import { Box, Button } from '@chakra-ui/react';
+import { Box, Button, Heading, HStack, Icon } from '@chakra-ui/react';
+import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { BlocklistDialog } from '../../components/blocklist/BlocklistDialog';
 import { BlocklistGrid } from '../../components/blocklist/BlocklistGrid';
-import { toaster } from '../../components/Toaster';
+import { toastError } from '../../components/Toaster';
 import { useBlocklist } from '../../hooks/useBlocklist';
 import { useCreateDomain } from '../../hooks/useCreateDomain';
 import { useRemoveDomain } from '../../hooks/useRemoveDomain';
-import { getApiError } from '../../lib/api/error';
 
 export default function BlocklistPage() {
 	const { data, refetch } = useBlocklist();
@@ -26,23 +26,7 @@ export default function BlocklistPage() {
 
 	const handleSubmit = async (domain: string) => {
 		await createDomain.mutateAsync(domain, {
-
-			onError: async (e) => {
-
-				const error = await getApiError(e);
-
-				if (error) {
-					toaster.error({ title: 'Error', description: error.message, duration: 1000 });
-				}
-				else if (e instanceof Error) {
-					toaster.error({ title: 'Error', description: e.message, duration: 1000 });
-				}
-				else {
-					toaster.error({ title: 'Error', description: 'Something went wrong', duration: 1000 });
-				}
-
-
-			}
+			onError: (e) => toastError(e),
 		});
 		await refetch();
 		handleClose();
@@ -51,36 +35,33 @@ export default function BlocklistPage() {
 	const handleRemove = async (domain: string) => {
 		await removeDomain.mutateAsync(domain, {
 			onError: async (e) => {
-
-				const error = await getApiError(e);
-
-				if (error) {
-					toaster.error({ title: 'Error', description: error.message, duration: 1000 });
-				}
-				else if (e instanceof Error) {
-					toaster.error({ title: 'Error', description: e.message, duration: 1000 });
-				}
-				else {
-					toaster.error({ title: 'Error', description: 'Something went wrong', duration: 1000 });
-				}
-
+				await Promise.all([toastError(e), refetch()]);
 			}
-
 		});
-		await refetch();
 	};
 
 	return (
 		<Box>
+			<HStack justify='space-between' mb='8'>
+				<Heading size='lg'>Blocklist</Heading>
+				<Button
+					bg='accent'
+					color='fg'
+					_hover={{ bg: 'accent.hover' }}
+					h='9'
+					fontSize='sm'
+					onClick={handleClick}
+				>
+					<Icon as={Plus} boxSize='3.5' mr='2' />
+					Add
+				</Button>
+			</HStack>
 			{showDialog && (
 				<BlocklistDialog onClose={handleClose} onSubmit={handleSubmit} />
 			)}
 			<Box display='flex' flexDirection='row-reverse'>
-				<Button bgColor='green.600' mb={2} onClick={handleClick}>
-					Add
-				</Button>
 			</Box>
 			<BlocklistGrid blocklist={data?.items ?? []} onRemove={handleRemove} />
 		</Box>
 	);
-}
+};

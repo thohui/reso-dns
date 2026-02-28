@@ -21,8 +21,8 @@ export function BlocklistGrid({ blocklist, onRemove }: BlocklistGridProps) {
 
 	const filteredBlocklist = search
 		? blocklist.filter((d) =>
-			d.domain.toLowerCase().includes(search.toLowerCase()),
-		)
+				d.domain.toLowerCase().includes(search.toLowerCase()),
+			)
 		: blocklist;
 
 	return (

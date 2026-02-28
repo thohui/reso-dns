@@ -26,6 +26,9 @@ impl ForwardResolver {
         if upstreams.is_empty() {
             tracing::warn!("No upstreams configured for forward resolver, it will not be able to resolve any queries!");
         }
+
+        tracing::debug!("creating new ForwardResolver instance with upstreams: {:?}", upstreams);
+
         Ok(Self {
             upstreams: Arc::new(
                 Upstreams::new(

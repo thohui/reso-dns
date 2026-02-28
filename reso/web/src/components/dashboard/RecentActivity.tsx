@@ -5,7 +5,7 @@ import {
 	HStack,
 	Icon,
 	Text,
-	VStack
+	VStack,
 } from '@chakra-ui/react';
 import { CheckCircle, ShieldOff, XCircle } from 'lucide-react';
 import { useRecentActivity } from '../../hooks/useRecentActivity';
@@ -20,7 +20,7 @@ export function RecentActivity() {
 
 	return (
 		<Box
-			bg='gray.900'
+			bg='bg.panel'
 			borderRadius='lg'
 			borderWidth='1px'
 			borderColor='gray.800'

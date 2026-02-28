@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import BlocklistPage from './pages/blocklist';
+import ConfigPage from './pages/config';
 import HomePage from './pages/home';
 import LoginPage from './pages/login';
 import LogsPage from './pages/logs';
@@ -18,6 +19,7 @@ export function AppRouter() {
 						<Route path='/home' element={<HomePage />} />
 						<Route path='/blocklist' element={<BlocklistPage />} />
 						<Route path='/logs' element={<LogsPage />} />
+						<Route path='/config' element={<ConfigPage />} />
 					</Route>
 				</Route>
 			</Routes>
