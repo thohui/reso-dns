@@ -1,4 +1,4 @@
-import { getStatusInfo } from '@/lib/status-info';
+import { getStatusInfo } from '../../lib/status-info';
 import {
 	Box,
 	Heading,
@@ -18,22 +18,6 @@ import {
 	type QueryActivity,
 } from '../../lib/api/activity';
 import { ActivityDetailDrawer } from './ActivityDetailDrawer';
-
-const STATUS_BG: Record<string, string> = {
-	error: 'status.errorMuted',
-	blocked: 'status.blockedMuted',
-	cached: 'status.cachedMuted',
-	warn: 'status.warnMuted',
-	success: 'status.successMuted',
-};
-
-const STATUS_FG: Record<string, string> = {
-	error: 'status.error',
-	blocked: 'status.blocked',
-	cached: 'status.cached',
-	warn: 'status.warn',
-	success: 'status.success',
-};
 
 function formatTimestamp(ts: number): string {
 	const d = new Date(ts);
