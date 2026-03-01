@@ -16,7 +16,7 @@ import {
 	XCircle,
 	Zap,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
 	type Activity,
 	type ErrorActivity,
@@ -102,9 +102,11 @@ function getDetailText(activity: Activity): string | null {
 function LogDetailRow({
 	activity,
 	onClick,
+	onKeyDown,
 }: {
 	activity: Activity;
 	onClick: () => void;
+	onKeyDown: (e: React.KeyboardEvent<HTMLTableRowElement>) => void;
 }) {
 	const statusKey = getStatusKey(activity);
 	const statusLabel = getStatusLabel(activity);
@@ -116,9 +118,12 @@ function LogDetailRow({
 			bg='bg.panel'
 			borderColor='border'
 			_hover={{ bg: 'bg.subtle' }}
+			_focus={{ bg: 'bg.subtle', outline: 'none' }}
 			transition='background 0.15s'
 			cursor='pointer'
+			tabIndex={0}
 			onClick={onClick}
+			onKeyDown={onKeyDown}
 		>
 			<Table.Cell
 				py='3'
@@ -234,6 +239,23 @@ export function LogsGrid({ activities }: { activities: Activity[]; }) {
 	const [filter, setFilter] = useState('all');
 	const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
 		null,
+	);
+	const handleRowKeyDown = useCallback(
+		(e: React.KeyboardEvent<HTMLTableRowElement>, activity: Activity) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				setSelectedActivity(activity);
+			} else if (e.key === 'ArrowDown') {
+				e.preventDefault();
+				const next = e.currentTarget.nextElementSibling as HTMLElement | null;
+				next?.focus();
+			} else if (e.key === 'ArrowUp') {
+				e.preventDefault();
+				const prev = e.currentTarget.previousElementSibling as HTMLElement | null;
+				prev?.focus();
+			}
+		},
+		[],
 	);
 
 	const filteredActivities = activities.filter((a) => {
@@ -417,6 +439,7 @@ export function LogsGrid({ activities }: { activities: Activity[]; }) {
 									key={`${activity.timestamp}-${i}`}
 									activity={activity}
 									onClick={() => setSelectedActivity(activity)}
+									onKeyDown={(e) => handleRowKeyDown(e, activity)}
 								/>
 							))}
 							{filteredActivities.length === 0 && (

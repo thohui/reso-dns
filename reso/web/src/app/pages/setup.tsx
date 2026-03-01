@@ -36,7 +36,6 @@ export default function SetupPage() {
 	const apiClient = useApiClient();
 	const setupRequired = useIsSetupRequired();
 
-	console.log('yo');
 	useEffect(() => {
 		if (!setupRequired) {
 			navigate('/', { replace: true });
@@ -51,13 +50,13 @@ export default function SetupPage() {
 	} = useForm({ resolver: zodResolver(setupSchema) });
 
 	const setupMutation = useMutation({
-		mutationFn: async (data: { username: string; password: string }) => {
+		mutationFn: async (data: { username: string; password: string; }) => {
 			await apiClient.setup(data.username, data.password);
 		},
 	});
 
 	const onSubmit = handleSubmit(async (data) => {
-		await setupMutation.mutateAsync(
+		setupMutation.mutate(
 			{ username: data.username, password: data.password },
 			{
 				onSuccess: () => navigate('/home'),

@@ -167,7 +167,7 @@ export function ActivityDetailDrawer({
 										color={STATUS_FG[statusKey]}
 									/>
 									<Text fontWeight='500' fontSize='sm'>
-										Query Detail
+										{activity.kind === 'query' ? 'Query Detail' : 'Error Detail'}
 									</Text>
 								</HStack>
 								<CloseButton size='sm' onClick={onClose} />
