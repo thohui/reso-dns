@@ -126,9 +126,7 @@ impl Default for Config {
             dns: DnsConfig {
                 timeout: Duration::seconds(3).num_milliseconds() as u64,
                 active: ActiveResolver::Forwarder,
-                forwarder: ForwarderConfig {
-                    upstreams: vec![UpstreamSpec("0.0.0.0".into())],
-                },
+                forwarder: ForwarderConfig { upstreams: vec![] },
             },
         }
     }
