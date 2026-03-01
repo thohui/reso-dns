@@ -1,7 +1,7 @@
-import { Box, Spinner, Text, VStack } from '@chakra-ui/react';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useApiClient } from '../contexts/ApiClientContext';
+import { PageLoader } from './PageLoader';
 
 export function Initializer({ children }: React.PropsWithChildren) {
 	const [loading, setLoading] = useState(true);
@@ -15,20 +15,7 @@ export function Initializer({ children }: React.PropsWithChildren) {
 	}, [apiClient]);
 
 	if (loading) {
-		return (
-			<Box
-				height='100vh'
-				width='100vw'
-				display='flex'
-				justifyContent='center'
-				alignItems='center'
-			>
-				<VStack>
-					<Spinner color='accent' size='xl' />
-					<Text>Loading...</Text>
-				</VStack>
-			</Box>
-		);
+		return <PageLoader />;
 	}
 
 	return children;
