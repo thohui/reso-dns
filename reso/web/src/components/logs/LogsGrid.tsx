@@ -9,15 +9,13 @@ import {
 	Text,
 	VStack,
 } from '@chakra-ui/react';
-import {
-	Clock
-} from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import {
 	type Activity,
 	getRecordType,
 	getTransportLabel,
-	type QueryActivity
+	type QueryActivity,
 } from '../../lib/api/activity';
 import { ActivityDetailDrawer } from './ActivityDetailDrawer';
 
@@ -61,7 +59,6 @@ function LogDetailRow({
 	onClick: () => void;
 	onKeyDown: (e: React.KeyboardEvent<HTMLTableRowElement>) => void;
 }) {
-
 	const statusInfo = getStatusInfo(activity);
 
 	return (
@@ -186,7 +183,7 @@ function LogDetailRow({
 	);
 }
 
-export function LogsGrid({ activities }: { activities: Activity[]; }) {
+export function LogsGrid({ activities }: { activities: Activity[] }) {
 	const [filter, setFilter] = useState('all');
 	const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
 		null,

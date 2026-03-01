@@ -1,5 +1,16 @@
-import { AlertTriangle, CheckCircle, type LucideIcon, ShieldOff, XCircle, Zap } from "lucide-react";
-import { type Activity, getErrorTypeLabel, type QueryActivity } from "./api/activity";
+import {
+	AlertTriangle,
+	CheckCircle,
+	type LucideIcon,
+	ShieldOff,
+	XCircle,
+	Zap,
+} from 'lucide-react';
+import {
+	type Activity,
+	getErrorTypeLabel,
+	type QueryActivity,
+} from './api/activity';
 
 export interface StatusInfo {
 	label: string;
@@ -16,7 +27,7 @@ export function getStatusInfo(activity: Activity): StatusInfo {
 			color: 'status.error',
 			bg: 'status.errorMuted',
 			icon: XCircle,
-			text: getErrorTypeLabel(activity.d.error_type)
+			text: getErrorTypeLabel(activity.d.error_type),
 		};
 	}
 
@@ -28,7 +39,7 @@ export function getStatusInfo(activity: Activity): StatusInfo {
 			color: 'status.blocked',
 			bg: 'status.blockedMuted',
 			icon: ShieldOff,
-			text: 'Blocked by filter'
+			text: 'Blocked by filter',
 		};
 	}
 
@@ -47,7 +58,7 @@ export function getStatusInfo(activity: Activity): StatusInfo {
 			color: 'status.cached',
 			bg: 'status.cachedMuted',
 			icon: Zap,
-			text: 'Served from cache'
+			text: 'Served from cache',
 		};
 	}
 

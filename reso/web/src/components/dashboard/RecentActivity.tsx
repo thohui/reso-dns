@@ -1,14 +1,8 @@
 import { Box, HStack, Icon, Text, VStack } from '@chakra-ui/react';
-import {
-	Zap
-} from 'lucide-react';
+import { Zap } from 'lucide-react';
 import { useRecentActivity } from '../../hooks/useRecentActivity';
-import {
-	type Activity,
-	getTransportLabel
-} from '../../lib/api/activity';
+import { type Activity, getTransportLabel } from '../../lib/api/activity';
 import { getStatusInfo } from '../../lib/status-info';
-
 
 export function RecentActivity() {
 	const activities = useRecentActivity();
@@ -47,7 +41,7 @@ export function RecentActivity() {
 	);
 }
 
-function ActivityRow({ activity }: { activity: Activity; }) {
+function ActivityRow({ activity }: { activity: Activity }) {
 	const status = getStatusInfo(activity);
 
 	const time = new Date(activity.timestamp).toLocaleTimeString('en-US', {
