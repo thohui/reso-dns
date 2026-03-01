@@ -1,72 +1,14 @@
 import { Box, HStack, Icon, Text, VStack } from '@chakra-ui/react';
 import {
-	AlertTriangle,
-	CheckCircle,
-	type LucideIcon,
-	ShieldOff,
-	XCircle,
-	Zap,
+	Zap
 } from 'lucide-react';
 import { useRecentActivity } from '../../hooks/useRecentActivity';
 import {
 	type Activity,
-	getTransportLabel,
-	type QueryActivity,
+	getTransportLabel
 } from '../../lib/api/activity';
+import { getStatusInfo } from '../../lib/status-info';
 
-interface StatusInfo {
-	label: string;
-	color: string;
-	bg: string;
-	icon: LucideIcon;
-}
-
-function getStatusInfo(activity: Activity): StatusInfo {
-	if (activity.kind === 'error') {
-		return {
-			label: 'error',
-			color: 'status.error',
-			bg: 'status.errorMuted',
-			icon: XCircle,
-		};
-	}
-
-	const q = activity as QueryActivity;
-
-	if (q.d.blocked) {
-		return {
-			label: 'blocked',
-			color: 'status.blocked',
-			bg: 'status.blockedMuted',
-			icon: ShieldOff,
-		};
-	}
-
-	if (q.d.rcode !== 0) {
-		return {
-			label: 'warning',
-			color: 'status.warn',
-			bg: 'status.warnMuted',
-			icon: AlertTriangle,
-		};
-	}
-
-	if (q.d.cache_hit) {
-		return {
-			label: 'cached',
-			color: 'status.cached',
-			bg: 'status.cachedMuted',
-			icon: Zap,
-		};
-	}
-
-	return {
-		label: 'ok',
-		color: 'status.success',
-		bg: 'status.successMuted',
-		icon: CheckCircle,
-	};
-}
 
 export function RecentActivity() {
 	const activities = useRecentActivity();
@@ -105,7 +47,7 @@ export function RecentActivity() {
 	);
 }
 
-function ActivityRow({ activity }: { activity: Activity }) {
+function ActivityRow({ activity }: { activity: Activity; }) {
 	const status = getStatusInfo(activity);
 
 	const time = new Date(activity.timestamp).toLocaleTimeString('en-US', {

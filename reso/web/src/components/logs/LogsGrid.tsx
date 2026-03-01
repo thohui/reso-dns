@@ -1,3 +1,4 @@
+import { getStatusInfo } from '@/lib/status-info';
 import {
 	Box,
 	Heading,
@@ -9,22 +10,14 @@ import {
 	VStack,
 } from '@chakra-ui/react';
 import {
-	AlertTriangle,
-	CheckCircle,
-	Clock,
-	ShieldOff,
-	XCircle,
-	Zap,
+	Clock
 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import {
 	type Activity,
-	type ErrorActivity,
-	getErrorTypeLabel,
 	getRecordType,
 	getTransportLabel,
-	type QueryActivity,
-	RCODE_LABELS,
+	type QueryActivity
 } from '../../lib/api/activity';
 import { ActivityDetailDrawer } from './ActivityDetailDrawer';
 
@@ -59,46 +52,6 @@ function formatDuration(ms: number): string {
 	return `${ms}ms`;
 }
 
-function getStatusKey(activity: Activity): string {
-	if (activity.kind === 'error') return 'error';
-	const q = activity as QueryActivity;
-	if (q.d.blocked) return 'blocked';
-	if (q.d.cache_hit) return 'cached';
-	if (q.d.rcode !== 0) return 'warn';
-	return 'success';
-}
-
-function getStatusLabel(activity: Activity): string {
-	if (activity.kind === 'error') return 'ERROR';
-	const q = activity as QueryActivity;
-	if (q.d.blocked) return 'BLOCKED';
-	if (q.d.cache_hit) return 'CACHED';
-	if (q.d.rcode !== 0) return RCODE_LABELS[q.d.rcode] || `RCODE:${q.d.rcode}`;
-	return 'OK';
-}
-
-function getStatusIcon(activity: Activity) {
-	if (activity.kind === 'error') return XCircle;
-	const q = activity as QueryActivity;
-	if (q.d.blocked) return ShieldOff;
-	if (q.d.cache_hit) return Zap;
-	if (q.d.rcode !== 0) return AlertTriangle;
-	return CheckCircle;
-}
-
-function getDetailText(activity: Activity): string | null {
-	if (activity.kind === 'error') {
-		const err = activity as ErrorActivity;
-		return getErrorTypeLabel(err.d.error_type);
-	}
-	const q = activity as QueryActivity;
-	if (q.d.blocked) return 'Blocked by filter';
-	if (q.d.cache_hit) return 'Served from cache';
-	if (q.d.rcode !== 0)
-		return RCODE_LABELS[q.d.rcode] || `Response code ${q.d.rcode}`;
-	return null;
-}
-
 function LogDetailRow({
 	activity,
 	onClick,
@@ -108,10 +61,8 @@ function LogDetailRow({
 	onClick: () => void;
 	onKeyDown: (e: React.KeyboardEvent<HTMLTableRowElement>) => void;
 }) {
-	const statusKey = getStatusKey(activity);
-	const statusLabel = getStatusLabel(activity);
-	const statusIcon = getStatusIcon(activity);
-	const detail = getDetailText(activity);
+
+	const statusInfo = getStatusInfo(activity);
 
 	return (
 		<Table.Row
@@ -137,7 +88,7 @@ function LogDetailRow({
 
 			<Table.Cell py='3' px='4'>
 				<HStack gap='2'>
-					<Icon as={statusIcon} boxSize='3.5' color={STATUS_FG[statusKey]} />
+					<Icon as={statusInfo.icon} boxSize='3.5' color={statusInfo.color} />
 					<Box
 						px='2.5'
 						py='0.5'
@@ -146,10 +97,10 @@ function LogDetailRow({
 						fontWeight='600'
 						textTransform='uppercase'
 						letterSpacing='0.03em'
-						bg={STATUS_BG[statusKey]}
-						color={STATUS_FG[statusKey]}
+						bg={statusInfo.bg}
+						color={statusInfo.color}
 					>
-						{statusLabel}
+						{statusInfo.label}
 					</Box>
 				</HStack>
 			</Table.Cell>
@@ -205,11 +156,11 @@ function LogDetailRow({
 			<Table.Cell py='3' px='4'>
 				<Text
 					fontSize='xs'
-					color={detail ? STATUS_FG[statusKey] : 'fg.faint'}
+					color={statusInfo.text ? statusInfo.color : 'fg.faint'}
 					truncate
 					maxW='200px'
 				>
-					{detail || '-'}
+					{statusInfo.text || '-'}
 				</Text>
 			</Table.Cell>
 
@@ -235,7 +186,7 @@ function LogDetailRow({
 	);
 }
 
-export function LogsGrid({ activities }: { activities: Activity[] }) {
+export function LogsGrid({ activities }: { activities: Activity[]; }) {
 	const [filter, setFilter] = useState('all');
 	const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
 		null,

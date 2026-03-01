@@ -164,6 +164,8 @@ export default function ConfigPage() {
 
 							const protocol = detectProtocol(upstream);
 
+							const protocolColor = PROTOCOL_COLORS[protocol] ?? '#71717a';
+
 							return (
 								<HStack
 									key={upstream}
@@ -202,14 +204,14 @@ export default function ConfigPage() {
 													px='1.5'
 													py='0.5'
 													borderRadius='md'
-													bg={`${PROTOCOL_COLORS[protocol] || '#71717a'}18`}
+													bg={hexToRgba(protocolColor, 0.09)}
 													borderWidth='1px'
-													borderColor={`${PROTOCOL_COLORS[protocol] || '#71717a'}30`}
+													borderColor={hexToRgba(protocolColor, 0.19)}
 												>
 													<Text
 														fontSize='2xs'
 														fontWeight='600'
-														color={PROTOCOL_COLORS[protocol] || '#71717a'}
+														color={protocolColor}
 														letterSpacing='0.02em'
 													>
 														{protocol}
