@@ -9,13 +9,6 @@ import {
 	VStack,
 } from '@chakra-ui/react';
 import {
-	AlertTriangle,
-	CheckCircle,
-	ShieldOff,
-	XCircle,
-	Zap,
-} from 'lucide-react';
-import {
 	type Activity,
 	type ErrorActivity,
 	getErrorTypeLabel,
@@ -24,51 +17,9 @@ import {
 	getTransportLabel,
 	type QueryActivity,
 } from '../../lib/api/activity';
+import { getStatusInfo } from '../../lib/status-info';
 
-const STATUS_BG: Record<string, string> = {
-	error: 'status.errorMuted',
-	blocked: 'status.blockedMuted',
-	cached: 'status.cachedMuted',
-	warn: 'status.warnMuted',
-	success: 'status.successMuted',
-};
-
-const STATUS_FG: Record<string, string> = {
-	error: 'status.error',
-	blocked: 'status.blocked',
-	cached: 'status.cached',
-	warn: 'status.warn',
-	success: 'status.success',
-};
-
-function getStatusKey(activity: Activity): string {
-	if (activity.kind === 'error') return 'error';
-	const q = activity as QueryActivity;
-	if (q.d.blocked) return 'blocked';
-	if (q.d.cache_hit) return 'cached';
-	if (q.d.rcode !== 0) return 'warn';
-	return 'success';
-}
-
-function getStatusLabel(activity: Activity): string {
-	if (activity.kind === 'error') return 'ERROR';
-	const q = activity as QueryActivity;
-	if (q.d.blocked) return 'BLOCKED';
-	if (q.d.cache_hit) return 'CACHED';
-	if (q.d.rcode !== 0) return getResponseCodeLabel(q.d.rcode);
-	return 'OK';
-}
-
-function getStatusIcon(activity: Activity) {
-	if (activity.kind === 'error') return XCircle;
-	const q = activity as QueryActivity;
-	if (q.d.blocked) return ShieldOff;
-	if (q.d.cache_hit) return Zap;
-	if (q.d.rcode !== 0) return AlertTriangle;
-	return CheckCircle;
-}
-
-function DetailRow({ label, value }: { label: string; value: string }) {
+function DetailRow({ label, value }: { label: string; value: string; }) {
 	return (
 		<HStack justify='space-between' py='2'>
 			<Text fontSize='xs' color='fg.faint' textTransform='uppercase'>
@@ -118,11 +69,11 @@ export function ActivityDetailDrawer({
 	open,
 	onClose,
 }: ActivityDetailDrawerProps) {
+
 	if (!activity) return null;
 
-	const statusKey = getStatusKey(activity);
-	const statusLabel = getStatusLabel(activity);
-	const statusIcon = getStatusIcon(activity);
+	const statusInfo = getStatusInfo(activity);
+
 	const time = new Date(activity.timestamp).toLocaleString('en-US', {
 		hour12: false,
 		year: 'numeric',
@@ -162,9 +113,9 @@ export function ActivityDetailDrawer({
 							<HStack justify='space-between' w='full'>
 								<HStack gap='3'>
 									<Icon
-										as={statusIcon}
+										as={statusInfo.icon}
 										boxSize='4'
-										color={STATUS_FG[statusKey]}
+										color={statusInfo.color}
 									/>
 									<Text fontWeight='500' fontSize='sm'>
 										{activity.kind === 'query'
@@ -186,11 +137,8 @@ export function ActivityDetailDrawer({
 									>
 										Status
 									</Text>
-									<StyledBadge
-										bg={STATUS_BG[statusKey]}
-										color={STATUS_FG[statusKey]}
-									>
-										{statusLabel}
+									<StyledBadge bg={statusInfo.bg} color={statusInfo.color}>
+										{statusInfo.label}
 									</StyledBadge>
 								</HStack>
 

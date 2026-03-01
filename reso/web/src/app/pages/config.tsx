@@ -14,7 +14,6 @@ import { Plus, RotateCcw, Save, Server, Timer, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import z from 'zod';
-import { useUpdateConfig } from '../..//hooks/useUpdateConfig';
 import { UpstreamSpecSchema } from '../..//lib/config/schema';
 import { ConfigField } from '../../components/config/ConfigField';
 import { ConfigSection } from '../../components/config/ConfigSection';
@@ -24,6 +23,7 @@ import {
 } from '../../components/config/UpstreamPicker';
 import { toastError } from '../../components/Toaster';
 import { useConfig, useConfigQueryKey } from '../../hooks/useConfig';
+import { useUpdateConfig } from '../../hooks/useUpdateConfig';
 import type { ConfigModel, Upstream } from '../../lib/api/config';
 import { detectProtocol, getProviderGroup } from '../../lib/config/providers';
 import { hexToRgba } from '../../lib/theme';
