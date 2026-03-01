@@ -144,6 +144,6 @@ export function DashboardLayout() {
 					</Suspense>
 				</Box>
 			</Box>
-		</Flex >
+		</Flex>
 	);
 }
