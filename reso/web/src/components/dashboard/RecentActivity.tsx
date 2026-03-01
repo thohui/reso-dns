@@ -23,24 +23,49 @@ interface StatusInfo {
 
 function getStatusInfo(activity: Activity): StatusInfo {
 	if (activity.kind === 'error') {
-		return { label: 'error', color: 'status.error', bg: 'status.errorMuted', icon: XCircle };
+		return {
+			label: 'error',
+			color: 'status.error',
+			bg: 'status.errorMuted',
+			icon: XCircle,
+		};
 	}
 
 	const q = activity as QueryActivity;
 
 	if (q.d.blocked) {
-		return { label: 'blocked', color: 'status.blocked', bg: 'status.blockedMuted', icon: ShieldOff };
+		return {
+			label: 'blocked',
+			color: 'status.blocked',
+			bg: 'status.blockedMuted',
+			icon: ShieldOff,
+		};
 	}
 
 	if (q.d.rcode !== 0) {
-		return { label: 'warning', color: 'status.warn', bg: 'status.warnMuted', icon: AlertTriangle };
+		return {
+			label: 'warning',
+			color: 'status.warn',
+			bg: 'status.warnMuted',
+			icon: AlertTriangle,
+		};
 	}
 
 	if (q.d.cache_hit) {
-		return { label: 'cached', color: 'status.cached', bg: 'status.cachedMuted', icon: Zap };
+		return {
+			label: 'cached',
+			color: 'status.cached',
+			bg: 'status.cachedMuted',
+			icon: Zap,
+		};
 	}
 
-	return { label: 'ok', color: 'status.success', bg: 'status.successMuted', icon: CheckCircle };
+	return {
+		label: 'ok',
+		color: 'status.success',
+		bg: 'status.successMuted',
+		icon: CheckCircle,
+	};
 }
 
 export function RecentActivity() {
@@ -80,7 +105,7 @@ export function RecentActivity() {
 	);
 }
 
-function ActivityRow({ activity }: { activity: Activity; }) {
+function ActivityRow({ activity }: { activity: Activity }) {
 	const status = getStatusInfo(activity);
 
 	const time = new Date(activity.timestamp).toLocaleTimeString('en-US', {

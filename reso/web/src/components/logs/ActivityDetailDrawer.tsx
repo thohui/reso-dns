@@ -22,7 +22,7 @@ import {
 	getRecordType,
 	getResponseCodeLabel,
 	getTransportLabel,
-	type QueryActivity
+	type QueryActivity,
 } from '../../lib/api/activity';
 
 const STATUS_BG: Record<string, string> = {
@@ -68,7 +68,7 @@ function getStatusIcon(activity: Activity) {
 	return CheckCircle;
 }
 
-function DetailRow({ label, value }: { label: string; value: string; }) {
+function DetailRow({ label, value }: { label: string; value: string }) {
 	return (
 		<HStack justify='space-between' py='2'>
 			<Text fontSize='xs' color='fg.faint' textTransform='uppercase'>
@@ -167,7 +167,9 @@ export function ActivityDetailDrawer({
 										color={STATUS_FG[statusKey]}
 									/>
 									<Text fontWeight='500' fontSize='sm'>
-										{activity.kind === 'query' ? 'Query Detail' : 'Error Detail'}
+										{activity.kind === 'query'
+											? 'Query Detail'
+											: 'Error Detail'}
 									</Text>
 								</HStack>
 								<CloseButton size='sm' onClick={onClose} />
@@ -259,8 +261,7 @@ export function ActivityDetailDrawer({
 										>
 											<DetailRow
 												label='Response Code'
-												value={getResponseCodeLabel(activity.d.rcode)
-												}
+												value={getResponseCodeLabel(activity.d.rcode)}
 											/>
 											<DetailRow
 												label='Cache Hit'
@@ -302,8 +303,9 @@ export function ActivityDetailDrawer({
 										>
 											<DetailRow
 												label='Error Type'
-												value={getErrorTypeLabel((activity as ErrorActivity).d.error_type)
-												}
+												value={getErrorTypeLabel(
+													(activity as ErrorActivity).d.error_type,
+												)}
 											/>
 											<DetailRow
 												label='Message'

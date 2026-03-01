@@ -49,10 +49,9 @@ export default function BlocklistPage() {
 	};
 
 	const handleToggle = async (domain: string) => {
-		const previous =
-			queryClient.getQueryData<PagedResponse<BlockedDomain>>([
-				'blocklist',
-			]);
+		const previous = queryClient.getQueryData<PagedResponse<BlockedDomain>>([
+			'blocklist',
+		]);
 
 		queryClient.setQueryData<PagedResponse<BlockedDomain>>(
 			['blocklist'],

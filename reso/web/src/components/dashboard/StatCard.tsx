@@ -8,12 +8,7 @@ interface Props {
 	accentColor: string;
 }
 
-export function StatCard({
-	label,
-	value,
-	icon,
-	accentColor,
-}: Props) {
+export function StatCard({ label, value, icon, accentColor }: Props) {
 	return (
 		<Box
 			bg='bg.panel'

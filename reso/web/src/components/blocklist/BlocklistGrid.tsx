@@ -1,4 +1,12 @@
-import { Box, HStack, Icon, IconButton, Input, Table, Text } from '@chakra-ui/react';
+import {
+	Box,
+	HStack,
+	Icon,
+	IconButton,
+	Input,
+	Table,
+	Text,
+} from '@chakra-ui/react';
 import {
 	Ban,
 	Globe,
@@ -167,7 +175,9 @@ export function BlocklistGrid({
 										</Table.Cell>
 										<Table.Cell py='3.5' px='4' textAlign='center'>
 											<IconButton
-												aria-label={entry.enabled ? 'Disable domain' : 'Enable domain'}
+												aria-label={
+													entry.enabled ? 'Disable domain' : 'Enable domain'
+												}
 												variant='plain'
 												size='xs'
 												color={entry.enabled ? 'status.success' : 'fg.subtle'}

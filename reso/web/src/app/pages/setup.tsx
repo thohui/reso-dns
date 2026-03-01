@@ -50,7 +50,7 @@ export default function SetupPage() {
 	} = useForm({ resolver: zodResolver(setupSchema) });
 
 	const setupMutation = useMutation({
-		mutationFn: async (data: { username: string; password: string; }) => {
+		mutationFn: async (data: { username: string; password: string }) => {
 			await apiClient.setup(data.username, data.password);
 		},
 	});

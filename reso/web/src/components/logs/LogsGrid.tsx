@@ -24,7 +24,7 @@ import {
 	getRecordType,
 	getTransportLabel,
 	type QueryActivity,
-	RCODE_LABELS
+	RCODE_LABELS,
 } from '../../lib/api/activity';
 import { ActivityDetailDrawer } from './ActivityDetailDrawer';
 
@@ -235,7 +235,7 @@ function LogDetailRow({
 	);
 }
 
-export function LogsGrid({ activities }: { activities: Activity[]; }) {
+export function LogsGrid({ activities }: { activities: Activity[] }) {
 	const [filter, setFilter] = useState('all');
 	const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
 		null,
@@ -251,7 +251,8 @@ export function LogsGrid({ activities }: { activities: Activity[]; }) {
 				next?.focus();
 			} else if (e.key === 'ArrowUp') {
 				e.preventDefault();
-				const prev = e.currentTarget.previousElementSibling as HTMLElement | null;
+				const prev = e.currentTarget
+					.previousElementSibling as HTMLElement | null;
 				prev?.focus();
 			}
 		},
