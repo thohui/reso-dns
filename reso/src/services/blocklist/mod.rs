@@ -14,7 +14,8 @@ pub struct BlocklistService {
 impl BlocklistService {
     pub async fn initialize(connection: Arc<DatabaseConnection>) -> anyhow::Result<Self> {
         let domains = BlockedDomain::list_all(&connection).await?;
-        let matcher = BlocklistMatcher::load(domains.iter().map(|d| d.domain.as_str()))?;
+        let matcher = BlocklistMatcher::load(domains.iter().filter(|d| d.enabled).map(|d| d.domain.as_str()))?;
+
         Ok(Self {
             matcher: ArcSwap::new(matcher.into()),
             connection,
