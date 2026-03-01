@@ -32,16 +32,16 @@ export function RecentActivity() {
 					Last 5 entries
 				</Text>
 			</HStack>
-			<VStack gap='0' align='stretch'>
+			<VStack gap='0' align='stretch' overflowX='auto'>
 				{activities?.items.map((activity, i) => (
 					<ActivityRow key={`${activity.timestamp}-${i}`} activity={activity} />
 				))}
 			</VStack>
-		</Box>
+		</Box >
 	);
 }
 
-function ActivityRow({ activity }: { activity: Activity }) {
+function ActivityRow({ activity }: { activity: Activity; }) {
 	const status = getStatusInfo(activity);
 
 	const time = new Date(activity.timestamp).toLocaleTimeString('en-US', {

@@ -69,7 +69,6 @@ export function DashboardLayout() {
 					</Text>
 				</HStack>
 
-				{/* Navigation */}
 				<VStack gap='0.5' align='stretch' flex='1'>
 					<Text
 						fontSize='xs'
@@ -136,14 +135,15 @@ export function DashboardLayout() {
 				</Box>
 			</Box>
 
-			{/* Main Content */}
 			<Box flex='1' p='8' overflowY='auto' maxH='100vh'>
-				<Suspense fallback={null}>
-					<Box key={location.pathname} className='animate-fade-in'>
-						<Outlet />
-					</Box>
-				</Suspense>
+				<Box maxW='1400px' mx='auto'>
+					<Suspense fallback={null}>
+						<Box key={location.pathname} className='animate-fade-in'>
+							<Outlet />
+						</Box>
+					</Suspense>
+				</Box>
 			</Box>
-		</Flex>
+		</Flex >
 	);
 }
