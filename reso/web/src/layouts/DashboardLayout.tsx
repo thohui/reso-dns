@@ -138,8 +138,10 @@ export function DashboardLayout() {
 
 			{/* Main Content */}
 			<Box flex='1' p='8' overflowY='auto' maxH='100vh'>
-				<Suspense fallback={<h1>loading...</h1>}>
-					<Outlet />
+				<Suspense fallback={null}>
+					<Box key={location.pathname} className='animate-fade-in'>
+						<Outlet />
+					</Box>
 				</Suspense>
 			</Box>
 		</Flex>

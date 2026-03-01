@@ -49,6 +49,11 @@ export default function BlocklistPage() {
 	};
 
 	const handleToggle = async (domain: string) => {
+		const previous =
+			queryClient.getQueryData<PagedResponse<BlockedDomain>>([
+				'blocklist',
+			]);
+
 		queryClient.setQueryData<PagedResponse<BlockedDomain>>(
 			['blocklist'],
 			(old) => {
@@ -65,18 +70,7 @@ export default function BlocklistPage() {
 		try {
 			await toggleDomain.mutateAsync(domain);
 		} catch (e) {
-			queryClient.setQueryData<PagedResponse<BlockedDomain>>(
-				['blocklist'],
-				(old) => {
-					if (!old) return old;
-					return {
-						...old,
-						items: old.items.map((d) =>
-							d.domain === domain ? { ...d, enabled: !d.enabled } : d,
-						),
-					};
-				},
-			);
+			queryClient.setQueryData(['blocklist'], previous);
 			toastError(e);
 		}
 	};

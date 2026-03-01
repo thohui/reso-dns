@@ -17,12 +17,12 @@ import {
 } from 'lucide-react';
 import {
 	type Activity,
-	ERROR_TYPE_LABELS,
 	type ErrorActivity,
-	type QueryActivity,
-	RCODE_LABELS,
-	RECORD_TYPES,
-	TRANSPORT_LABELS,
+	getErrorTypeLabel,
+	getRecordType,
+	getResponseCodeLabel,
+	getTransportLabel,
+	type QueryActivity
 } from '../../lib/api/activity';
 
 const STATUS_BG: Record<string, string> = {
@@ -55,7 +55,7 @@ function getStatusLabel(activity: Activity): string {
 	const q = activity as QueryActivity;
 	if (q.d.blocked) return 'BLOCKED';
 	if (q.d.cache_hit) return 'CACHED';
-	if (q.d.rcode !== 0) return RCODE_LABELS[q.d.rcode] || `RCODE:${q.d.rcode}`;
+	if (q.d.rcode !== 0) return getResponseCodeLabel(q.d.rcode);
 	return 'OK';
 }
 
@@ -68,7 +68,7 @@ function getStatusIcon(activity: Activity) {
 	return CheckCircle;
 }
 
-function DetailRow({ label, value }: { label: string; value: string }) {
+function DetailRow({ label, value }: { label: string; value: string; }) {
 	return (
 		<HStack justify='space-between' py='2'>
 			<Text fontSize='xs' color='fg.faint' textTransform='uppercase'>
@@ -218,7 +218,7 @@ export function ActivityDetailDrawer({
 											label='Type'
 											value={
 												activity.qtype !== null
-													? RECORD_TYPES[activity.qtype] || `${activity.qtype}`
+													? getRecordType(activity.qtype)
 													: '-'
 											}
 										/>
@@ -228,10 +228,7 @@ export function ActivityDetailDrawer({
 										/>
 										<DetailRow
 											label='Transport'
-											value={
-												TRANSPORT_LABELS[activity.transport] ||
-												`T:${activity.transport}`
-											}
+											value={getTransportLabel(activity.transport)}
 										/>
 										<DetailRow label='Time' value={time} />
 										<DetailRow label='Duration' value={durationStr} />
@@ -262,9 +259,7 @@ export function ActivityDetailDrawer({
 										>
 											<DetailRow
 												label='Response Code'
-												value={
-													RCODE_LABELS[(activity as QueryActivity).d.rcode] ||
-													`${(activity as QueryActivity).d.rcode}`
+												value={getResponseCodeLabel(activity.d.rcode)
 												}
 											/>
 											<DetailRow
@@ -307,11 +302,7 @@ export function ActivityDetailDrawer({
 										>
 											<DetailRow
 												label='Error Type'
-												value={
-													ERROR_TYPE_LABELS[
-														(activity as ErrorActivity).d.error_type
-													] ||
-													`Type ${(activity as ErrorActivity).d.error_type}`
+												value={getErrorTypeLabel((activity as ErrorActivity).d.error_type)
 												}
 											/>
 											<DetailRow

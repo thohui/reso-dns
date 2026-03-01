@@ -1,12 +1,10 @@
 import { Box, HStack, Icon, Text } from '@chakra-ui/react';
-import { type Activity, TrendingDown, TrendingUp } from 'lucide-react';
+import { type Activity } from 'lucide-react';
 
 interface Props {
 	label: string;
 	value: string | number;
 	icon: typeof Activity;
-	trend?: 'up' | 'down';
-	trendValue?: string;
 	accentColor: string;
 }
 
@@ -14,8 +12,6 @@ export function StatCard({
 	label,
 	value,
 	icon,
-	trend,
-	trendValue,
 	accentColor,
 }: Props) {
 	return (
@@ -55,25 +51,6 @@ export function StatCard({
 			<Text fontSize='2xl' fontWeight='600' letterSpacing='-0.02em'>
 				{value}
 			</Text>
-			{trend && trendValue && (
-				<HStack mt='2' gap='1'>
-					<Icon
-						as={trend === 'up' ? TrendingUp : TrendingDown}
-						boxSize='3.5'
-						color={trend === 'up' ? 'status.success' : 'status.error'}
-					/>
-					<Text
-						color={trend === 'up' ? 'status.success' : 'status.error'}
-						fontSize='xs'
-						fontWeight='500'
-					>
-						{trendValue}
-					</Text>
-					<Text color='fg.faint' fontSize='xs'>
-						vs last hour
-					</Text>
-				</HStack>
-			)}
 		</Box>
 	);
 }

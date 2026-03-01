@@ -67,7 +67,7 @@ pub async fn setup(
         ApiError::server_error()
     })?;
 
-    let user = User::new(&payload.username, password_hash);
+    let user = User::new(payload.username.trim(), password_hash);
     let user_id = user.id.clone();
 
     user.insert(&global.database).await.map_err(|e| {

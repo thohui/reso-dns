@@ -19,12 +19,12 @@ import {
 import { useState } from 'react';
 import {
 	type Activity,
-	ERROR_TYPE_LABELS,
 	type ErrorActivity,
+	getErrorTypeLabel,
+	getRecordType,
+	getTransportLabel,
 	type QueryActivity,
-	RCODE_LABELS,
-	RECORD_TYPES,
-	TRANSPORT_LABELS,
+	RCODE_LABELS
 } from '../../lib/api/activity';
 import { ActivityDetailDrawer } from './ActivityDetailDrawer';
 
@@ -89,11 +89,7 @@ function getStatusIcon(activity: Activity) {
 function getDetailText(activity: Activity): string | null {
 	if (activity.kind === 'error') {
 		const err = activity as ErrorActivity;
-		return (
-			ERROR_TYPE_LABELS[err.d.error_type] ||
-			err.d.message ||
-			`Error type ${err.d.error_type}`
-		);
+		return getErrorTypeLabel(err.d.error_type);
 	}
 	const q = activity as QueryActivity;
 	if (q.d.blocked) return 'Blocked by filter';
@@ -169,7 +165,7 @@ function LogDetailRow({
 							bg='accent.muted'
 							color='accent.fg'
 						>
-							{RECORD_TYPES[activity.qtype] || `${activity.qtype}`}
+							{getRecordType(activity.qtype)}
 						</Box>
 					)}
 				</HStack>
@@ -197,7 +193,7 @@ function LogDetailRow({
 					bg='accent.muted'
 					color='accent.fg'
 				>
-					{TRANSPORT_LABELS[activity.transport] || `T:${activity.transport}`}
+					{getTransportLabel(activity.transport)}
 				</Box>
 			</Table.Cell>
 
@@ -234,7 +230,7 @@ function LogDetailRow({
 	);
 }
 
-export function LogsGrid({ activities }: { activities: Activity[] }) {
+export function LogsGrid({ activities }: { activities: Activity[]; }) {
 	const [filter, setFilter] = useState('all');
 	const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
 		null,

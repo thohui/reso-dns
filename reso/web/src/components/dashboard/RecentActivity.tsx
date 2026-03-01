@@ -3,8 +3,8 @@ import { CheckCircle, ShieldOff, XCircle, Zap } from 'lucide-react';
 import { useRecentActivity } from '../../hooks/useRecentActivity';
 import {
 	type Activity,
-	type QueryActivity,
-	TRANSPORT_LABELS,
+	getTransportLabel,
+	type QueryActivity
 } from '../../lib/api/activity';
 
 export function RecentActivity() {
@@ -44,7 +44,7 @@ export function RecentActivity() {
 	);
 }
 
-function ActivityRow({ activity }: { activity: Activity }) {
+function ActivityRow({ activity }: { activity: Activity; }) {
 	const isError = activity.kind === 'error';
 	const isBlocked =
 		activity.kind === 'query' && (activity as QueryActivity).d.blocked;
@@ -114,7 +114,7 @@ function ActivityRow({ activity }: { activity: Activity }) {
 					bg='accent.muted'
 					color='accent.fg'
 				>
-					{TRANSPORT_LABELS[activity.transport] || '?'}
+					{getTransportLabel(activity.transport)}
 				</Box>
 				<Text
 					color='fg.faint'
