@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, str::FromStr};
+use std::{collections::HashMap, net::SocketAddr, str::FromStr};
 
 use anyhow::{Context, Result, bail};
 use chrono::Duration;
@@ -117,6 +117,53 @@ impl ForwarderConfig {
             .enumerate()
             .map(|(i, spec)| spec.parse().with_context(|| format!("forwarder.upstreams[{i}]")))
             .collect()
+    }
+}
+
+impl Config {
+    pub fn from_kv(map: &HashMap<String, String>) -> Self {
+        let defaults = Self::default();
+
+        let timeout = map
+            .get("dns.timeout")
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(defaults.dns.timeout);
+
+        let active = map
+            .get("dns.active")
+            .and_then(|v| serde_json::from_value::<ActiveResolver>(serde_json::Value::String(v.clone())).ok())
+            .unwrap_or(defaults.dns.active);
+
+        let upstreams = map
+            .get("dns.forwarder.upstreams")
+            .and_then(|v| serde_json::from_str::<Vec<String>>(v).ok())
+            .map(|specs| specs.into_iter().map(UpstreamSpec).collect())
+            .unwrap_or(defaults.dns.forwarder.upstreams);
+
+        Self {
+            dns: DnsConfig {
+                timeout,
+                active,
+                forwarder: ForwarderConfig { upstreams },
+            },
+        }
+    }
+
+    pub fn to_kv(&self) -> Vec<(String, String)> {
+        let active_str = match &self.dns.active {
+            ActiveResolver::Forwarder => "forwarder",
+        };
+
+        let upstreams_json = serde_json::to_string(
+            &self.dns.forwarder.upstreams.iter().map(|u| &u.0).collect::<Vec<_>>(),
+        )
+        .unwrap_or_else(|_| "[]".to_string());
+
+        vec![
+            ("dns.timeout".to_string(), self.dns.timeout.to_string()),
+            ("dns.active".to_string(), active_str.to_string()),
+            ("dns.forwarder.upstreams".to_string(), upstreams_json),
+        ]
     }
 }
 
