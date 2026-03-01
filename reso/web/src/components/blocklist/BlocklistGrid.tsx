@@ -1,11 +1,4 @@
-import {
-	Box,
-	HStack,
-	Icon,
-	Input,
-	Table,
-	Text,
-} from '@chakra-ui/react';
+import { Box, HStack, Icon, Input, Table, Text } from '@chakra-ui/react';
 import {
 	Ban,
 	Globe,
@@ -47,7 +40,6 @@ export function BlocklistGrid({
 
 	return (
 		<Box>
-			{/* Search */}
 			<Box position='relative' mb='4'>
 				<Box
 					position='absolute'
@@ -71,7 +63,6 @@ export function BlocklistGrid({
 				/>
 			</Box>
 
-			{/* Table */}
 			<Box
 				bg='bg.panel'
 				borderRadius='lg'
@@ -158,11 +149,7 @@ export function BlocklistGrid({
 												<Icon
 													as={Ban}
 													boxSize='3.5'
-													color={
-														entry.enabled
-															? 'status.error'
-															: 'fg.subtle'
-													}
+													color={entry.enabled ? 'status.error' : 'fg.subtle'}
 												/>
 												<Text
 													fontFamily="'JetBrains Mono', monospace"
@@ -178,32 +165,18 @@ export function BlocklistGrid({
 												{formatTimeAgo(entry.created_at)}
 											</Text>
 										</Table.Cell>
-										<Table.Cell
-											py='3.5'
-											px='4'
-											textAlign='center'
-										>
+										<Table.Cell py='3.5' px='4' textAlign='center'>
 											<Box
 												as='button'
 												cursor='pointer'
 												display='inline-flex'
-												onClick={() =>
-													onToggle(entry.domain)
-												}
-												color={
-													entry.enabled
-														? 'status.success'
-														: 'fg.subtle'
-												}
+												onClick={() => onToggle(entry.domain)}
+												color={entry.enabled ? 'status.success' : 'fg.subtle'}
 												_hover={{ opacity: 0.8 }}
 												transition='all 0.15s'
 											>
 												<Icon
-													as={
-														entry.enabled
-															? ToggleRight
-															: ToggleLeft
-													}
+													as={entry.enabled ? ToggleRight : ToggleLeft}
 													boxSize='5'
 												/>
 											</Box>
@@ -221,14 +194,9 @@ export function BlocklistGrid({
 													bg: 'status.errorMuted',
 												}}
 												transition='all 0.15s'
-												onClick={() =>
-													onRemove(entry.domain)
-												}
+												onClick={() => onRemove(entry.domain)}
 											>
-												<Icon
-													as={Trash2}
-													boxSize='3.5'
-												/>
+												<Icon as={Trash2} boxSize='3.5' />
 											</Box>
 										</Table.Cell>
 									</Table.Row>

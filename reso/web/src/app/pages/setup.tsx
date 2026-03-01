@@ -51,7 +51,7 @@ export default function SetupPage() {
 	} = useForm({ resolver: zodResolver(setupSchema) });
 
 	const setupMutation = useMutation({
-		mutationFn: async (data: { username: string; password: string; }) => {
+		mutationFn: async (data: { username: string; password: string }) => {
 			await apiClient.setup(data.username, data.password);
 		},
 	});
@@ -63,8 +63,7 @@ export default function SetupPage() {
 				onSuccess: () => navigate('/home'),
 				onError: (e) => {
 					setError('root', {
-						message:
-							e instanceof Error ? e.message : 'Setup failed',
+						message: e instanceof Error ? e.message : 'Setup failed',
 					});
 				},
 			},
@@ -169,16 +168,13 @@ export default function SetupPage() {
 									_placeholder={{ color: 'fg.faint' }}
 									_focus={{
 										borderColor: 'accent',
-										boxShadow:
-											'0 0 0 1px rgba(233, 30, 120, 0.4)',
+										boxShadow: '0 0 0 1px rgba(233, 30, 120, 0.4)',
 									}}
 									transition='all 0.15s ease'
 									{...register('username')}
 								/>
 							</Group>
-							<Field.ErrorText>
-								{errors.username?.message}
-							</Field.ErrorText>
+							<Field.ErrorText>{errors.username?.message}</Field.ErrorText>
 						</Field.Root>
 
 						<Field.Root w='full' invalid={!!errors.password}>
@@ -212,16 +208,13 @@ export default function SetupPage() {
 									_placeholder={{ color: 'fg.faint' }}
 									_focus={{
 										borderColor: 'accent',
-										boxShadow:
-											'0 0 0 1px rgba(233, 30, 120, 0.4)',
+										boxShadow: '0 0 0 1px rgba(233, 30, 120, 0.4)',
 									}}
 									transition='all 0.15s ease'
 									{...register('password')}
 								/>
 							</Group>
-							<Field.ErrorText>
-								{errors.password?.message}
-							</Field.ErrorText>
+							<Field.ErrorText>{errors.password?.message}</Field.ErrorText>
 						</Field.Root>
 
 						<Field.Root w='full' invalid={!!errors.confirmPassword}>
@@ -243,11 +236,7 @@ export default function SetupPage() {
 									zIndex='1'
 									pointerEvents='none'
 								>
-									<Icon
-										as={ShieldCheck}
-										boxSize='4'
-										color='fg.faint'
-									/>
+									<Icon as={ShieldCheck} boxSize='4' color='fg.faint' />
 								</Box>
 								<Input
 									type='password'
@@ -259,8 +248,7 @@ export default function SetupPage() {
 									_placeholder={{ color: 'fg.faint' }}
 									_focus={{
 										borderColor: 'accent',
-										boxShadow:
-											'0 0 0 1px rgba(233, 30, 120, 0.4)',
+										boxShadow: '0 0 0 1px rgba(233, 30, 120, 0.4)',
 									}}
 									transition='all 0.15s ease'
 									{...register('confirmPassword')}

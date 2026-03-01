@@ -72,9 +72,7 @@ export default function BlocklistPage() {
 					return {
 						...old,
 						items: old.items.map((d) =>
-							d.domain === domain
-								? { ...d, enabled: !d.enabled }
-								: d,
+							d.domain === domain ? { ...d, enabled: !d.enabled } : d,
 						),
 					};
 				},
@@ -129,7 +127,11 @@ export default function BlocklistPage() {
 			{showDialog && (
 				<BlocklistDialog onClose={handleClose} onSubmit={handleSubmit} />
 			)}
-			<BlocklistGrid blocklist={items} onRemove={handleRemove} onToggle={handleToggle} />
+			<BlocklistGrid
+				blocklist={items}
+				onRemove={handleRemove}
+				onToggle={handleToggle}
+			/>
 		</Box>
 	);
 }

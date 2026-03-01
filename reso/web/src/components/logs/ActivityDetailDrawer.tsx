@@ -13,7 +13,7 @@ import {
 	CheckCircle,
 	ShieldOff,
 	XCircle,
-	Zap
+	Zap,
 } from 'lucide-react';
 import {
 	type Activity,
@@ -68,17 +68,13 @@ function getStatusIcon(activity: Activity) {
 	return CheckCircle;
 }
 
-function DetailRow({ label, value }: { label: string; value: string; }) {
+function DetailRow({ label, value }: { label: string; value: string }) {
 	return (
 		<HStack justify='space-between' py='2'>
 			<Text fontSize='xs' color='fg.faint' textTransform='uppercase'>
 				{label}
 			</Text>
-			<Text
-				fontSize='sm'
-				fontFamily="'JetBrains Mono', monospace"
-				color='fg'
-			>
+			<Text fontSize='sm' fontFamily="'JetBrains Mono', monospace" color='fg'>
 				{value}
 			</Text>
 		</HStack>
@@ -143,11 +139,20 @@ export function ActivityDetailDrawer({
 			: `${activity.duration}ms`;
 
 	return (
-		<Drawer.Root open={open} onOpenChange={(e) => !e.open && onClose()} placement='end' size='sm'>
+		<Drawer.Root
+			open={open}
+			onOpenChange={(e) => !e.open && onClose()}
+			placement='end'
+			size='sm'
+		>
 			<Portal>
 				<Drawer.Backdrop />
 				<Drawer.Positioner>
-					<Drawer.Content bg='bg.panel' borderColor='border' borderLeftWidth='1px'>
+					<Drawer.Content
+						bg='bg.panel'
+						borderColor='border'
+						borderLeftWidth='1px'
+					>
 						<Drawer.Header
 							borderBottomWidth='1px'
 							borderColor='border'
@@ -171,9 +176,12 @@ export function ActivityDetailDrawer({
 
 						<Drawer.Body px='5' py='4'>
 							<VStack align='stretch' gap='5'>
-								{/* Status */}
 								<HStack justify='space-between'>
-									<Text fontSize='xs' color='fg.faint' textTransform='uppercase'>
+									<Text
+										fontSize='xs'
+										color='fg.faint'
+										textTransform='uppercase'
+									>
 										Status
 									</Text>
 									<StyledBadge
@@ -184,7 +192,6 @@ export function ActivityDetailDrawer({
 									</StyledBadge>
 								</HStack>
 
-								{/* General */}
 								<Box>
 									<Text
 										fontSize='xs'
@@ -206,10 +213,7 @@ export function ActivityDetailDrawer({
 										borderWidth='1px'
 										borderColor='border'
 									>
-										<DetailRow
-											label='Domain'
-											value={activity.qname || '-'}
-										/>
+										<DetailRow label='Domain' value={activity.qname || '-'} />
 										<DetailRow
 											label='Type'
 											value={
@@ -234,7 +238,6 @@ export function ActivityDetailDrawer({
 									</VStack>
 								</Box>
 
-								{/* Resolution / Error details */}
 								{activity.kind === 'query' && (
 									<Box>
 										<Text
@@ -267,17 +270,13 @@ export function ActivityDetailDrawer({
 											<DetailRow
 												label='Cache Hit'
 												value={
-													(activity as QueryActivity).d.cache_hit
-														? 'Yes'
-														: 'No'
+													(activity as QueryActivity).d.cache_hit ? 'Yes' : 'No'
 												}
 											/>
 											<DetailRow
 												label='Blocked'
 												value={
-													(activity as QueryActivity).d.blocked
-														? 'Yes'
-														: 'No'
+													(activity as QueryActivity).d.blocked ? 'Yes' : 'No'
 												}
 											/>
 										</VStack>
@@ -310,8 +309,9 @@ export function ActivityDetailDrawer({
 												label='Error Type'
 												value={
 													ERROR_TYPE_LABELS[
-													(activity as ErrorActivity).d.error_type
-													] || `Type ${(activity as ErrorActivity).d.error_type}`
+														(activity as ErrorActivity).d.error_type
+													] ||
+													`Type ${(activity as ErrorActivity).d.error_type}`
 												}
 											/>
 											<DetailRow

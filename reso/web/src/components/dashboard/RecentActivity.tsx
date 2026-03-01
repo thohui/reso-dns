@@ -37,17 +37,14 @@ export function RecentActivity() {
 			</HStack>
 			<VStack gap='0' align='stretch'>
 				{activities?.items.map((activity, i) => (
-					<ActivityRow
-						key={`${activity.timestamp}-${i}`}
-						activity={activity}
-					/>
+					<ActivityRow key={`${activity.timestamp}-${i}`} activity={activity} />
 				))}
 			</VStack>
 		</Box>
 	);
 }
 
-function ActivityRow({ activity }: { activity: Activity; }) {
+function ActivityRow({ activity }: { activity: Activity }) {
 	const isError = activity.kind === 'error';
 	const isBlocked =
 		activity.kind === 'query' && (activity as QueryActivity).d.blocked;

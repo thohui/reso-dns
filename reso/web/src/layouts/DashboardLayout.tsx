@@ -92,9 +92,7 @@ export function DashboardLayout() {
 								bg={isActive ? 'accent.muted' : 'transparent'}
 								color={isActive ? 'accent.fg' : 'fg.muted'}
 								borderWidth='1px'
-								borderColor={
-									isActive ? 'accent.muted' : 'transparent'
-								}
+								borderColor={isActive ? 'accent.muted' : 'transparent'}
 								_hover={{
 									bg: isActive ? 'accent.muted' : 'bg.subtle',
 									color: isActive ? 'accent.fg' : 'fg',

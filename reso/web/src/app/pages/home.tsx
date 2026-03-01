@@ -73,26 +73,42 @@ export default function HomePage() {
 				gap='6'
 				mb='8'
 			>
-				<Box bg="bg.panel" borderRadius="xl" borderWidth="1px" borderColor="border" p="5">
-					<Text color="fg.subtle" fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.05em" mb="3">
+				<Box
+					bg='bg.panel'
+					borderRadius='xl'
+					borderWidth='1px'
+					borderColor='border'
+					p='5'
+				>
+					<Text
+						color='fg.subtle'
+						fontSize='xs'
+						fontWeight='500'
+						textTransform='uppercase'
+						letterSpacing='0.05em'
+						mb='3'
+					>
 						System Uptime
 					</Text>
-					<Text fontSize="2xl" fontWeight="600" letterSpacing="-0.02em" mb="3">{uptime.text}</Text>
-					<HStack gap="2">
-						<Box position="relative">
-							<Box w="2.5" h="2.5" borderRadius="full" bg="status.success" />
+					<Text fontSize='2xl' fontWeight='600' letterSpacing='-0.02em' mb='3'>
+						{uptime.text}
+					</Text>
+					<HStack gap='2'>
+						<Box position='relative'>
+							<Box w='2.5' h='2.5' borderRadius='full' bg='status.success' />
 							<Box
-								position="absolute"
-								inset="0"
-								borderRadius="full"
-								bg="status.success"
-								className="animate-pulse-glow"
+								position='absolute'
+								inset='0'
+								borderRadius='full'
+								bg='status.success'
+								className='animate-pulse-glow'
 							/>
 						</Box>
-						<Text color="status.success" fontSize="xs" fontWeight="500">All systems operational</Text>
+						<Text color='status.success' fontSize='xs' fontWeight='500'>
+							All systems operational
+						</Text>
 					</HStack>
 				</Box>
-
 			</Box>
 			<RecentActivity />
 		</Box>

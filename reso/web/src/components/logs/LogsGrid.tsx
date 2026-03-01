@@ -136,11 +136,7 @@ function LogDetailRow({
 
 			<Table.Cell py='3' px='4'>
 				<HStack gap='2'>
-					<Icon
-						as={statusIcon}
-						boxSize='3.5'
-						color={STATUS_FG[statusKey]}
-					/>
+					<Icon as={statusIcon} boxSize='3.5' color={STATUS_FG[statusKey]} />
 					<Box
 						px='2.5'
 						py='0.5'
@@ -201,8 +197,7 @@ function LogDetailRow({
 					bg='accent.muted'
 					color='accent.fg'
 				>
-					{TRANSPORT_LABELS[activity.transport] ||
-						`T:${activity.transport}`}
+					{TRANSPORT_LABELS[activity.transport] || `T:${activity.transport}`}
 				</Box>
 			</Table.Cell>
 
@@ -239,7 +234,7 @@ function LogDetailRow({
 	);
 }
 
-export function LogsGrid({ activities }: { activities: Activity[]; }) {
+export function LogsGrid({ activities }: { activities: Activity[] }) {
 	const [filter, setFilter] = useState('all');
 	const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
 		null,
