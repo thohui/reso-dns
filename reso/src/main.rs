@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use aes_gcm::{AesGcm, KeyInit, aead::generic_array::GenericArray};
-use anyhow::Context;
 use api::serve_web;
-use database::{connect, models::user::User, run_migrations};
+use database::{connect, run_migrations};
 use env_config::EnvConfig;
 use global::{Global, SharedGlobal};
 use metrics::service::MetricsService;
@@ -14,7 +13,6 @@ use tokio::signal;
 use tracing::level_filters::LevelFilter;
 use tracing_appender::non_blocking;
 use tracing_subscriber::{Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
-use utils::password::{generate_password, hash_password};
 
 mod api;
 mod database;
@@ -56,23 +54,6 @@ async fn main() -> anyhow::Result<()> {
         database: connection,
         cipher: AesGcm::new(&GenericArray::clone_from_slice(&config.cookie_secret)),
     });
-
-    let users = User::list(&global.database).await.context("list users")?;
-
-    // Generate admin account if there are no users
-    if users.len() == 0 {
-        const ADMIN_USERNAME: &str = "admin";
-        let password = generate_password(16);
-        let password_hash = hash_password(&password)?;
-        let admin_user = User::new(ADMIN_USERNAME, password_hash);
-        admin_user.insert(&global.database).await.context("create admin user")?;
-
-        tracing::info!(
-            "Created user with username: {} and password: {}",
-            ADMIN_USERNAME,
-            password
-        )
-    }
 
     let server = build_dns_server(global.clone()).await?;
 

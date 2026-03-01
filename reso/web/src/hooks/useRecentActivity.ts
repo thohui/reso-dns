@@ -7,7 +7,7 @@ export function useRecentActivity() {
 	const { data } = useQuery({
 		queryKey: ['recent-activity'],
 		queryFn: async () => {
-			return apiClient.activities.list({ top: 10, skip: 0 });
+			return apiClient.activities.list({ top: 5, skip: 0 });
 		},
 		refetchInterval: 5 * 1000,
 	});

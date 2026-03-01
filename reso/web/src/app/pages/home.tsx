@@ -40,31 +40,31 @@ export default function HomePage() {
 					label='Total Queries'
 					value={data?.total ?? 0}
 					icon={Globe}
-					color='blue'
+					accentColor='accent'
 				/>
 				<StatCard
 					label='Queries Blocked'
 					value={data?.blocked ?? 0}
 					icon={Ban}
-					color='red'
+					accentColor='accent'
 				/>
 				<StatCard
 					label='Total Errors'
 					value={data?.errors ?? 0}
 					icon={AlertCircle}
-					color='red'
+					accentColor='accent'
 				/>
 				<StatCard
 					label='Queries cached'
 					value={data?.cached ?? 0}
 					icon={DatabaseBackup}
-					color='red'
+					accentColor='accent'
 				/>
 				<StatCard
 					label='Avg Response'
 					value={`${(data?.sum_duration && data.total ? data?.sum_duration / data?.total : 0).toFixed()} ms`}
 					icon={Clock}
-					color='yellow'
+					accentColor='accent'
 				/>
 			</Box>
 			<Box
@@ -73,28 +73,26 @@ export default function HomePage() {
 				gap='6'
 				mb='8'
 			>
-				<Box
-					bg='bg.panel'
-					borderRadius='lg'
-					borderWidth='1px'
-					borderColor='gray.800'
-					p='6'
-				>
-					<Text color='gray.400' fontSize='sm' mb='2'>
+				<Box bg="bg.panel" borderRadius="xl" borderWidth="1px" borderColor="border" p="5">
+					<Text color="fg.subtle" fontSize="xs" fontWeight="500" textTransform="uppercase" letterSpacing="0.05em" mb="3">
 						System Uptime
 					</Text>
-					<HStack align='baseline' gap='2'>
-						<Text color='white' fontSize='2xl' fontWeight='bold'>
-							{uptime.text}
-						</Text>
-					</HStack>
-					<HStack mt='4' gap='2'>
-						<Box w='3' h='3' borderRadius='full' bg='green.500' />
-						<Text color='green.400' fontSize='sm'>
-							System Online
-						</Text>
+					<Text fontSize="2xl" fontWeight="600" letterSpacing="-0.02em" mb="3">{uptime.text}</Text>
+					<HStack gap="2">
+						<Box position="relative">
+							<Box w="2.5" h="2.5" borderRadius="full" bg="status.success" />
+							<Box
+								position="absolute"
+								inset="0"
+								borderRadius="full"
+								bg="status.success"
+								className="animate-pulse-glow"
+							/>
+						</Box>
+						<Text color="status.success" fontSize="xs" fontWeight="500">All systems operational</Text>
 					</HStack>
 				</Box>
+
 			</Box>
 			<RecentActivity />
 		</Box>

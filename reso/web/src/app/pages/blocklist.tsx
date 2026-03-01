@@ -1,15 +1,21 @@
-import { Box, Button, Heading, HStack, Icon } from '@chakra-ui/react';
-import { Plus } from 'lucide-react';
+import { Box, Button, Grid, Heading, HStack, Icon } from '@chakra-ui/react';
+import { useQueryClient } from '@tanstack/react-query';
+import { Ban, Plus, ShieldCheck, ShieldOff } from 'lucide-react';
+import { StatCard } from '../../components/dashboard/StatCard';
 import { useState } from 'react';
 import { BlocklistDialog } from '../../components/blocklist/BlocklistDialog';
 import { BlocklistGrid } from '../../components/blocklist/BlocklistGrid';
 import { toastError } from '../../components/Toaster';
+import type { BlockedDomain } from '../../lib/api/blocklist';
+import type { PagedResponse } from '../../lib/api/pagination';
 import { useBlocklist } from '../../hooks/useBlocklist';
 import { useCreateDomain } from '../../hooks/useCreateDomain';
 import { useRemoveDomain } from '../../hooks/useRemoveDomain';
+import { useToggleDomain } from '../../hooks/useToggleDomain';
 
 export default function BlocklistPage() {
 	const { data, refetch } = useBlocklist();
+	const queryClient = useQueryClient();
 
 	const [showDialog, setShowDialog] = useState(false);
 
@@ -23,6 +29,7 @@ export default function BlocklistPage() {
 
 	const createDomain = useCreateDomain();
 	const removeDomain = useRemoveDomain();
+	const toggleDomain = useToggleDomain();
 
 	const handleSubmit = async (domain: string) => {
 		await createDomain.mutateAsync(domain, {
@@ -36,9 +43,50 @@ export default function BlocklistPage() {
 		await removeDomain.mutateAsync(domain, {
 			onError: async (e) => {
 				await Promise.all([toastError(e), refetch()]);
-			}
+			},
 		});
+		await refetch();
 	};
+
+	const handleToggle = async (domain: string) => {
+		queryClient.setQueryData<PagedResponse<BlockedDomain>>(
+			['blocklist'],
+			(old) => {
+				if (!old) return old;
+				return {
+					...old,
+					items: old.items.map((d) =>
+						d.domain === domain ? { ...d, enabled: !d.enabled } : d,
+					),
+				};
+			},
+		);
+
+		try {
+			await toggleDomain.mutateAsync(domain);
+		} catch (e) {
+			queryClient.setQueryData<PagedResponse<BlockedDomain>>(
+				['blocklist'],
+				(old) => {
+					if (!old) return old;
+					return {
+						...old,
+						items: old.items.map((d) =>
+							d.domain === domain
+								? { ...d, enabled: !d.enabled }
+								: d,
+						),
+					};
+				},
+			);
+			toastError(e);
+		}
+	};
+
+	const items = data?.items ?? [];
+	const totalCount = items.length;
+	const enabledCount = items.filter((d) => d.enabled).length;
+	const disabledCount = totalCount - enabledCount;
 
 	return (
 		<Box>
@@ -53,15 +101,35 @@ export default function BlocklistPage() {
 					onClick={handleClick}
 				>
 					<Icon as={Plus} boxSize='3.5' mr='2' />
-					Add
+					Add Domain
 				</Button>
 			</HStack>
+
+			<Grid templateColumns='repeat(3, 1fr)' gap='4' mb='6'>
+				<StatCard
+					label='Total Domains'
+					value={totalCount}
+					icon={Ban}
+					accentColor='status.error'
+				/>
+				<StatCard
+					label='Active'
+					value={enabledCount}
+					icon={ShieldCheck}
+					accentColor='status.success'
+				/>
+				<StatCard
+					label='Disabled'
+					value={disabledCount}
+					icon={ShieldOff}
+					accentColor='status.warn'
+				/>
+			</Grid>
+
 			{showDialog && (
 				<BlocklistDialog onClose={handleClose} onSubmit={handleSubmit} />
 			)}
-			<Box display='flex' flexDirection='row-reverse'>
-			</Box>
-			<BlocklistGrid blocklist={data?.items ?? []} onRemove={handleRemove} />
+			<BlocklistGrid blocklist={items} onRemove={handleRemove} onToggle={handleToggle} />
 		</Box>
 	);
-};
+}

@@ -4,7 +4,7 @@ use arc_swap::ArcSwap;
 use reso_blocklist::BlocklistMatcher;
 use reso_dns::domain_name::DomainName;
 
-use crate::database::{DatabaseConnection, models::blocklist::BlockedDomain};
+use crate::database::{DatabaseConnection, models::blocked_domain::BlockedDomain};
 
 pub struct BlocklistService {
     matcher: ArcSwap<BlocklistMatcher>,
@@ -37,9 +37,16 @@ impl BlocklistService {
         Ok(())
     }
 
+    pub async fn toggle_domain(&self, domain: &str) -> anyhow::Result<()> {
+        let domain = DomainName::from_user(domain)?;
+        BlockedDomain::toggle(&domain.to_string(), &self.connection).await?;
+        self.load_matcher().await?;
+        Ok(())
+    }
+
     pub async fn load_matcher(&self) -> anyhow::Result<()> {
         let domains = BlockedDomain::list_all(&self.connection).await?;
-        let updated_matcher = BlocklistMatcher::load(domains.iter().map(|d| d.domain.as_str()))?;
+        let updated_matcher = BlocklistMatcher::load(domains.iter().filter(|d| d.enabled).map(|d| d.domain.as_str()))?;
         self.matcher.swap(updated_matcher.into());
         Ok(())
     }

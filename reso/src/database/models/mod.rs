@@ -1,5 +1,5 @@
 pub mod activity_log;
-pub mod blocklist;
+pub mod blocked_domain;
 pub mod config;
 pub mod error_log;
 pub mod query_log;

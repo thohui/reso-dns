@@ -35,7 +35,6 @@ const isValidHostname = (s: string) => {
 		if (label.startsWith('-') || label.endsWith('-')) return false;
 		return true;
 	});
-
 };
 const isValidIPv6 = (s: string) => {
 	try {
@@ -46,8 +45,7 @@ const isValidIPv6 = (s: string) => {
 	}
 };
 
-
-function parseHostPort(input: string): { host: string; port?: string; } | null {
+function parseHostPort(input: string): { host: string; port?: string } | null {
 	const s = input.trim();
 	if (!s) return null;
 

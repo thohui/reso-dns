@@ -11,44 +11,64 @@ import {
 } from '@chakra-ui/react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
-import { Lock, User } from 'lucide-react';
+import { Lock, ShieldCheck, User } from 'lucide-react';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import z from 'zod';
 import Logo from '../../assets/logo.svg?react';
 import { useApiClient } from '../../contexts/ApiClientContext';
+import { useIsSetupRequired } from '../../hooks/useIsSetupRequired';
 
-const loginSchema = z.object({
-	username: z.string().min(1),
-	password: z.string().min(1),
-});
+const setupSchema = z
+	.object({
+		username: z.string().min(1, 'Username is required'),
+		password: z.string().min(8, 'Password must be at least 8 characters'),
+		confirmPassword: z.string().min(1, 'Please confirm your password'),
+	})
+	.refine((data) => data.password === data.confirmPassword, {
+		message: 'Passwords do not match',
+		path: ['confirmPassword'],
+	});
 
-export default function LoginPage() {
+export default function SetupPage() {
 	const navigate = useNavigate();
-
 	const apiClient = useApiClient();
+	const setupRequired = useIsSetupRequired();
+
+	console.log('yo');
+	useEffect(() => {
+		if (!setupRequired) {
+			navigate('/', { replace: true });
+		}
+	}, [setupRequired, navigate]);
 
 	const {
 		register,
 		handleSubmit,
 		setError,
-		formState: { errors, isLoading },
-	} = useForm({ resolver: zodResolver(loginSchema) });
+		formState: { errors },
+	} = useForm({ resolver: zodResolver(setupSchema) });
 
-	const loginMutation = useMutation({
-		mutationFn: async (data: z.infer<typeof loginSchema>) => {
-			await apiClient.login(data.username, data.password);
+	const setupMutation = useMutation({
+		mutationFn: async (data: { username: string; password: string; }) => {
+			await apiClient.setup(data.username, data.password);
 		},
 	});
 
 	const onSubmit = handleSubmit(async (data) => {
-		await loginMutation.mutateAsync(data, {
-			onSuccess: () => navigate('/home'),
-			onError: () => {
-				setError('username', { message: 'Invalid username or password' });
-				setError('password', { message: 'Invalid username or password' });
+		await setupMutation.mutateAsync(
+			{ username: data.username, password: data.password },
+			{
+				onSuccess: () => navigate('/home'),
+				onError: (e) => {
+					setError('root', {
+						message:
+							e instanceof Error ? e.message : 'Setup failed',
+					});
+				},
 			},
-		});
+		);
 	});
 
 	return (
@@ -82,7 +102,6 @@ export default function LoginPage() {
 				borderColor='border'
 				position='relative'
 				boxShadow='0 0 60px rgba(0, 0, 0, 0.4)'
-				className='animate-slide-in-up'
 			>
 				<VStack gap='2' mb='8'>
 					<Logo width={56} height={56} />
@@ -96,14 +115,30 @@ export default function LoginPage() {
 							[ResoDNS]
 						</Heading>
 						<Text color='fg.muted' fontSize='sm' mt='1'>
-							Network-wide DNS Protection
+							Create your administrator account
 						</Text>
 					</Box>
 				</VStack>
 
+				{errors.root?.message && (
+					<Box
+						bg='status.errorMuted'
+						borderWidth='1px'
+						borderColor='status.error'
+						borderRadius='lg'
+						px='4'
+						py='3'
+						mb='6'
+					>
+						<Text color='status.error' fontSize='sm'>
+							{errors.root.message}
+						</Text>
+					</Box>
+				)}
+
 				<form onSubmit={onSubmit}>
 					<VStack gap='5'>
-						<Field.Root w='full' invalid={!!errors.username || !errors.root}>
+						<Field.Root w='full' invalid={!!errors.username}>
 							<Field.Label
 								color='fg.subtle'
 								fontSize='xs'
@@ -126,7 +161,7 @@ export default function LoginPage() {
 								</Box>
 								<Input
 									type='text'
-									placeholder='Enter your username'
+									placeholder='Choose a username'
 									pl='10'
 									bg='bg.input'
 									borderColor='border.input'
@@ -134,18 +169,19 @@ export default function LoginPage() {
 									_placeholder={{ color: 'fg.faint' }}
 									_focus={{
 										borderColor: 'accent',
-										boxShadow: '0 0 0 1px rgba(233, 30, 120, 0.4)',
+										boxShadow:
+											'0 0 0 1px rgba(233, 30, 120, 0.4)',
 									}}
 									transition='all 0.15s ease'
 									{...register('username')}
 								/>
 							</Group>
 							<Field.ErrorText>
-								{errors.root?.message ?? errors.username?.message}
+								{errors.username?.message}
 							</Field.ErrorText>
 						</Field.Root>
 
-						<Field.Root w='full' invalid={!!errors.root || !!errors.password}>
+						<Field.Root w='full' invalid={!!errors.password}>
 							<Field.Label
 								color='fg.subtle'
 								fontSize='xs'
@@ -168,7 +204,7 @@ export default function LoginPage() {
 								</Box>
 								<Input
 									type='password'
-									placeholder='Enter your password'
+									placeholder='Minimum 8 characters'
 									pl='10'
 									bg='bg.input'
 									borderColor='border.input'
@@ -176,14 +212,62 @@ export default function LoginPage() {
 									_placeholder={{ color: 'fg.faint' }}
 									_focus={{
 										borderColor: 'accent',
-										boxShadow: '0 0 0 1px rgba(233, 30, 120, 0.4)',
+										boxShadow:
+											'0 0 0 1px rgba(233, 30, 120, 0.4)',
 									}}
 									transition='all 0.15s ease'
 									{...register('password')}
 								/>
 							</Group>
 							<Field.ErrorText>
-								{errors.root?.message ?? errors.password?.message}
+								{errors.password?.message}
+							</Field.ErrorText>
+						</Field.Root>
+
+						<Field.Root w='full' invalid={!!errors.confirmPassword}>
+							<Field.Label
+								color='fg.subtle'
+								fontSize='xs'
+								fontWeight='500'
+								textTransform='uppercase'
+								letterSpacing='0.05em'
+							>
+								Confirm Password
+							</Field.Label>
+							<Group w='full' position='relative'>
+								<Box
+									position='absolute'
+									left='3'
+									top='50%'
+									transform='translateY(-50%)'
+									zIndex='1'
+									pointerEvents='none'
+								>
+									<Icon
+										as={ShieldCheck}
+										boxSize='4'
+										color='fg.faint'
+									/>
+								</Box>
+								<Input
+									type='password'
+									placeholder='Repeat your password'
+									pl='10'
+									bg='bg.input'
+									borderColor='border.input'
+									borderRadius='lg'
+									_placeholder={{ color: 'fg.faint' }}
+									_focus={{
+										borderColor: 'accent',
+										boxShadow:
+											'0 0 0 1px rgba(233, 30, 120, 0.4)',
+									}}
+									transition='all 0.15s ease'
+									{...register('confirmPassword')}
+								/>
+							</Group>
+							<Field.ErrorText>
+								{errors.confirmPassword?.message}
 							</Field.ErrorText>
 						</Field.Root>
 
@@ -196,16 +280,16 @@ export default function LoginPage() {
 							fontSize='sm'
 							borderRadius='lg'
 							_hover={{ bg: 'accent.hover' }}
-							loading={isLoading}
-							loadingText='Signing in...'
+							loading={setupMutation.isPending}
+							loadingText='Creating account...'
 							transition='all 0.15s ease'
 						>
-							Sign In
+							Create Account
 						</Button>
 					</VStack>
 				</form>
 				<Text color='fg.faint' fontSize='xs' textAlign='center' mt='6'>
-					Admin panel
+					Initial setup
 				</Text>
 			</Box>
 		</Box>

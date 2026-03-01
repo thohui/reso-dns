@@ -14,7 +14,6 @@ export const toaster = createToaster({
 });
 
 export async function toastError(e: unknown) {
-
 	const toasterDuration = 3000;
 
 	const error = await getApiError(e);
@@ -23,7 +22,7 @@ export async function toastError(e: unknown) {
 		toaster.error({
 			title: 'Error',
 			description: error.message,
-			duration: toasterDuration
+			duration: toasterDuration,
 		});
 	} else if (e instanceof Error) {
 		toaster.error({
@@ -31,7 +30,6 @@ export async function toastError(e: unknown) {
 			description: e.message,
 			duration: toasterDuration,
 		});
-
 	} else {
 		toaster.error({
 			title: 'Error',
@@ -39,7 +37,6 @@ export async function toastError(e: unknown) {
 			duration: toasterDuration,
 		});
 	}
-
 }
 
 export const Toaster = () => {

@@ -29,24 +29,3 @@ pub fn verify_password(password: &str, hash: &str) -> anyhow::Result<()> {
 
     Ok(())
 }
-
-pub fn generate_password(length: usize) -> String {
-    const CHARSET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*-_=+?";
-    let mut out = String::with_capacity(length);
-
-    // rejection sampling to avoid modulo bias.
-    let charset_len = CHARSET.len();
-    let max_acceptable = 256 - (256 % charset_len);
-
-    while out.len() < length {
-        let mut byte = [0u8; 1];
-        OsRng.fill_bytes(&mut byte);
-        let v = byte[0] as usize;
-
-        if v < max_acceptable {
-            out.push(CHARSET[v % charset_len] as char);
-        }
-    }
-
-    out
-}

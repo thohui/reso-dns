@@ -34,7 +34,6 @@ const schema = z.object({
 });
 
 export default function ConfigPage() {
-
 	const config = useConfig();
 
 	const [pickerOpen, setPickerOpen] = useState(false);
@@ -52,7 +51,6 @@ export default function ConfigPage() {
 	const queryClient = useQueryClient();
 
 	const handleSave = form.handleSubmit((data) => {
-
 		const updatedConfig: ConfigModel = {
 			...config.data,
 			dns: {
@@ -75,12 +73,11 @@ export default function ConfigPage() {
 				// Update cache
 				queryClient.setQueryData(useConfigQueryKey, () => data);
 			},
-			onError: (e) => toastError(e)
+			onError: (e) => toastError(e),
 		});
 	});
 
 	const handleAddUpstream = (upstream: Upstream) => {
-
 		const currentUpstreams = form.getValues('upstreams');
 
 		form.setValue('upstreams', [...currentUpstreams, upstream], {
@@ -88,11 +85,9 @@ export default function ConfigPage() {
 			shouldValidate: true,
 			shouldTouch: true,
 		});
-
 	};
 
 	const handleRemoveUpstream = (upstream: Upstream) => {
-
 		const updatedUpStreams = form
 			.getValues('upstreams')
 			.filter((v) => v !== upstream);
@@ -102,7 +97,6 @@ export default function ConfigPage() {
 			shouldValidate: true,
 			shouldTouch: true,
 		});
-
 	};
 
 	const upstreams = form.watch('upstreams');

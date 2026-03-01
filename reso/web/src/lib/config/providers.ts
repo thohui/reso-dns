@@ -5,7 +5,7 @@ export interface ProviderGroup {
 	slug: string;
 	color: string;
 	description: string;
-	servers: { address: string; label: string; }[];
+	servers: { address: string; label: string }[];
 }
 
 export const providerGroups: ProviderGroup[] = [

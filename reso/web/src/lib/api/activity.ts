@@ -161,3 +161,12 @@ export const RECORD_TYPES: Record<number, string> = {
 	263: 'CLA',
 	264: 'IPN',
 };
+
+export const ERROR_TYPE_LABELS: Record<number, string> = {
+	0: 'Timeout',
+	1: 'Connection Refused',
+	2: 'Network Unreachable',
+	3: 'Invalid Response',
+	4: 'Server Failure',
+	5: 'Internal Error',
+};
