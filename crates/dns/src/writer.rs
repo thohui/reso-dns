@@ -28,9 +28,9 @@ impl DnsMessageWriter {
         }
     }
 
-    /// Create a new DNS message writer with the default dns message size (512 bytes)
+    /// Create a new DNS message writer.
     pub fn new() -> Self {
-        Self::new_with_max(512)
+        Self::new_with_max(65535)
     }
 
     #[inline]
