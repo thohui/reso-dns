@@ -8,6 +8,7 @@ export class ApiClient {
 	private eventBus: EventBus;
 	private httpClient: KyInstance;
 	private authenticated: boolean;
+	private setupRequired: boolean;
 
 	public activities: Activities;
 	public stats: Stats;
@@ -30,6 +31,7 @@ export class ApiClient {
 			},
 		});
 		this.authenticated = false;
+		this.setupRequired = false;
 
 		this.activities = new Activities(this.httpClient);
 		this.stats = new Stats(this.httpClient);
@@ -39,20 +41,33 @@ export class ApiClient {
 
 	public async initialize() {
 		try {
-			await this.httpClient.post('api/auth/check');
-			this.setAuthenticated(true);
+			const resp = await this.httpClient
+				.post('api/auth/check')
+				.json<{ authenticated: boolean; setup_required: boolean }>();
+
+			this.setSetupRequired(resp.setup_required);
+			this.setAuthenticated(resp.authenticated);
 		} catch {
 			this.setAuthenticated(false);
 		}
 	}
 
-	private async setAuthenticated(value: boolean) {
+	private setAuthenticated(value: boolean) {
 		this.authenticated = value;
 		this.eventBus.emit('auth-change', value);
 	}
 
+	private setSetupRequired(value: boolean) {
+		this.setupRequired = value;
+		this.eventBus.emit('setup-change', value);
+	}
+
 	public isAuthenticated() {
 		return this.authenticated;
+	}
+
+	public isSetupRequired() {
+		return this.setupRequired;
 	}
 
 	public async login(username: string, password: string) {
@@ -62,6 +77,17 @@ export class ApiClient {
 				password: password,
 			},
 		});
+		this.setAuthenticated(true);
+	}
+
+	public async setup(username: string, password: string) {
+		await this.httpClient.post('api/auth/setup', {
+			json: {
+				username: username,
+				password: password,
+			},
+		});
+		this.setSetupRequired(false);
 		this.setAuthenticated(true);
 	}
 
@@ -87,6 +113,7 @@ export class ApiClient {
 
 export interface Events {
 	'auth-change': boolean;
+	'setup-change': boolean;
 }
 
 export type EventType = keyof Events;

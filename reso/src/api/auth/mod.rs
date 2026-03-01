@@ -7,7 +7,7 @@ use axum::{
     routing::post,
 };
 use axum_extra::extract::cookie::CookieJar;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     database::models::{user::User, user_session::UserSession},
@@ -23,13 +23,11 @@ pub mod middleware;
 pub fn create_auth_router(global: SharedGlobal) -> Router<SharedGlobal> {
     Router::new()
         .route("/login", post(login))
+        .route("/check", post(check))
+        .route("/setup", post(setup))
         .route(
             "/logout",
             post(logout).layer(axum_middleware::from_fn_with_state(global.clone(), auth_middleware)),
-        )
-        .route(
-            "/check",
-            post(check).layer(axum_middleware::from_fn_with_state(global.clone(), auth_middleware)),
         )
         .with_state(global)
 }
@@ -38,6 +36,64 @@ pub fn create_auth_router(global: SharedGlobal) -> Router<SharedGlobal> {
 pub(crate) struct LoginPayload {
     username: String,
     password: String,
+}
+
+#[derive(Serialize)]
+struct CheckResponse {
+    authenticated: bool,
+    setup_required: bool,
+}
+
+pub async fn setup(
+    global: State<SharedGlobal>,
+    jar: CookieJar,
+    payload: Json<LoginPayload>,
+) -> axum::response::Result<Response, ApiError> {
+    let count = User::count(&global.database).await.map_err(|e| {
+        tracing::error!("failed to count users: {:?}", e);
+        ApiError::server_error()
+    })?;
+
+    if count > 0 {
+        return Err(ApiError::setup_already_completed());
+    }
+
+    if payload.username.trim().is_empty() || payload.password.len() < 8 {
+        return Err(ApiError::invalid_credentials());
+    }
+
+    let password_hash = password::hash_password(&payload.password).map_err(|e| {
+        tracing::error!("failed to hash password: {:?}", e);
+        ApiError::server_error()
+    })?;
+
+    let user = User::new(payload.username.trim(), password_hash);
+    let user_id = user.id.clone();
+
+    user.insert(&global.database).await.map_err(|e| {
+        tracing::error!("failed to insert user: {:?}", e);
+        ApiError::server_error()
+    })?;
+
+    let session = UserSession::new(user_id);
+    let session_id = session.id.clone();
+
+    session.insert(&global.database).await.map_err(|e| {
+        tracing::error!("failed to insert user session: {:?}", e);
+        ApiError::server_error()
+    })?;
+
+    let encrypted_cookie = cookie::encrypt_session_id(&global.cipher, session_id).map_err(|e| {
+        tracing::error!("failed to encrypt the session id: {:?}", e);
+        ApiError::server_error()
+    })?;
+
+    let c = cookie::build_session_cookie(encrypted_cookie);
+    let jar = jar.add(c);
+
+    tracing::info!("setup completed: admin user '{}' created", payload.username);
+
+    Ok((jar, StatusCode::OK).into_response())
 }
 
 pub async fn login(
@@ -97,6 +153,33 @@ pub async fn logout(
     Ok((jar, StatusCode::OK).into_response())
 }
 
-pub async fn check() -> axum::response::Result<Response, ApiError> {
-    return Ok(StatusCode::OK.into_response());
+pub async fn check(
+    global: State<SharedGlobal>,
+    jar: CookieJar,
+) -> axum::response::Result<Json<CheckResponse>, ApiError> {
+    let count = User::count(&global.database).await.map_err(|e| {
+        tracing::error!("failed to count users: {:?}", e);
+        ApiError::server_error()
+    })?;
+
+    if count == 0 {
+        return Ok(Json(CheckResponse {
+            authenticated: false,
+            setup_required: true,
+        }));
+    }
+
+    let authenticated = (|| async {
+        let value = jar.get(cookie::SESSION_COOKIE_KEY)?.value().to_string();
+        let id = cookie::decrypt_session_cookie(&global.cipher, &value).ok()?;
+        let session = UserSession::find_by_id(&global.database, id).await.ok()??;
+        if session.is_expired() { None } else { Some(()) }
+    })()
+    .await
+    .is_some();
+
+    Ok(Json(CheckResponse {
+        authenticated,
+        setup_required: false,
+    }))
 }

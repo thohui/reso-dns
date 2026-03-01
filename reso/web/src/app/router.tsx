@@ -6,11 +6,14 @@ import ConfigPage from './pages/config';
 import HomePage from './pages/home';
 import LoginPage from './pages/login';
 import LogsPage from './pages/logs';
+import NotFoundPage from './pages/not-found';
+import SetupPage from './pages/setup';
 
 export function AppRouter() {
 	return (
 		<BrowserRouter>
 			<Routes>
+				<Route path='/setup' element={<SetupPage />} />
 				<Route element={<ProtectedRoute requiresAuthentication={false} />}>
 					<Route path='/' element={<LoginPage />} />
 				</Route>
@@ -22,6 +25,7 @@ export function AppRouter() {
 						<Route path='/config' element={<ConfigPage />} />
 					</Route>
 				</Route>
+				<Route path='*' element={<NotFoundPage />} />
 			</Routes>
 		</BrowserRouter>
 	);

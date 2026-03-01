@@ -1,5 +1,5 @@
+import { getStatusInfo } from '@/lib/status-info';
 import {
-	Badge,
 	Box,
 	Heading,
 	HStack,
@@ -9,22 +9,31 @@ import {
 	Text,
 	VStack,
 } from '@chakra-ui/react';
-import {
-	AlertTriangle,
-	CheckCircle,
-	Clock,
-	ShieldOff,
-	XCircle,
-	Zap,
-} from 'lucide-react';
-import { useState } from 'react';
+import { Clock } from 'lucide-react';
+import { useCallback, useState } from 'react';
 import {
 	type Activity,
+	getRecordType,
+	getTransportLabel,
 	type QueryActivity,
-	RCODE_LABELS,
-	RECORD_TYPES,
-	TRANSPORT_LABELS,
 } from '../../lib/api/activity';
+import { ActivityDetailDrawer } from './ActivityDetailDrawer';
+
+const STATUS_BG: Record<string, string> = {
+	error: 'status.errorMuted',
+	blocked: 'status.blockedMuted',
+	cached: 'status.cachedMuted',
+	warn: 'status.warnMuted',
+	success: 'status.successMuted',
+};
+
+const STATUS_FG: Record<string, string> = {
+	error: 'status.error',
+	blocked: 'status.blocked',
+	cached: 'status.cached',
+	warn: 'status.warn',
+	success: 'status.success',
+};
 
 function formatTimestamp(ts: number): string {
 	const d = new Date(ts);
@@ -41,62 +50,33 @@ function formatDuration(ms: number): string {
 	return `${ms}ms`;
 }
 
-function getStatusInfo(activity: Activity) {
-	if (activity.kind === 'error') {
-		return {
-			label: 'ERROR',
-			color: 'red' as const,
-			icon: XCircle,
-			tokenColor: 'status.error',
-		};
-	}
-	const q = activity as QueryActivity;
-	if (q.d.blocked) {
-		return {
-			label: 'BLOCKED',
-			color: 'orange' as const,
-			icon: ShieldOff,
-			tokenColor: 'status.blocked',
-		};
-	}
-	if (q.d.cache_hit) {
-		return {
-			label: 'CACHED',
-			color: 'blue' as const,
-			icon: Zap,
-			tokenColor: 'status.cached',
-		};
-	}
-	if (q.d.rcode !== 0) {
-		return {
-			label: RCODE_LABELS[q.d.rcode] || `RCODE:${q.d.rcode}`,
-			color: 'yellow' as const,
-			icon: AlertTriangle,
-			tokenColor: 'status.warn',
-		};
-	}
-	return {
-		label: 'OK',
-		color: 'green' as const,
-		icon: CheckCircle,
-		tokenColor: 'status.success',
-	};
-}
-
-function LogDetailRow({ activity }: { activity: Activity }) {
-	const status = getStatusInfo(activity);
+function LogDetailRow({
+	activity,
+	onClick,
+	onKeyDown,
+}: {
+	activity: Activity;
+	onClick: () => void;
+	onKeyDown: (e: React.KeyboardEvent<HTMLTableRowElement>) => void;
+}) {
+	const statusInfo = getStatusInfo(activity);
 
 	return (
 		<Table.Row
 			bg='bg.panel'
 			borderColor='border'
 			_hover={{ bg: 'bg.subtle' }}
+			_focus={{ bg: 'bg.subtle', outline: 'none' }}
 			transition='background 0.15s'
+			cursor='pointer'
+			tabIndex={0}
+			onClick={onClick}
+			onKeyDown={onKeyDown}
 		>
 			<Table.Cell
 				py='3'
 				px='4'
-				fontFamily='mono'
+				fontFamily="'JetBrains Mono', monospace"
 				fontSize='sm'
 				color='fg.muted'
 			>
@@ -105,28 +85,41 @@ function LogDetailRow({ activity }: { activity: Activity }) {
 
 			<Table.Cell py='3' px='4'>
 				<HStack gap='2'>
-					<Icon as={status.icon} boxSize='3.5' color={status.tokenColor} />
-					<Badge colorPalette={status.color} size='sm' variant='subtle'>
-						{status.label}
-					</Badge>
+					<Icon as={statusInfo.icon} boxSize='3.5' color={statusInfo.color} />
+					<Box
+						px='2.5'
+						py='0.5'
+						borderRadius='md'
+						fontSize='xs'
+						fontWeight='600'
+						textTransform='uppercase'
+						letterSpacing='0.03em'
+						bg={statusInfo.bg}
+						color={statusInfo.color}
+					>
+						{statusInfo.label}
+					</Box>
 				</HStack>
 			</Table.Cell>
 
 			<Table.Cell py='3' px='4'>
 				<HStack gap='2'>
-					<Text fontFamily='mono' fontSize='sm'>
+					<Text fontFamily="'JetBrains Mono', monospace" fontSize='sm'>
 						{activity.qname || '-'}
 					</Text>
 					{activity.qtype !== null && (
-						<Badge
-							colorPalette='gray'
-							size='sm'
-							variant='outline'
-							color='white'
-							fontFamily='mono'
+						<Box
+							px='2'
+							py='0.5'
+							borderRadius='md'
+							fontSize='xs'
+							fontWeight='500'
+							fontFamily="'JetBrains Mono', monospace"
+							bg='accent.muted'
+							color='accent.fg'
 						>
-							{RECORD_TYPES[activity.qtype] || 'Unknown'}
-						</Badge>
+							{getRecordType(activity.qtype)}
+						</Box>
 					)}
 				</HStack>
 			</Table.Cell>
@@ -134,7 +127,7 @@ function LogDetailRow({ activity }: { activity: Activity }) {
 			<Table.Cell
 				py='3'
 				px='4'
-				fontFamily='mono'
+				fontFamily="'JetBrains Mono', monospace"
 				fontSize='sm'
 				color='fg.muted'
 			>
@@ -142,16 +135,37 @@ function LogDetailRow({ activity }: { activity: Activity }) {
 			</Table.Cell>
 
 			<Table.Cell py='3' px='4'>
-				<Badge colorPalette='gray' size='sm' variant='subtle'>
-					{TRANSPORT_LABELS[activity.transport] || `T:${activity.transport}`}
-				</Badge>
+				<Box
+					display='inline-block'
+					px='2'
+					py='0.5'
+					borderRadius='md'
+					fontSize='xs'
+					fontWeight='500'
+					fontFamily="'JetBrains Mono', monospace"
+					bg='accent.muted'
+					color='accent.fg'
+				>
+					{getTransportLabel(activity.transport)}
+				</Box>
+			</Table.Cell>
+
+			<Table.Cell py='3' px='4'>
+				<Text
+					fontSize='xs'
+					color={statusInfo.text ? statusInfo.color : 'fg.faint'}
+					truncate
+					maxW='200px'
+				>
+					{statusInfo.text || '-'}
+				</Text>
 			</Table.Cell>
 
 			<Table.Cell py='3' px='4' textAlign='right'>
 				<HStack gap='1' justify='flex-end'>
 					<Icon as={Clock} boxSize='3' color='fg.subtle' />
 					<Text
-						fontFamily='mono'
+						fontFamily="'JetBrains Mono', monospace"
 						fontSize='sm'
 						color={
 							activity.duration > 1000
@@ -171,6 +185,27 @@ function LogDetailRow({ activity }: { activity: Activity }) {
 
 export function LogsGrid({ activities }: { activities: Activity[] }) {
 	const [filter, setFilter] = useState('all');
+	const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
+		null,
+	);
+	const handleRowKeyDown = useCallback(
+		(e: React.KeyboardEvent<HTMLTableRowElement>, activity: Activity) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				setSelectedActivity(activity);
+			} else if (e.key === 'ArrowDown') {
+				e.preventDefault();
+				const next = e.currentTarget.nextElementSibling as HTMLElement | null;
+				next?.focus();
+			} else if (e.key === 'ArrowUp') {
+				e.preventDefault();
+				const prev = e.currentTarget
+					.previousElementSibling as HTMLElement | null;
+				prev?.focus();
+			}
+		},
+		[],
+	);
 
 	const filteredActivities = activities.filter((a) => {
 		if (filter === 'all') return true;
@@ -331,6 +366,16 @@ export function LogsGrid({ activities }: { activities: Activity[] }) {
 									fontSize='xs'
 									textTransform='uppercase'
 									letterSpacing='wider'
+								>
+									Detail
+								</Table.ColumnHeader>
+								<Table.ColumnHeader
+									color='fg.muted'
+									py='3'
+									px='4'
+									fontSize='xs'
+									textTransform='uppercase'
+									letterSpacing='wider'
 									textAlign='right'
 								>
 									Duration
@@ -342,12 +387,14 @@ export function LogsGrid({ activities }: { activities: Activity[] }) {
 								<LogDetailRow
 									key={`${activity.timestamp}-${i}`}
 									activity={activity}
+									onClick={() => setSelectedActivity(activity)}
+									onKeyDown={(e) => handleRowKeyDown(e, activity)}
 								/>
 							))}
 							{filteredActivities.length === 0 && (
 								<Table.Row bg='bg.panel'>
 									<Table.Cell
-										colSpan={6}
+										colSpan={7}
 										py='8'
 										textAlign='center'
 										color='fg.muted'
@@ -360,6 +407,12 @@ export function LogsGrid({ activities }: { activities: Activity[] }) {
 					</Table.Root>
 				</Box>
 			</Box>
+
+			<ActivityDetailDrawer
+				activity={selectedActivity}
+				open={selectedActivity !== null}
+				onClose={() => setSelectedActivity(null)}
+			/>
 		</Box>
 	);
 }

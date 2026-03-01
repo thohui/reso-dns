@@ -1,19 +1,8 @@
-import {
-	Badge,
-	Box,
-	Heading,
-	HStack,
-	Icon,
-	Text,
-	VStack,
-} from '@chakra-ui/react';
-import { CheckCircle, ShieldOff, XCircle } from 'lucide-react';
+import { Box, HStack, Icon, Text, VStack } from '@chakra-ui/react';
+import { Zap } from 'lucide-react';
 import { useRecentActivity } from '../../hooks/useRecentActivity';
-import {
-	type Activity,
-	type QueryActivity,
-	TRANSPORT_LABELS,
-} from '../../lib/api/activity';
+import { type Activity, getTransportLabel } from '../../lib/api/activity';
+import { getStatusInfo } from '../../lib/status-info';
 
 export function RecentActivity() {
 	const activities = useRecentActivity();
@@ -21,45 +10,39 @@ export function RecentActivity() {
 	return (
 		<Box
 			bg='bg.panel'
-			borderRadius='lg'
+			borderRadius='xl'
 			borderWidth='1px'
-			borderColor='gray.800'
-			p='6'
+			borderColor='border'
+			overflow='hidden'
 		>
-			<Heading size='md' color='white' mb='4'>
-				Recent Activity
-			</Heading>
-			<VStack gap='3' align='stretch'>
-				{activities?.items.map((activity) => (
-					<ActivityRow key={activity.timestamp} activity={activity} />
+			<HStack
+				justify='space-between'
+				px='5'
+				py='4'
+				borderBottomWidth='1px'
+				borderColor='border'
+			>
+				<HStack gap='2'>
+					<Icon as={Zap} boxSize='4' color='accent.subtle' />
+					<Text fontWeight='500' fontSize='sm'>
+						Recent Activity
+					</Text>
+				</HStack>
+				<Text fontSize='xs' color='fg.faint'>
+					Last 5 entries
+				</Text>
+			</HStack>
+			<VStack gap='0' align='stretch'>
+				{activities?.items.map((activity, i) => (
+					<ActivityRow key={`${activity.timestamp}-${i}`} activity={activity} />
 				))}
 			</VStack>
 		</Box>
 	);
 }
 
-function ActivityRow({ activity }: { activity: Activity; }) {
-	const isError = activity.kind === 'error';
-
-	const isBlocked =
-		activity.kind === 'query' && (activity as QueryActivity).d.blocked;
-
-	let statusColor: string = 'status.success';
-	let badgePalette: string = 'green';
-	let statusLabel: string = 'ok';
-	let icon = CheckCircle;
-
-	if (isError) {
-		statusColor = 'status.error';
-		statusLabel = 'error';
-		badgePalette = 'red';
-		icon = XCircle;
-	} else if (isBlocked) {
-		statusColor = 'status.blocked';
-		statusLabel = 'blocked';
-		badgePalette = 'red';
-		icon = ShieldOff;
-	}
+function ActivityRow({ activity }: { activity: Activity }) {
+	const status = getStatusInfo(activity);
 
 	const time = new Date(activity.timestamp).toLocaleTimeString('en-US', {
 		hour12: false,
@@ -71,28 +54,55 @@ function ActivityRow({ activity }: { activity: Activity; }) {
 	return (
 		<HStack
 			justify='space-between'
-			py='2'
+			px='5'
+			py='3'
 			borderBottomWidth='1px'
 			borderColor='border'
-			_last={{ border: 'none' }}
+			_last={{ borderBottom: 'none' }}
+			_hover={{ bg: 'bg.subtle' }}
+			transition='background 0.1s ease'
 		>
 			<HStack gap='3'>
-				<Icon as={icon} boxSize='4' color={statusColor} />
-				<Text fontFamily='mono' fontSize='sm'>
+				<Icon as={status.icon} boxSize='3.5' color={status.color} />
+				<Text
+					fontFamily="'JetBrains Mono', monospace"
+					fontSize='xs'
+					fontWeight='500'
+				>
 					{activity.qname || '-'}
 				</Text>
-				<Badge colorPalette={badgePalette} size='sm'>
-					{statusLabel}
-				</Badge>
+				<Box
+					px='2.5'
+					py='0.5'
+					borderRadius='md'
+					fontSize='xs'
+					fontWeight='600'
+					textTransform='uppercase'
+					letterSpacing='0.03em'
+					bg={status.bg}
+					color={status.color}
+				>
+					{status.label}
+				</Box>
 			</HStack>
-			<HStack gap='4'>
-				<Badge colorPalette='gray' size='sm' variant='subtle'>
-					{TRANSPORT_LABELS[activity.transport] || '?'}
-				</Badge>
-				<Text color='fg.subtle' fontSize='sm'>
-					{activity.client || 'unknown'}
-				</Text>
-				<Text color='fg.faint' fontSize='sm' fontFamily='mono'>
+			<HStack gap='3'>
+				<Box
+					px='2'
+					py='0.5'
+					borderRadius='md'
+					fontSize='xs'
+					fontWeight='500'
+					fontFamily="'JetBrains Mono', monospace"
+					bg='accent.muted'
+					color='accent.fg'
+				>
+					{getTransportLabel(activity.transport)}
+				</Box>
+				<Text
+					color='fg.faint'
+					fontSize='xs'
+					fontFamily="'JetBrains Mono', monospace"
+				>
 					{time}
 				</Text>
 			</HStack>

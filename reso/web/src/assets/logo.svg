@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="340 290 345 450">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: url(#linear-gradient-2);
+      }
+
+      .cls-2 {
+        fill: #ff0076;
+      }
+
+      .cls-3 {
+        fill: url(#linear-gradient);
+      }
+    </style>
+    <linearGradient id="linear-gradient" x1="611.77" y1="389.93" x2="611.77" y2="693.27" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff0076"/>
+      <stop offset="1" stop-color="#000120"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-2" x1="584.18" y1="698.06" x2="416.18" y2="410.06" xlink:href="#linear-gradient"/>
+  </defs>
+  <g>
+    <polygon class="cls-2" points="459.97 310.38 362.75 371.49 362.75 601.35 462.4 540.59 462.4 423.21 560.78 367.71 560.78 367.69 459.97 310.38"/>
+    <polygon class="cls-2" points="560.78 367.69 560.78 367.71 560.79 367.7 560.78 367.69"/>
+    <polygon class="cls-2" points="662.75 539.43 662.75 425.66 560.79 367.7 560.78 367.71 560.78 597.99 662.75 539.43"/>
+    <polygon class="cls-2" points="560.78 716.28 659.16 656.56 462.4 540.59 462.4 659.34 560.78 716.28"/>
+  </g>
+  <polygon class="cls-2" points="462.4 540.59 462.4 540.53 462.36 540.62 462.4 540.59"/>
+  <polygon class="cls-3" points="662.75 539.43 662.75 425.66 561.02 367.83 560.78 368.18 560.78 597.99 662.75 539.43"/>
+  <polygon class="cls-1" points="560.78 716.28 659.16 656.56 462.4 540.59 462.4 659.34 560.78 716.28"/>
+  <polygon class="cls-2" points="560.78 367.71 560.78 367.69 459.97 310.38 362.75 371.49 362.75 601.35 462.36 540.62 462.4 540.53 462.4 423.21 560.78 367.71"/>
+  <polygon class="cls-2" points="560.78 367.71 560.79 367.7 560.78 367.69 560.78 367.71"/>
+  <polygon class="cls-2" points="560.79 367.7 560.78 367.71 560.78 368.18 561.02 367.83 560.79 367.7"/>
+</svg>

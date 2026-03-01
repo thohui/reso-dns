@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Suspense } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import Logo from '../assets/logo.svg?react';
 import { useLogout } from '../hooks/useLogout';
 
 interface MenuItem {
@@ -57,14 +58,15 @@ export function DashboardLayout() {
 				flexDirection='column'
 			>
 				<HStack gap='3' px='3' mb='8'>
-					<Box>
-						<Text fontWeight='600' fontSize='sm' letterSpacing='-0.01em'>
-							ResoDNS
-						</Text>
-						<Text fontSize='xs' color='fg.faint' lineHeight='1'>
-							v1.0.0
-						</Text>
-					</Box>
+					<Logo width={28} height={28} />
+					<Text
+						fontWeight='600'
+						fontSize='sm'
+						letterSpacing='-0.02em'
+						fontFamily="'JetBrains Mono', monospace"
+					>
+						[ResoDNS]
+					</Text>
 				</HStack>
 
 				{/* Navigation */}
@@ -90,9 +92,7 @@ export function DashboardLayout() {
 								bg={isActive ? 'accent.muted' : 'transparent'}
 								color={isActive ? 'accent.fg' : 'fg.muted'}
 								borderWidth='1px'
-								borderColor={
-									isActive ? 'rgba(233, 30, 120, 0.15)' : 'transparent'
-								}
+								borderColor={isActive ? 'accent.muted' : 'transparent'}
 								_hover={{
 									bg: isActive ? 'accent.muted' : 'bg.subtle',
 									color: isActive ? 'accent.fg' : 'fg',
@@ -138,8 +138,10 @@ export function DashboardLayout() {
 
 			{/* Main Content */}
 			<Box flex='1' p='8' overflowY='auto' maxH='100vh'>
-				<Suspense fallback={<h1>loading...</h1>}>
-					<Outlet />
+				<Suspense fallback={null}>
+					<Box key={location.pathname} className='animate-fade-in'>
+						<Outlet />
+					</Box>
 				</Suspense>
 			</Box>
 		</Flex>

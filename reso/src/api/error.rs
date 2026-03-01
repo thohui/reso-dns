@@ -39,6 +39,14 @@ impl ApiError {
             jar: None,
         }
     }
+    pub fn setup_already_completed() -> Self {
+        Self {
+            status_code: StatusCode::CONFLICT,
+            error: Cow::Borrowed("setup_already_completed"),
+            message: Cow::Borrowed("Setup has already been completed."),
+            jar: None,
+        }
+    }
     pub fn server_error() -> Self {
         Self {
             status_code: StatusCode::INTERNAL_SERVER_ERROR,

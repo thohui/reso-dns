@@ -30,9 +30,18 @@ export class Blocklist {
 			},
 		});
 	}
+
+	public async toggle(domain: string) {
+		await this.httpClient.patch('api/blocklist/toggle', {
+			json: {
+				domain,
+			},
+		});
+	}
 }
 
 export interface BlockedDomain {
 	domain: string;
 	created_at: number;
+	enabled: boolean;
 }

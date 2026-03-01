@@ -94,6 +94,16 @@ impl User {
         Ok(user)
     }
 
+    pub async fn count(db: &DatabaseConnection) -> anyhow::Result<i64> {
+        let conn = db.conn().await;
+
+        let count = conn
+            .call(|c| c.query_one("SELECT COUNT(*) FROM users", [], |r| r.get(0)))
+            .await?;
+
+        Ok(count)
+    }
+
     pub async fn list(db: &DatabaseConnection) -> anyhow::Result<Vec<Self>> {
         let conn = db.conn().await;
 

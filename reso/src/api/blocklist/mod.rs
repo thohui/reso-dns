@@ -1,10 +1,10 @@
-use crate::{database::models::blocklist::BlockedDomain, global::SharedGlobal};
+use crate::{database::models::blocked_domain::BlockedDomain, global::SharedGlobal};
 use axum::{
     Json, Router,
     extract::{Query, State},
     http::StatusCode,
     middleware,
-    routing::{delete, get, post},
+    routing::{delete, get, patch, post},
 };
 use serde::Deserialize;
 
@@ -19,6 +19,7 @@ pub fn create_blocklist_router(global: SharedGlobal) -> Router<SharedGlobal> {
         .route("/", get(list))
         .route("/", delete(remove_domain))
         .route("/", post(add_domain))
+        .route("/toggle", patch(toggle_domain))
         .layer(middleware::from_fn_with_state(global, auth_middleware))
 }
 
@@ -71,4 +72,13 @@ pub async fn add_domain(
     }
 
     Ok(StatusCode::CREATED)
+}
+
+pub async fn toggle_domain(global: State<SharedGlobal>, Json(payload): Json<DomainPayload>) -> Result<(), ApiError> {
+    if let Err(e) = global.blocklist.toggle_domain(&payload.domain).await {
+        tracing::error!("failed to toggle domain: {:?}", e);
+        return Err(ApiError::server_error());
+    }
+
+    Ok(())
 }

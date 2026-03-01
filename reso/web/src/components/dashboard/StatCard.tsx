@@ -1,38 +1,49 @@
 import { Box, HStack, Icon, Text } from '@chakra-ui/react';
-import type { Activity } from 'lucide-react';
-
-const colorMap = {
-	green: { bg: 'green.600' },
-	red: { bg: 'red.600' },
-	blue: { bg: 'blue.600' },
-	yellow: { bg: 'yellow.600' },
-} as const;
+import { type Activity } from 'lucide-react';
 
 interface Props {
 	label: string;
 	value: string | number;
 	icon: typeof Activity;
-	color?: 'green' | 'red' | 'blue' | 'yellow';
+	accentColor: string;
 }
 
-export function StatCard({ label, value, icon, color = 'green' }: Props) {
+export function StatCard({ label, value, icon, accentColor }: Props) {
 	return (
 		<Box
 			bg='bg.panel'
-			borderRadius='lg'
+			borderRadius='xl'
 			borderWidth='1px'
-			borderColor='bg.panel'
-			p='6'
+			borderColor='border'
+			p='5'
+			position='relative'
+			overflow='hidden'
+			transition='border-color 0.2s ease'
+			_hover={{ borderColor: 'border.input' }}
 		>
-			<HStack justify='space-between' mb='4'>
-				<Text color='gray.400' fontSize='sm'>
+			<Box
+				position='absolute'
+				top='0'
+				left='0'
+				right='0'
+				h='1px'
+				bg={accentColor}
+				opacity='0.5'
+			/>
+
+			<HStack justify='space-between' mb='3'>
+				<Text
+					color='fg.subtle'
+					fontSize='xs'
+					fontWeight='500'
+					textTransform='uppercase'
+					letterSpacing='0.05em'
+				>
 					{label}
 				</Text>
-				<Box p='2' bg={colorMap[color].bg} borderRadius='md'>
-					<Icon as={icon} boxSize='4' color='white' />
-				</Box>
+				<Icon as={icon} boxSize='4' color='fg.faint' />
 			</HStack>
-			<Text color='white' fontSize='3xl' fontWeight='bold'>
+			<Text fontSize='2xl' fontWeight='600' letterSpacing='-0.02em'>
 				{value}
 			</Text>
 		</Box>

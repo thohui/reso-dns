@@ -55,6 +55,10 @@ export const TRANSPORT_LABELS: Record<number, string> = {
 	4: 'DoQ',
 };
 
+export function getTransportLabel(id: number) {
+	return TRANSPORT_LABELS[id] ?? 'Unknown';
+}
+
 export const RCODE_LABELS: Record<number, string> = {
 	0: 'NOERROR',
 	1: 'FORMERR',
@@ -63,6 +67,10 @@ export const RCODE_LABELS: Record<number, string> = {
 	4: 'NOTIMP',
 	5: 'REFUSED',
 };
+
+export function getResponseCodeLabel(id: number) {
+	return RCODE_LABELS[id] ?? id.toString();
+}
 
 export const RECORD_TYPES: Record<number, string> = {
 	1: 'A',
@@ -161,3 +169,20 @@ export const RECORD_TYPES: Record<number, string> = {
 	263: 'CLA',
 	264: 'IPN',
 };
+
+export function getRecordType(id: number) {
+	return RECORD_TYPES[id] ?? id.toString();
+}
+
+export const ERROR_TYPE_LABELS: Record<number, string> = {
+	0: 'Timeout',
+	1: 'Connection Refused',
+	2: 'Network Unreachable',
+	3: 'Invalid Response',
+	4: 'Server Failure',
+	5: 'Internal Error',
+};
+
+export function getErrorTypeLabel(id: number) {
+	return ERROR_TYPE_LABELS[id] ?? 'Unknown';
+}

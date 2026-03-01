@@ -7,7 +7,7 @@ import {
 	Icon,
 	IconButton,
 	Input,
-	Text
+	Text,
 } from '@chakra-ui/react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, Check, ChevronRight, Plus, X } from 'lucide-react';
@@ -169,7 +169,6 @@ export function ServersView({
 	existingUpstreams: Upstream[];
 	handleSelectProvider: (provider: ProviderGroup | 'custom') => void;
 }) {
-
 	return (
 		<Box>
 			{providerGroups.map((group, i) => {

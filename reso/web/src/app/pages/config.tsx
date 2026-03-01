@@ -34,7 +34,6 @@ const schema = z.object({
 });
 
 export default function ConfigPage() {
-
 	const config = useConfig();
 
 	const [pickerOpen, setPickerOpen] = useState(false);
@@ -52,7 +51,6 @@ export default function ConfigPage() {
 	const queryClient = useQueryClient();
 
 	const handleSave = form.handleSubmit((data) => {
-
 		const updatedConfig: ConfigModel = {
 			...config.data,
 			dns: {
@@ -75,12 +73,11 @@ export default function ConfigPage() {
 				// Update cache
 				queryClient.setQueryData(useConfigQueryKey, () => data);
 			},
-			onError: (e) => toastError(e)
+			onError: (e) => toastError(e),
 		});
 	});
 
 	const handleAddUpstream = (upstream: Upstream) => {
-
 		const currentUpstreams = form.getValues('upstreams');
 
 		form.setValue('upstreams', [...currentUpstreams, upstream], {
@@ -88,11 +85,9 @@ export default function ConfigPage() {
 			shouldValidate: true,
 			shouldTouch: true,
 		});
-
 	};
 
 	const handleRemoveUpstream = (upstream: Upstream) => {
-
 		const updatedUpStreams = form
 			.getValues('upstreams')
 			.filter((v) => v !== upstream);
@@ -102,7 +97,6 @@ export default function ConfigPage() {
 			shouldValidate: true,
 			shouldTouch: true,
 		});
-
 	};
 
 	const upstreams = form.watch('upstreams');
@@ -170,6 +164,8 @@ export default function ConfigPage() {
 
 							const protocol = detectProtocol(upstream);
 
+							const protocolColor = PROTOCOL_COLORS[protocol] ?? '#71717a';
+
 							return (
 								<HStack
 									key={upstream}
@@ -208,14 +204,14 @@ export default function ConfigPage() {
 													px='1.5'
 													py='0.5'
 													borderRadius='md'
-													bg={`${PROTOCOL_COLORS[protocol] || '#71717a'}18`}
+													bg={hexToRgba(protocolColor, 0.09)}
 													borderWidth='1px'
-													borderColor={`${PROTOCOL_COLORS[protocol] || '#71717a'}30`}
+													borderColor={hexToRgba(protocolColor, 0.19)}
 												>
 													<Text
 														fontSize='2xs'
 														fontWeight='600'
-														color={PROTOCOL_COLORS[protocol] || '#71717a'}
+														color={protocolColor}
 														letterSpacing='0.02em'
 													>
 														{protocol}
