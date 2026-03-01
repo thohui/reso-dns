@@ -19,7 +19,7 @@ import {
 } from '../../lib/api/activity';
 import { getStatusInfo } from '../../lib/status-info';
 
-function DetailRow({ label, value }: { label: string; value: string; }) {
+function DetailRow({ label, value }: { label: string; value: string }) {
 	return (
 		<HStack justify='space-between' py='2'>
 			<Text fontSize='xs' color='fg.faint' textTransform='uppercase'>
@@ -69,7 +69,6 @@ export function ActivityDetailDrawer({
 	open,
 	onClose,
 }: ActivityDetailDrawerProps) {
-
 	if (!activity) return null;
 
 	const statusInfo = getStatusInfo(activity);

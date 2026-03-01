@@ -18,6 +18,7 @@ import {
 import { Suspense } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Logo from '../assets/logo.svg?react';
+import { PageLoader } from '../components/PageLoader';
 import { useLogout } from '../hooks/useLogout';
 
 interface MenuItem {
@@ -137,7 +138,7 @@ export function DashboardLayout() {
 
 			<Box flex='1' p='8' overflowY='auto' maxH='100vh'>
 				<Box maxW='1400px' mx='auto'>
-					<Suspense fallback={null}>
+					<Suspense fallback={<PageLoader />}>
 						<Box key={location.pathname} className='animate-fade-in'>
 							<Outlet />
 						</Box>

@@ -37,11 +37,11 @@ export function RecentActivity() {
 					<ActivityRow key={`${activity.timestamp}-${i}`} activity={activity} />
 				))}
 			</VStack>
-		</Box >
+		</Box>
 	);
 }
 
-function ActivityRow({ activity }: { activity: Activity; }) {
+function ActivityRow({ activity }: { activity: Activity }) {
 	const status = getStatusInfo(activity);
 
 	const time = new Date(activity.timestamp).toLocaleTimeString('en-US', {
