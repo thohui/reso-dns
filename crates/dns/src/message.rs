@@ -423,11 +423,7 @@ impl DnsReadable for DnsQuestion {
 impl DnsWritable for DnsQuestion {
     fn write_to(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
         writer.write_qname(&self.qname)?;
-        if let RecordType::Unknown(unknown_record) = self.qtype {
-            writer.write_u16(unknown_record)?;
-        } else {
-            writer.write_u16(self.qtype.to_u16());
-        }
+        writer.write_u16(self.qtype.to_u16())?;
         writer.write_u16(self.qclass.to_u16())?;
         Ok(())
     }
@@ -1369,23 +1365,6 @@ mod tests {
         assert_eq!(decoded_message.flags.opcode, DnsOpcode::Query);
     }
     #[test]
-    fn test_ns_query_encoding() {
-        let domain_name = DomainName::from_ascii("com").unwrap();
-        let packet = DnsMessageBuilder::new()
-            .add_question(DnsQuestion::new(domain_name, RecordType::NS, ClassType::IN))
-            .build();
-
-        let encoded = packet.encode().unwrap();
-        let hex: Vec<String> = encoded.iter().map(|b| format!("{:02x}", b)).collect();
-        println!("Packet: {}", hex.join(" "));
-
-        assert!(hex.contains(&"00".to_string()));
-        assert!(hex.contains(&"02".to_string())); // QTYPE = 2
-        assert!(hex.contains(&"00".to_string()));
-        assert!(hex.contains(&"01".to_string())); // QCLASS = 1
-    }
-
-    #[test]
     fn test_message_compression() {
         let message = DnsMessageBuilder::new()
             .with_id(1)
@@ -1434,7 +1413,7 @@ mod tests {
 
     #[test]
     fn test_dns_flags_try_from_u16() {
-        // Test all flags set
+        // test all flags set
         let flags_bytes: u16 = 0b1000_0111_1111_1111;
         let flags = DnsFlags::try_from(flags_bytes).unwrap();
         assert!(flags.response);
@@ -1446,7 +1425,7 @@ mod tests {
         assert!(flags.authentic_data);
         assert!(flags.checking_disabled);
 
-        // Test no flags set
+        // test no flags set
         let flags_bytes: u16 = 0;
         let flags = DnsFlags::try_from(flags_bytes).unwrap();
         assert!(!flags.response);
@@ -1543,31 +1522,6 @@ mod tests {
     }
 
     #[test]
-    fn test_dns_message_accessors() {
-        let question = DnsQuestion::new(
-            DomainName::from_ascii("example.com").unwrap(),
-            RecordType::A,
-            ClassType::IN,
-        );
-
-        let message = DnsMessage::new(
-            12345,
-            DnsFlags::default(),
-            vec![question.clone()],
-            vec![],
-            vec![],
-            vec![],
-        );
-
-        assert_eq!(message.questions().len(), 1);
-        assert_eq!(message.questions()[0], question);
-        assert_eq!(message.answers().len(), 0);
-        assert_eq!(message.authority_records().len(), 0);
-        assert_eq!(message.additional_records().len(), 0);
-        assert!(message.edns().is_none());
-    }
-
-    #[test]
     fn test_dns_record_data_ipv4() {
         use std::net::Ipv4Addr;
         let ip = Ipv4Addr::new(192, 168, 1, 1);
@@ -1579,19 +1533,6 @@ mod tests {
 
         assert_eq!(bytes.len(), 4);
         assert_eq!(&bytes[..], &[192, 168, 1, 1]);
-    }
-
-    #[test]
-    fn test_dns_record_data_ipv6() {
-        use std::net::Ipv6Addr;
-        let ip = Ipv6Addr::new(0x2001, 0x0db8, 0, 0, 0, 0, 0, 1);
-        let data = DnsRecordData::Ipv6(ip);
-
-        let mut writer = DnsMessageWriter::new();
-        data.write(&mut writer).unwrap();
-        let bytes = writer.into_bytes();
-
-        assert_eq!(bytes.len(), 16);
     }
 
     #[test]
@@ -1608,60 +1549,6 @@ mod tests {
         assert_eq!(&bytes[1..6], b"hello");
         assert_eq!(bytes[6], 5);
         assert_eq!(&bytes[7..12], b"world");
-    }
-
-    #[test]
-    fn test_dns_record_data_domain_name() {
-        let domain = DomainName::from_ascii("example.com").unwrap();
-        let data = DnsRecordData::DomainName(domain.clone());
-
-        let mut writer = DnsMessageWriter::new();
-        data.write(&mut writer).unwrap();
-        let bytes = writer.into_bytes();
-
-        let mut reader = DnsMessageReader::new(&bytes);
-        let decoded_domain = reader.read_qname().unwrap();
-        assert_eq!(decoded_domain, domain);
-    }
-
-    #[test]
-    fn test_dns_record_data_mx() {
-        let host = DomainName::from_ascii("mail.example.com").unwrap();
-        let data = DnsRecordData::MX {
-            priority: 10,
-            host: host.clone(),
-        };
-
-        let mut writer = DnsMessageWriter::new();
-        data.write(&mut writer).unwrap();
-        let bytes = writer.into_bytes();
-
-        let mut reader = DnsMessageReader::new(&bytes);
-        assert_eq!(reader.read_u16().unwrap(), 10);
-        let decoded_host = reader.read_qname().unwrap();
-        assert_eq!(decoded_host, host);
-    }
-
-    #[test]
-    fn test_edns_do_bit() {
-        let mut edns = Edns::default();
-        assert!(!edns.do_bit());
-
-        edns.set_do_bit(true);
-        assert!(edns.do_bit());
-
-        edns.set_do_bit(false);
-        assert!(!edns.do_bit());
-    }
-
-    #[test]
-    fn test_edns_default() {
-        let edns = Edns::default();
-        assert_eq!(edns.udp_payload_size, 4096);
-        assert_eq!(edns.extended_rcode, 0);
-        assert_eq!(edns.version, 0);
-        assert_eq!(edns.z_flags, 0);
-        assert_eq!(edns.options.len(), 0);
     }
 
     #[test]
@@ -1736,12 +1623,6 @@ mod tests {
     }
 
     #[test]
-    fn test_dns_opcode_default() {
-        let opcode = DnsOpcode::default();
-        assert_eq!(opcode, DnsOpcode::Query);
-    }
-
-    #[test]
     fn test_dns_message_empty() {
         let message = DnsMessage::new(0, DnsFlags::default(), vec![], vec![], vec![], vec![]);
 
@@ -1752,4 +1633,701 @@ mod tests {
         assert_eq!(decoded.questions().len(), 0);
         assert_eq!(decoded.answers().len(), 0);
     }
+
+    #[test]
+    fn test_soa_record_roundtrip() {
+        let soa = DnsRecord {
+            name: DomainName::from_ascii("example.com").unwrap(),
+            record_type: RecordType::SOA,
+            class: ClassType::IN,
+            ttl: 3600,
+            data: DnsRecordData::SOA {
+                mname: DomainName::from_ascii("ns1.example.com").unwrap(),
+                rname: DomainName::from_ascii("admin.example.com").unwrap(),
+                serial: 2024010101,
+                refresh: 7200,
+                retry: 3600,
+                expire: 1209600,
+                minimum: 86400,
+            },
+        };
+
+        let message = DnsMessage::new(1, DnsFlags::default(), vec![], vec![], vec![soa.clone()], vec![]);
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        assert_eq!(decoded.authority_records().len(), 1);
+        let decoded_soa = &decoded.authority_records()[0];
+        assert_eq!(decoded_soa.record_type(), RecordType::SOA);
+        assert_eq!(decoded_soa.ttl(), 3600);
+
+        match &decoded_soa.data {
+            DnsRecordData::SOA {
+                mname,
+                rname,
+                serial,
+                refresh,
+                retry,
+                expire,
+                minimum,
+            } => {
+                assert_eq!(&**mname, "ns1.example.com");
+                assert_eq!(&**rname, "admin.example.com");
+                assert_eq!(*serial, 2024010101);
+                assert_eq!(*refresh, 7200);
+                assert_eq!(*retry, 3600);
+                assert_eq!(*expire, 1209600);
+                assert_eq!(*minimum, 86400);
+            }
+            _ => panic!("expected SOA record data"),
+        }
+    }
+
+    #[test]
+    fn test_srv_record_roundtrip() {
+        let srv = DnsRecord {
+            name: DomainName::from_ascii("_sip._tcp.example.com").unwrap(),
+            record_type: RecordType::SRV,
+            class: ClassType::IN,
+            ttl: 600,
+            data: DnsRecordData::SRV {
+                priority: 10,
+                weight: 60,
+                port: 5060,
+                target: DomainName::from_ascii("sip.example.com").unwrap(),
+            },
+        };
+
+        let message = DnsMessage::new(2, DnsFlags::default(), vec![], vec![srv], vec![], vec![]);
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        assert_eq!(decoded.answers().len(), 1);
+        match &decoded.answers()[0].data {
+            DnsRecordData::SRV {
+                priority,
+                weight,
+                port,
+                target,
+            } => {
+                assert_eq!(*priority, 10);
+                assert_eq!(*weight, 60);
+                assert_eq!(*port, 5060);
+                assert_eq!(&**target, "sip.example.com");
+            }
+            _ => panic!("expected SRV record data"),
+        }
+    }
+
+    #[test]
+    fn test_full_message_with_all_sections() {
+        let question = DnsQuestion::new(
+            DomainName::from_ascii("example.com").unwrap(),
+            RecordType::A,
+            ClassType::IN,
+        );
+
+        let answer = DnsRecord {
+            name: DomainName::from_ascii("example.com").unwrap(),
+            record_type: RecordType::A,
+            class: ClassType::IN,
+            ttl: 300,
+            data: DnsRecordData::Ipv4(Ipv4Addr::new(93, 184, 216, 34)),
+        };
+
+        let authority = DnsRecord {
+            name: DomainName::from_ascii("example.com").unwrap(),
+            record_type: RecordType::NS,
+            class: ClassType::IN,
+            ttl: 86400,
+            data: DnsRecordData::DomainName(DomainName::from_ascii("ns1.example.com").unwrap()),
+        };
+
+        let additional = DnsRecord {
+            name: DomainName::from_ascii("ns1.example.com").unwrap(),
+            record_type: RecordType::A,
+            class: ClassType::IN,
+            ttl: 86400,
+            data: DnsRecordData::Ipv4(Ipv4Addr::new(198, 51, 100, 1)),
+        };
+
+        let mut flags = DnsFlags::default();
+        flags.response = true;
+        flags.recursion_desired = true;
+        flags.recursion_available = true;
+        flags.authorative_answer = true;
+
+        let message = DnsMessage::new(
+            0xABCD,
+            flags,
+            vec![question],
+            vec![answer],
+            vec![authority],
+            vec![additional],
+        );
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        assert_eq!(decoded.id, 0xABCD);
+        assert!(decoded.flags.response);
+        assert!(decoded.flags.recursion_desired);
+        assert!(decoded.flags.recursion_available);
+        assert!(decoded.flags.authorative_answer);
+        assert_eq!(decoded.questions().len(), 1);
+        assert_eq!(decoded.answers().len(), 1);
+        assert_eq!(decoded.authority_records().len(), 1);
+        assert_eq!(decoded.additional_records().len(), 1);
+
+        assert_eq!(decoded.answers()[0].name(), "example.com");
+        assert_eq!(
+            decoded.answers()[0].data,
+            DnsRecordData::Ipv4(Ipv4Addr::new(93, 184, 216, 34))
+        );
+
+        assert_eq!(decoded.authority_records()[0].record_type(), RecordType::NS);
+        assert_eq!(decoded.additional_records()[0].name(), "ns1.example.com");
+    }
+
+    #[test]
+    fn test_multiple_answers_different_types() {
+        let cname = DnsRecord {
+            name: DomainName::from_ascii("www.example.com").unwrap(),
+            record_type: RecordType::CNAME,
+            class: ClassType::IN,
+            ttl: 300,
+            data: DnsRecordData::DomainName(DomainName::from_ascii("example.com").unwrap()),
+        };
+
+        let a_record = DnsRecord {
+            name: DomainName::from_ascii("example.com").unwrap(),
+            record_type: RecordType::A,
+            class: ClassType::IN,
+            ttl: 300,
+            data: DnsRecordData::Ipv4(Ipv4Addr::new(93, 184, 216, 34)),
+        };
+
+        let aaaa_record = DnsRecord {
+            name: DomainName::from_ascii("example.com").unwrap(),
+            record_type: RecordType::AAAA,
+            class: ClassType::IN,
+            ttl: 300,
+            data: DnsRecordData::Ipv6(Ipv6Addr::new(
+                0x2606, 0x2800, 0x0220, 0x0001, 0x0248, 0x1893, 0x25c8, 0x1946,
+            )),
+        };
+
+        let message = DnsMessage::new(
+            100,
+            DnsFlags::default(),
+            vec![],
+            vec![cname, a_record, aaaa_record],
+            vec![],
+            vec![],
+        );
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        assert_eq!(decoded.answers().len(), 3);
+        assert_eq!(decoded.answers()[0].record_type(), RecordType::CNAME);
+        assert_eq!(decoded.answers()[1].record_type(), RecordType::A);
+        assert_eq!(decoded.answers()[2].record_type(), RecordType::AAAA);
+
+        match &decoded.answers()[2].data {
+            DnsRecordData::Ipv6(addr) => {
+                assert_eq!(
+                    *addr,
+                    Ipv6Addr::new(0x2606, 0x2800, 0x0220, 0x0001, 0x0248, 0x1893, 0x25c8, 0x1946)
+                );
+            }
+            _ => panic!("expected AAAA record data"),
+        }
+    }
+
+    #[test]
+    fn test_extended_response_code_roundtrip() {
+        let mut message = DnsMessageBuilder::new()
+            .with_id(1)
+            .with_flags(DnsFlags {
+                response: true,
+                ..Default::default()
+            })
+            .build();
+
+        // BADVERS (16) doesn't fit in the 4-bit rcode, so it needs EDNS
+        message.set_response_code(DnsResponseCode::BADVERS);
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        assert_eq!(decoded.response_code().unwrap(), DnsResponseCode::BADVERS);
+        assert!(decoded.edns().is_some());
+    }
+
+    #[test]
+    fn test_edns_do_bit_survives_roundtrip() {
+        let message = DnsMessage {
+            id: 1,
+            flags: DnsFlags::default(),
+            edns: Some({
+                let mut edns = Edns::default();
+                edns.set_do_bit(true);
+                edns
+            }),
+            questions: vec![DnsQuestion::new(
+                DomainName::from_ascii("example.com").unwrap(),
+                RecordType::A,
+                ClassType::IN,
+            )],
+            answers: vec![],
+            authority_records: vec![],
+            additional_records: vec![],
+        };
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        assert!(decoded.edns().as_ref().unwrap().do_bit());
+    }
+
+    #[test]
+    fn test_edns_extended_error_roundtrip() {
+        let message = DnsMessage {
+            id: 1,
+            flags: DnsFlags::default(),
+            edns: Some(Edns {
+                options: vec![EdnsOption {
+                    code: EdnsOptionCode::ExtendedDnsError,
+                    len: 2 + 11, // info_code + "blocked.com"
+                    data: Some(EdnsOptionData::ExtendedError {
+                        info_code: ExtendedDnsErrorInfoCode::Blocked,
+                        extra_text: Some("blocked.com".to_string()),
+                    }),
+                }],
+                ..Default::default()
+            }),
+            questions: vec![],
+            answers: vec![],
+            authority_records: vec![],
+            additional_records: vec![],
+        };
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        let edns = decoded.edns().as_ref().unwrap();
+        assert_eq!(edns.options.len(), 1);
+
+        match &edns.options[0].data {
+            Some(EdnsOptionData::ExtendedError { info_code, extra_text }) => {
+                assert_eq!(*info_code, ExtendedDnsErrorInfoCode::Blocked);
+                assert_eq!(extra_text.as_deref(), Some("blocked.com"));
+            }
+            _ => panic!("expected ExtendedError option data"),
+        }
+    }
+
+    #[test]
+    fn test_edns_client_subnet_roundtrip() {
+        let message = DnsMessage {
+            id: 1,
+            flags: DnsFlags::default(),
+            edns: Some(Edns {
+                options: vec![EdnsOption {
+                    code: EdnsOptionCode::ClientSubnet,
+                    len: 7, // family(2) + prefixes(2) + addr(3 for a /24)
+                    data: Some(EdnsOptionData::ClientSubnet {
+                        family: 1, // IPv4
+                        source_prefix: 24,
+                        scope_prefix: 0,
+                        address: vec![192, 168, 1],
+                    }),
+                }],
+                ..Default::default()
+            }),
+            questions: vec![],
+            answers: vec![],
+            authority_records: vec![],
+            additional_records: vec![],
+        };
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        let edns = decoded.edns().as_ref().unwrap();
+        match &edns.options[0].data {
+            Some(EdnsOptionData::ClientSubnet {
+                family,
+                source_prefix,
+                scope_prefix,
+                address,
+            }) => {
+                assert_eq!(*family, 1);
+                assert_eq!(*source_prefix, 24);
+                assert_eq!(*scope_prefix, 0);
+                assert_eq!(address, &vec![192, 168, 1]);
+            }
+            _ => panic!("expected ClientSubnet option data"),
+        }
+    }
+
+    #[test]
+    fn test_unknown_record_type_raw_roundtrip() {
+        let raw_data = vec![0xDE, 0xAD, 0xBE, 0xEF];
+        let record = DnsRecord {
+            name: DomainName::from_ascii("example.com").unwrap(),
+            record_type: RecordType::Unknown(65534),
+            class: ClassType::IN,
+            ttl: 120,
+            data: DnsRecordData::Raw(raw_data.clone()),
+        };
+
+        let message = DnsMessage::new(1, DnsFlags::default(), vec![], vec![record], vec![], vec![]);
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        assert_eq!(decoded.answers().len(), 1);
+        assert_eq!(decoded.answers()[0].record_type(), RecordType::Unknown(65534));
+        assert_eq!(decoded.answers()[0].data, DnsRecordData::Raw(raw_data));
+    }
+
+    #[test]
+    fn test_txt_record_roundtrip() {
+        let txt = DnsRecord {
+            name: DomainName::from_ascii("example.com").unwrap(),
+            record_type: RecordType::TXT,
+            class: ClassType::IN,
+            ttl: 300,
+            data: DnsRecordData::Text(vec![
+                Arc::from("v=spf1 include:_spf.google.com ~all"),
+                Arc::from("another chunk"),
+            ]),
+        };
+
+        let message = DnsMessage::new(1, DnsFlags::default(), vec![], vec![txt], vec![], vec![]);
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        match &decoded.answers()[0].data {
+            DnsRecordData::Text(chunks) => {
+                assert_eq!(chunks.len(), 2);
+                assert_eq!(&*chunks[0], "v=spf1 include:_spf.google.com ~all");
+                assert_eq!(&*chunks[1], "another chunk");
+            }
+            _ => panic!("expected TXT record data"),
+        }
+    }
+
+    #[test]
+    fn test_domain_name_compression_across_sections() {
+        // same domain in question, answer, and authority — should get compressed
+        let domain = DomainName::from_ascii("example.com").unwrap();
+
+        let message = DnsMessage::new(
+            1,
+            DnsFlags::default(),
+            vec![DnsQuestion::new(domain.clone(), RecordType::A, ClassType::IN)],
+            vec![DnsRecord {
+                name: domain.clone(),
+                record_type: RecordType::A,
+                class: ClassType::IN,
+                ttl: 300,
+                data: DnsRecordData::Ipv4(Ipv4Addr::new(1, 2, 3, 4)),
+            }],
+            vec![DnsRecord {
+                name: domain.clone(),
+                record_type: RecordType::NS,
+                class: ClassType::IN,
+                ttl: 86400,
+                data: DnsRecordData::DomainName(DomainName::from_ascii("ns1.example.com").unwrap()),
+            }],
+            vec![],
+        );
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        assert_eq!(&*decoded.questions()[0].qname, "example.com");
+        assert_eq!(decoded.answers()[0].name(), "example.com");
+        assert_eq!(decoded.authority_records()[0].name(), "example.com");
+
+        match &decoded.authority_records()[0].data {
+            DnsRecordData::DomainName(name) => {
+                assert_eq!(&**name, "ns1.example.com");
+            }
+            _ => panic!("expected DomainName record data"),
+        }
+
+        // make sure compression actually saved some space
+        let uncompressed_domain_size = 13; // "example.com" as wire labels
+        assert!(encoded.len() < 12 + (uncompressed_domain_size * 4) + 50);
+    }
+
+    #[test]
+    fn test_flags_rcode_preserved_in_roundtrip() {
+        let flags = DnsFlags {
+            response: true,
+            opcode: DnsOpcode::Query,
+            authorative_answer: false,
+            truncated: false,
+            recursion_desired: true,
+            recursion_available: true,
+            z: false,
+            authentic_data: false,
+            checking_disabled: false,
+            rcode_low: 3, // NxDomain
+        };
+
+        let message = DnsMessage::new(
+            42,
+            flags,
+            vec![DnsQuestion::new(
+                DomainName::from_ascii("nonexistent.example.com").unwrap(),
+                RecordType::A,
+                ClassType::IN,
+            )],
+            vec![],
+            vec![],
+            vec![],
+        );
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        assert_eq!(decoded.response_code().unwrap(), DnsResponseCode::NxDomain);
+        assert!(decoded.flags.response);
+        assert!(decoded.flags.recursion_desired);
+        assert!(decoded.flags.recursion_available);
+    }
+
+    #[test]
+    fn test_multiple_edns_options() {
+        let message = DnsMessage {
+            id: 1,
+            flags: DnsFlags::default(),
+            edns: Some(Edns {
+                udp_payload_size: 1232,
+                options: vec![
+                    EdnsOption {
+                        code: EdnsOptionCode::Cookie,
+                        len: 8,
+                        data: Some(EdnsOptionData::Raw(vec![1, 2, 3, 4, 5, 6, 7, 8])),
+                    },
+                    EdnsOption {
+                        code: EdnsOptionCode::Padding,
+                        len: 2,
+                        data: Some(EdnsOptionData::Padding(2)),
+                    },
+                ],
+                ..Default::default()
+            }),
+            questions: vec![],
+            answers: vec![],
+            authority_records: vec![],
+            additional_records: vec![],
+        };
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        let edns = decoded.edns().as_ref().unwrap();
+        assert_eq!(edns.udp_payload_size, 1232);
+        assert_eq!(edns.options.len(), 2);
+        assert_eq!(edns.options[0].code, EdnsOptionCode::Cookie);
+        assert_eq!(edns.options[1].code, EdnsOptionCode::Padding);
+
+        match &edns.options[1].data {
+            Some(EdnsOptionData::Padding(len)) => assert_eq!(*len, 2),
+            _ => panic!("expected Padding option data"),
+        }
+    }
+
+    #[test]
+    fn test_mx_record_roundtrip() {
+        let mx1 = DnsRecord {
+            name: DomainName::from_ascii("example.com").unwrap(),
+            record_type: RecordType::MX,
+            class: ClassType::IN,
+            ttl: 3600,
+            data: DnsRecordData::MX {
+                priority: 10,
+                host: DomainName::from_ascii("mail1.example.com").unwrap(),
+            },
+        };
+
+        let mx2 = DnsRecord {
+            name: DomainName::from_ascii("example.com").unwrap(),
+            record_type: RecordType::MX,
+            class: ClassType::IN,
+            ttl: 3600,
+            data: DnsRecordData::MX {
+                priority: 20,
+                host: DomainName::from_ascii("mail2.example.com").unwrap(),
+            },
+        };
+
+        let message = DnsMessage::new(1, DnsFlags::default(), vec![], vec![mx1, mx2], vec![], vec![]);
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        assert_eq!(decoded.answers().len(), 2);
+        match &decoded.answers()[0].data {
+            DnsRecordData::MX { priority, host } => {
+                assert_eq!(*priority, 10);
+                assert_eq!(&**host, "mail1.example.com");
+            }
+            _ => panic!("expected MX record data"),
+        }
+        match &decoded.answers()[1].data {
+            DnsRecordData::MX { priority, host } => {
+                assert_eq!(*priority, 20);
+                assert_eq!(&**host, "mail2.example.com");
+            }
+            _ => panic!("expected MX record data"),
+        }
+    }
+
+    #[test]
+    fn test_edns_with_additional_records() {
+        // OPT should get separated from normal additional records
+        let additional = DnsRecord {
+            name: DomainName::from_ascii("ns1.example.com").unwrap(),
+            record_type: RecordType::A,
+            class: ClassType::IN,
+            ttl: 3600,
+            data: DnsRecordData::Ipv4(Ipv4Addr::new(10, 0, 0, 1)),
+        };
+
+        let message = DnsMessage {
+            id: 1,
+            flags: DnsFlags::default(),
+            edns: Some(Edns::default()),
+            questions: vec![],
+            answers: vec![],
+            authority_records: vec![],
+            additional_records: vec![additional],
+        };
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        assert!(decoded.edns().is_some());
+        assert_eq!(decoded.additional_records().len(), 1);
+        assert_eq!(decoded.additional_records()[0].name(), "ns1.example.com");
+    }
+
+    #[test]
+    fn test_decode_truncated_message_fails() {
+        // 6 bytes is way too short for a dns header (need at least 12)
+        let too_short = vec![0u8; 6];
+        assert!(DnsMessage::decode(&too_short).is_err());
+    }
+
+    #[test]
+    fn test_ptr_record_roundtrip() {
+        let ptr = DnsRecord {
+            name: DomainName::from_ascii("1.168.192.in-addr.arpa").unwrap(),
+            record_type: RecordType::PTR,
+            class: ClassType::IN,
+            ttl: 3600,
+            data: DnsRecordData::DomainName(DomainName::from_ascii("host.example.com").unwrap()),
+        };
+
+        let message = DnsMessage::new(
+            1,
+            DnsFlags::default(),
+            vec![DnsQuestion::new(
+                DomainName::from_ascii("1.168.192.in-addr.arpa").unwrap(),
+                RecordType::PTR,
+                ClassType::IN,
+            )],
+            vec![ptr],
+            vec![],
+            vec![],
+        );
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        assert_eq!(decoded.answers()[0].record_type(), RecordType::PTR);
+        match &decoded.answers()[0].data {
+            DnsRecordData::DomainName(name) => {
+                assert_eq!(&**name, "host.example.com");
+            }
+            _ => panic!("expected DomainName record data for PTR"),
+        }
+    }
+
+    #[test]
+    fn test_multiple_questions_roundtrip() {
+        let message = DnsMessageBuilder::new()
+            .with_id(999)
+            .add_question(DnsQuestion::new(
+                DomainName::from_ascii("example.com").unwrap(),
+                RecordType::A,
+                ClassType::IN,
+            ))
+            .add_question(DnsQuestion::new(
+                DomainName::from_ascii("example.com").unwrap(),
+                RecordType::AAAA,
+                ClassType::IN,
+            ))
+            .add_question(DnsQuestion::new(
+                DomainName::from_ascii("example.org").unwrap(),
+                RecordType::MX,
+                ClassType::IN,
+            ))
+            .build();
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        assert_eq!(decoded.questions().len(), 3);
+        assert_eq!(decoded.questions()[0].qtype, RecordType::A);
+        assert_eq!(decoded.questions()[1].qtype, RecordType::AAAA);
+        assert_eq!(decoded.questions()[2].qtype, RecordType::MX);
+        assert_eq!(&*decoded.questions()[2].qname, "example.org");
+    }
+
+    #[test]
+    fn test_edns_extended_error_without_extra_text() {
+        let message = DnsMessage {
+            id: 1,
+            flags: DnsFlags::default(),
+            edns: Some(Edns {
+                options: vec![EdnsOption {
+                    code: EdnsOptionCode::ExtendedDnsError,
+                    len: 2, // just the info code, no extra text
+                    data: Some(EdnsOptionData::ExtendedError {
+                        info_code: ExtendedDnsErrorInfoCode::StaleAnswer,
+                        extra_text: None,
+                    }),
+                }],
+                ..Default::default()
+            }),
+            questions: vec![],
+            answers: vec![],
+            authority_records: vec![],
+            additional_records: vec![],
+        };
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        let edns = decoded.edns().as_ref().unwrap();
+        match &edns.options[0].data {
+            Some(EdnsOptionData::ExtendedError { info_code, extra_text }) => {
+                assert_eq!(*info_code, ExtendedDnsErrorInfoCode::StaleAnswer);
+                assert!(extra_text.is_none());
+            }
+            _ => panic!("expected ExtendedError option data"),
+        }
+    }
+
 }
