@@ -79,9 +79,14 @@ async fn main() -> anyhow::Result<()> {
 
     let _ = tokio::spawn(async move { update_server_state_on_config_changes(global_clone, server).await });
 
-    signal::ctrl_c().await?;
-    tracing::info!("shutdown signal received");
+    let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())?;
 
+    tokio::select! {
+        _ = signal::ctrl_c() => {}
+        _ = sigterm.recv() => {}
+    }
+
+    tracing::info!("shutdown signal received");
     shutdown.cancel();
 
     let drain = async {
