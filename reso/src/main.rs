@@ -9,10 +9,7 @@ use metrics::service::MetricsService;
 use reso_cache::DnsMessageCache;
 use server_builder::{build_dns_server, update_server_state_on_config_changes};
 use services::{blocklist::BlocklistService, config::ConfigService};
-use tokio::signal::{
-    self,
-    unix::{Signal, SignalKind},
-};
+use tokio::signal;
 use tracing::level_filters::LevelFilter;
 use tracing_appender::non_blocking;
 use tracing_subscriber::{Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
@@ -82,26 +79,18 @@ async fn main() -> anyhow::Result<()> {
 
     let _ = tokio::spawn(async move { update_server_state_on_config_changes(global_clone, server).await });
 
-    tokio::select! {
-        sig = signal::ctrl_c() => {
-            sig?;
-        }
-    }
-
-    signal::ctrl_c().await.unwrap();
+    signal::ctrl_c().await?;
     tracing::info!("shutdown signal received");
 
     shutdown.cancel();
 
-    // wait for a grace period to allow in-flight requests to complete and for the servers to stop accepting new connections.
-    let drain_timeout = Duration::from_secs(10);
     let drain = async {
         let _ = dns_udp_handle.await;
         let _ = dns_tcp_handle.await;
         let _ = web_handle.await;
     };
 
-    match tokio::time::timeout(drain_timeout, drain).await {
+    match tokio::time::timeout(Duration::from_secs(10), drain).await {
         Ok(_) => tracing::info!("all connections drained"),
         Err(_) => tracing::warn!("drain timeout, forcing shutdown"),
     }

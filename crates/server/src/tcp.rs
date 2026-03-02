@@ -33,6 +33,11 @@ where
 
     loop {
         tokio::select! {
+            join_res = inflight.join_next(), if !inflight.is_empty() => {
+                if let Some(Err(err)) = join_res {
+                    tracing::warn!("TCP inflight task failed: {}", err);
+                }
+            }
             result = listener.accept() => {
                 let (mut stream, client) = result?;
 
@@ -91,7 +96,7 @@ where
                             if let Ok(message) = ctx.message() {
                                 let res = write_tcp_server_error_response(message, &mut stream, &e).await;
                                 if let Err(err) = res {
-                                    tracing::warn!("Failed to write error response to client {}: {}", client, err);
+                                    tracing::warn!("failed to write error response to client {}: {}", client, err);
                                 }
                             }
                             if let Some(cb) = &on_error {
@@ -102,14 +107,18 @@ where
                 });
             }
             _ = shutdown.cancelled() => {
-                tracing::info!("TCP shutdown signal received, waiting for in-flight requests");
+                tracing::info!("TCP shutdown signal received, waiting for inflight requests");
                 break;
             }
         }
     }
 
-    // wait for all in-flight requests to finish
-    while inflight.join_next().await.is_some() {}
+    // wait for in flight requests to finish
+    while let Some(join_res) = inflight.join_next().await {
+        if let Err(err) = join_res {
+            tracing::warn!("TCP inflight task failed during shutdown: {}", err);
+        }
+    }
 
     tracing::info!("TCP shutdown complete");
 
