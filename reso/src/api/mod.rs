@@ -27,7 +27,11 @@ mod stats;
 
 use crate::global::SharedGlobal;
 
-pub async fn serve_web(address: SocketAddr, global: SharedGlobal) -> anyhow::Result<()> {
+pub async fn serve_web(
+    address: SocketAddr,
+    global: SharedGlobal,
+    shutdown: tokio_util::sync::CancellationToken,
+) -> anyhow::Result<()> {
     let api = Router::new()
         .nest("/auth", create_auth_router(global.clone()))
         .nest("/stats", create_stats_router(global.clone()))
@@ -55,7 +59,11 @@ pub async fn serve_web(address: SocketAddr, global: SharedGlobal) -> anyhow::Res
 
     tracing::info!("HTTP listening on {}", address);
     let listener = tokio::net::TcpListener::bind(address).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown.cancelled_owned())
+        .await?;
+
+    tracing::info!("HTTP shutdown complete");
 
     Ok(())
 }

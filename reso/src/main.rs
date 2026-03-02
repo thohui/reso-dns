@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use aes_gcm::{AesGcm, KeyInit, aead::generic_array::GenericArray};
 use api::serve_web;
@@ -43,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
     let connection = Arc::new(connect(&config.db_path).await?);
     run_migrations(&connection).await?;
 
-    let (handle, stats, metrics_service) = MetricsService::new(connection.clone(), 1024);
+    let (handle, stats, metrics_service) = MetricsService::new(connection.clone(), 1000);
 
     let global: SharedGlobal = Arc::new(Global {
         cache: DnsMessageCache::new(50_000),
@@ -58,35 +58,48 @@ async fn main() -> anyhow::Result<()> {
     let server = build_dns_server(global.clone()).await?;
 
     let global_clone = global.clone();
-    let server_clone = server.clone();
-    tokio::spawn(async move { update_server_state_on_config_changes(global_clone, server_clone).await });
 
-    tokio::select! {
-        r = serve_web(config.http_server_address, global.clone()) => {
-            if let Err(e) = r {
-                tracing::error!("HTTP server exited with error: {}", e);
-            }
-        }
-        r = metrics_service.run() => {
-            if let Err(e) = r {
-                tracing::error!("Metrics exited with error: {}", e);
-            }
-        },
-        r = server.serve_tcp(config.dns_server_address) => {
-            if let Err(e) = r {
-                tracing::error!("TCP listener exited with error: {}", e);
-            }
-        },
-        r = server.serve_udp(config.dns_server_address) => {
-            if let Err(e) = r {
-                tracing::error!("UDP listener exited with error: {}", e);
-            }
-        }
-        _ = signal::ctrl_c() => {
-            tracing::info!("Shutting down DNS server...");
-        },
+    let shutdown = tokio_util::sync::CancellationToken::new();
 
+    let dns_udp_shutdown = shutdown.child_token();
+    let dns_tcp_shutdown = shutdown.child_token();
+    let metrics_shutdown = shutdown.child_token();
+    let web_shutdown = shutdown.child_token();
+
+    let udp_clone = server.clone();
+    let tcp_clone = server.clone();
+
+    let dns_udp_handle =
+        tokio::spawn(async move { udp_clone.serve_udp(config.dns_server_address, dns_udp_shutdown).await });
+    let dns_tcp_handle =
+        tokio::spawn(async move { tcp_clone.serve_tcp(config.dns_server_address, dns_tcp_shutdown).await });
+
+    let metrics_handle = tokio::spawn(metrics_service.run(metrics_shutdown.clone()));
+    let web_handle = tokio::spawn(serve_web(config.http_server_address, global, web_shutdown.clone()));
+
+    let _ = tokio::spawn(async move { update_server_state_on_config_changes(global_clone, server).await });
+
+    signal::ctrl_c().await?;
+    tracing::info!("shutdown signal received");
+
+    shutdown.cancel();
+
+    let drain = async {
+        let _ = dns_udp_handle.await;
+        let _ = dns_tcp_handle.await;
+        let _ = web_handle.await;
+    };
+
+    match tokio::time::timeout(Duration::from_secs(10), drain).await {
+        Ok(_) => tracing::info!("all connections drained"),
+        Err(_) => tracing::warn!("drain timeout, forcing shutdown"),
     }
+
+    tracing::info!("waiting for metrics service to shut down");
+    let _ = metrics_handle.await;
+    tracing::info!("metrics service shut down");
+
+    tracing::info!("shutdown complete");
 
     Ok(())
 }
