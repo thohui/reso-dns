@@ -194,10 +194,11 @@ impl DnsMessage {
         let full: u16 = response_code.to_u16();
         self.flags.rcode_low = (full & 0x0F) as u8;
 
-        // handle higher part.
         if full > 0x0F {
             let edns = self.edns.get_or_insert_with(Edns::default);
             edns.extended_rcode = (full >> 4) as u8;
+        } else if let Some(edns) = &mut self.edns {
+            edns.extended_rcode = 0;
         }
     }
 
@@ -2063,9 +2064,11 @@ mod tests {
             _ => panic!("expected DomainName record data"),
         }
 
-        // make sure compression actually saved some space
-        let uncompressed_domain_size = 13; // "example.com" as wire labels
-        assert!(encoded.len() < 12 + (uncompressed_domain_size * 4) + 50);
+        // verify at least one compression pointer to the first qname (offset 12 / 0x0c)
+        assert!(
+            encoded.windows(2).any(|w| w == [0xC0, 0x0C]),
+            "expected compression pointer to first qname"
+        );
     }
 
     #[test]
@@ -2329,5 +2332,4 @@ mod tests {
             _ => panic!("expected ExtendedError option data"),
         }
     }
-
 }
