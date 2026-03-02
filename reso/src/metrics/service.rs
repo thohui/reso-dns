@@ -138,7 +138,7 @@ impl MetricsService {
     }
 
     pub async fn run(mut self, shutdown: tokio_util::sync::CancellationToken) -> anyhow::Result<()> {
-        tracing::info!("Running metrics service");
+        tracing::info!("running metrics service");
 
         let mut tick = time::interval(Duration::from_secs(5));
         tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
@@ -150,6 +150,16 @@ impl MetricsService {
                 _ = tick.tick() =>  self.flush_events().await,
                 _ = shutdown.cancelled() => {
                     tracing::info!("shutting down metrics service");
+
+                    // drain any buffered messages before flushing
+                    while let Ok(msg) = self.rx.try_recv() {
+                        match msg {
+                            MetricsMessage::Query(ev) => self.on_event(ev).await,
+                            MetricsMessage::Error(ev) => self.on_error(ev).await,
+                            MetricsMessage::Shutdown => break,
+                        }
+                    }
+
                     self.flush_events().await;
                     break;
                 },

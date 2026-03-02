@@ -3,7 +3,7 @@ FROM rust:1.88-bookworm AS builder
 
 # build.rs runs pnpm install + build, so we need Node.js and pnpm
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y nodejs \
+    && apt-get install -y --no-install-recommends nodejs \
     && corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /build
