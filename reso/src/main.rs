@@ -1,4 +1,5 @@
 use std::{sync::Arc, time::Duration};
+use tokio::runtime::Builder;
 
 use aes_gcm::{AesGcm, KeyInit, aead::generic_array::GenericArray};
 use api::serve_web;
@@ -25,8 +26,16 @@ mod server_builder;
 mod services;
 mod utils;
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
+    let worker_threads = std::thread::available_parallelism()?.get();
+    let runtime = Builder::new_multi_thread()
+        .worker_threads(worker_threads)
+        .enable_all()
+        .build()?;
+    runtime.block_on(run())
+}
+
+async fn run() -> anyhow::Result<()> {
     let (nb, _guard) = non_blocking(std::io::stdout());
 
     let config = EnvConfig::from_env()?;
