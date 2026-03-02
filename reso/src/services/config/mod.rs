@@ -32,17 +32,24 @@ impl ConfigService {
     }
 
     /// Initializes the configuration from the database.
+    /// Missing keys are seeded with defaults so that new config fields
+    /// are automatically populated for existing databases.
     async fn initialize_config(db: &DatabaseConnection) -> anyhow::Result<Config> {
         let map = ConfigSetting::all(db).await?;
 
-        if map.is_empty() {
-            tracing::info!("Initializing database config");
-            let default_config = Config::default();
-            ConfigSetting::batch_set(db, default_config.to_kv()).await?;
-            Ok(default_config)
-        } else {
-            Ok(Config::from_kv(&map))
+        let default_config = Config::default();
+        let missing: Vec<(String, String)> = default_config
+            .to_kv()
+            .into_iter()
+            .filter(|(key, _)| !map.contains_key(key))
+            .collect();
+
+        if !missing.is_empty() {
+            tracing::info!("Seeding {} missing config keys", missing.len());
+            ConfigSetting::batch_set(db, missing).await?;
         }
+
+        Ok(Config::from_kv(&map))
     }
 
     /// Updates the configuration and notify the subscribers.
