@@ -49,13 +49,21 @@ impl<L: Default + Send + Sync + 'static, G: Send + Sync + 'static> DnsServer<G, 
     }
 
     /// Serve the server over TCP.
-    pub async fn serve_tcp(&self, bind_addr: SocketAddr) -> anyhow::Result<()> {
-        run_tcp(bind_addr, &self.state).await
+    pub async fn serve_tcp(
+        &self,
+        bind_addr: SocketAddr,
+        shutdown: tokio_util::sync::CancellationToken,
+    ) -> anyhow::Result<()> {
+        run_tcp(bind_addr, &self.state, shutdown).await
     }
 
     /// Serve the server over UDP.
-    pub async fn serve_udp(&self, bind_addr: SocketAddr) -> anyhow::Result<()> {
-        run_udp(bind_addr, &self.state).await
+    pub async fn serve_udp(
+        &self,
+        bind_addr: SocketAddr,
+        shutdown: tokio_util::sync::CancellationToken,
+    ) -> anyhow::Result<()> {
+        run_udp(bind_addr, &self.state, shutdown).await
     }
 
     /// Serve the server over DOH.

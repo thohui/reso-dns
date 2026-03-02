@@ -311,7 +311,7 @@ impl DnsWritable for DnsFlags {
                 | ((self.z as u16) << 6)
                 | ((self.authentic_data as u16) << 5)
                 | (self.checking_disabled as u16) << 4
-                | self.rcode_low as u16, // todo: add edns support for this. should probably move this inside the encode fn.
+                | self.rcode_low as u16,
         )?;
         Ok(())
     }

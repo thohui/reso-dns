@@ -137,7 +137,7 @@ impl MetricsService {
         )
     }
 
-    pub async fn run(mut self) -> anyhow::Result<()> {
+    pub async fn run(mut self, shutdown: tokio_util::sync::CancellationToken) -> anyhow::Result<()> {
         tracing::info!("Running metrics service");
 
         let mut tick = time::interval(Duration::from_secs(5));
@@ -148,6 +148,11 @@ impl MetricsService {
         loop {
             tokio::select! {
                 _ = tick.tick() =>  self.flush_events().await,
+                _ = shutdown.cancelled() => {
+                    tracing::info!("shutting down metrics service");
+                    self.flush_events().await;
+                    break;
+                },
                 msg = self.rx.recv() => {
                     match msg {
                         None | Some(MetricsMessage::Shutdown) => {
