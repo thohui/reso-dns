@@ -3,7 +3,7 @@ use std::sync::Arc;
 use arc_swap::ArcSwap;
 use model::Config;
 
-use database::models::config::Config as DbConfig;
+use database::models::config::ConfigSetting;
 
 use crate::database::{self, DatabaseConnection};
 
@@ -24,35 +24,37 @@ impl ConfigService {
         let config = Arc::new(config);
         let (tx, rx) = tokio::sync::watch::channel(config.clone());
         Ok(ConfigService {
-            db: db,
+            db,
             config: ArcSwap::new(config),
-            tx: tx,
+            tx,
             _rx_guard: rx,
         })
     }
 
     /// Initializes the configuration from the database.
+    /// Missing keys are seeded with defaults so that new config fields
+    /// are automatically populated for existing databases.
     async fn initialize_config(db: &DatabaseConnection) -> anyhow::Result<Config> {
-        let db_config = DbConfig::get(&db).await?;
+        let map = ConfigSetting::all(db).await?;
 
-        // has the config data been initialized before?
-        let config = if db_config.version() == 0 {
-            tracing::info!("Initializing database config");
-            let default_config = Config::default();
-            let value = serde_json::to_string(&default_config)?;
-            DbConfig::update_data(&db, value).await?;
-            default_config
-        } else {
-            serde_json::from_str(&db_config.data)?
-        };
+        let default_config = Config::default();
+        let missing: Vec<(String, String)> = default_config
+            .to_kv()
+            .into_iter()
+            .filter(|(key, _)| !map.contains_key(key))
+            .collect();
 
-        Ok(config)
+        if !missing.is_empty() {
+            tracing::info!("Seeding {} missing config keys", missing.len());
+            ConfigSetting::batch_set(db, missing).await?;
+        }
+
+        Ok(Config::from_kv(&map))
     }
 
     /// Updates the configuration and notify the subscribers.
     pub async fn update_config(&self, config: Config) -> anyhow::Result<()> {
-        let stringified_data = serde_json::to_string(&config)?;
-        DbConfig::update_data(&self.db, stringified_data).await?;
+        ConfigSetting::batch_set(&self.db, config.to_kv()).await?;
         let arc_config = Arc::new(config);
         self.config.store(arc_config.clone());
         self.tx.send_replace(arc_config);
