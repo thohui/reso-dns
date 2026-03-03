@@ -993,7 +993,7 @@ impl DnsWritable for Edns {
         let rdlen: u16 = self
             .options
             .iter()
-            .map(|opt| 4u16 + opt.len as u16) // opt.len is data length
+            .map(|opt| 4u16 + opt.wire_len())
             .sum();
         writer.write_u16(rdlen)?;
 
@@ -1010,10 +1010,20 @@ impl DnsWritable for Edns {
 pub struct EdnsOption {
     /// EDNS option code
     pub code: EdnsOptionCode,
-    /// EDNS option length.
-    pub len: u16,
     /// EDNS option data
     pub data: Option<EdnsOptionData>,
+}
+
+impl EdnsOption {
+    /// Create a new EDNS option. The wire length is derived from the data.
+    pub fn new(code: EdnsOptionCode, data: EdnsOptionData) -> Self {
+        Self { code, data: Some(data) }
+    }
+
+    /// Wire-format byte length of this option's data.
+    pub fn wire_len(&self) -> u16 {
+        self.data.as_ref().map_or(0, |d| d.wire_len())
+    }
 }
 
 u16_enum_with_unknown! {
@@ -1146,6 +1156,24 @@ impl DnsWritable for EdnsOptionData {
 }
 
 impl EdnsOptionData {
+    /// Wire-format byte length of this option's data.
+    pub fn wire_len(&self) -> u16 {
+        match self {
+            Self::Lease { key_lease, .. } => {
+                if key_lease.is_some() { 8 } else { 4 }
+            }
+            Self::ClientSubnet { address, .. } => 4 + address.len() as u16,
+            Self::Timeout(_) => 2,
+            Self::Padding(len) => *len,
+            Self::DomainName(name) => name.wire_len() as u16,
+            Self::ExtendedError { extra_text, .. } => {
+                2 + extra_text.as_ref().map_or(0, |t| t.len() as u16)
+            }
+            Self::ZoneVersion { version, .. } => 2 + version.len() as u16,
+            Self::Raw(data) => data.len() as u16,
+        }
+    }
+
     pub fn read(reader: &mut DnsMessageReader, code: &EdnsOptionCode, len: u16) -> anyhow::Result<Self> {
         Ok(match *code {
             EdnsOptionCode::ClientSubnet => {
@@ -1238,14 +1266,14 @@ impl DnsReadable for EdnsOption {
         } else {
             Some(EdnsOptionData::read(reader, &code, len)?)
         };
-        Ok(Self { code: code, len, data })
+        Ok(Self { code, data })
     }
 }
 
 impl DnsWritable for EdnsOption {
     fn write_to(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
         writer.write_u16(self.code.to_u16())?;
-        writer.write_u16(self.len)?;
+        writer.write_u16(self.wire_len())?;
         if let Some(data) = &self.data {
             data.write_to(writer)?;
         }
@@ -1399,11 +1427,10 @@ mod tests {
             flags: DnsFlags::default(),
             edns: Some(Edns {
                 z_flags: 0,
-                options: vec![EdnsOption {
-                    code: EdnsOptionCode::Cookie,
-                    len: 5,
-                    data: Some(EdnsOptionData::Raw(vec![1, 2, 3, 4, 5])),
-                }],
+                options: vec![EdnsOption::new(
+                    EdnsOptionCode::Cookie,
+                    EdnsOptionData::Raw(vec![1, 2, 3, 4, 5]),
+                )],
                 ..Default::default()
             }),
             additional_records: vec![],
@@ -1904,14 +1931,13 @@ mod tests {
             id: 1,
             flags: DnsFlags::default(),
             edns: Some(Edns {
-                options: vec![EdnsOption {
-                    code: EdnsOptionCode::ExtendedDnsError,
-                    len: 2 + 11, // info_code + "blocked.com"
-                    data: Some(EdnsOptionData::ExtendedError {
+                options: vec![EdnsOption::new(
+                    EdnsOptionCode::ExtendedDnsError,
+                    EdnsOptionData::ExtendedError {
                         info_code: ExtendedDnsErrorInfoCode::Blocked,
                         extra_text: Some("blocked.com".to_string()),
-                    }),
-                }],
+                    },
+                )],
                 ..Default::default()
             }),
             questions: vec![],
@@ -1941,16 +1967,15 @@ mod tests {
             id: 1,
             flags: DnsFlags::default(),
             edns: Some(Edns {
-                options: vec![EdnsOption {
-                    code: EdnsOptionCode::ClientSubnet,
-                    len: 7, // family(2) + prefixes(2) + addr(3 for a /24)
-                    data: Some(EdnsOptionData::ClientSubnet {
+                options: vec![EdnsOption::new(
+                    EdnsOptionCode::ClientSubnet,
+                    EdnsOptionData::ClientSubnet {
                         family: 1, // IPv4
                         source_prefix: 24,
                         scope_prefix: 0,
                         address: vec![192, 168, 1],
-                    }),
-                }],
+                    },
+                )],
                 ..Default::default()
             }),
             questions: vec![],
@@ -2120,16 +2145,14 @@ mod tests {
             edns: Some(Edns {
                 udp_payload_size: 1232,
                 options: vec![
-                    EdnsOption {
-                        code: EdnsOptionCode::Cookie,
-                        len: 8,
-                        data: Some(EdnsOptionData::Raw(vec![1, 2, 3, 4, 5, 6, 7, 8])),
-                    },
-                    EdnsOption {
-                        code: EdnsOptionCode::Padding,
-                        len: 2,
-                        data: Some(EdnsOptionData::Padding(2)),
-                    },
+                    EdnsOption::new(
+                        EdnsOptionCode::Cookie,
+                        EdnsOptionData::Raw(vec![1, 2, 3, 4, 5, 6, 7, 8]),
+                    ),
+                    EdnsOption::new(
+                        EdnsOptionCode::Padding,
+                        EdnsOptionData::Padding(2),
+                    ),
                 ],
                 ..Default::default()
             }),
@@ -2308,14 +2331,13 @@ mod tests {
             id: 1,
             flags: DnsFlags::default(),
             edns: Some(Edns {
-                options: vec![EdnsOption {
-                    code: EdnsOptionCode::ExtendedDnsError,
-                    len: 2, // just the info code, no extra text
-                    data: Some(EdnsOptionData::ExtendedError {
+                options: vec![EdnsOption::new(
+                    EdnsOptionCode::ExtendedDnsError,
+                    EdnsOptionData::ExtendedError {
                         info_code: ExtendedDnsErrorInfoCode::StaleAnswer,
                         extra_text: None,
-                    }),
-                }],
+                    },
+                )],
                 ..Default::default()
             }),
             questions: vec![],

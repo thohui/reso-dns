@@ -78,10 +78,16 @@ async fn run() -> anyhow::Result<()> {
     let udp_clone = server.clone();
     let tcp_clone = server.clone();
 
-    let dns_udp_handle =
-        tokio::spawn(async move { udp_clone.serve_udp(config.dns_server_address, dns_udp_shutdown).await });
-    let dns_tcp_handle =
-        tokio::spawn(async move { tcp_clone.serve_tcp(config.dns_server_address, dns_tcp_shutdown).await });
+    let dns_udp_handle = tokio::spawn(async move {
+        if let Err(e) = udp_clone.serve_udp(config.dns_server_address, dns_udp_shutdown).await {
+            tracing::error!("UDP server failed: {}", e);
+        }
+    });
+    let dns_tcp_handle = tokio::spawn(async move {
+        if let Err(e) = tcp_clone.serve_tcp(config.dns_server_address, dns_tcp_shutdown).await {
+            tracing::error!("TCP server failed: {}", e);
+        }
+    });
 
     let metrics_handle = tokio::spawn(metrics_service.run(metrics_shutdown.clone()));
     let web_handle = tokio::spawn(serve_web(config.http_server_address, global, web_shutdown.clone()));
