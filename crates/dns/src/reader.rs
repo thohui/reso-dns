@@ -88,7 +88,7 @@ impl<'a> DnsMessageReader<'a> {
         let mut pos = self.position;
         let mut jumped = false;
         let mut seen = HashSet::new();
-        let mut name = String::new();
+        let mut labels: Vec<Vec<u8>> = Vec::new();
 
         loop {
             if pos >= self.buffer.len() {
@@ -144,12 +144,7 @@ impl<'a> DnsMessageReader<'a> {
                     );
                 }
 
-                let label_bytes = &self.buffer[pos..pos + label_len];
-
-                let label_str = String::from_utf8_lossy(label_bytes);
-
-                name.push_str(&label_str);
-                name.push('.');
+                labels.push(self.buffer[pos..pos + label_len].to_vec());
 
                 pos += label_len;
 
@@ -159,15 +154,14 @@ impl<'a> DnsMessageReader<'a> {
             }
         }
 
-        if name.is_empty() {
+        if labels.is_empty() {
             return Ok(DomainName::root());
         }
 
-        name.pop();
-        DomainName::from_ascii(name)
+        DomainName::from_labels(labels)
     }
 
-    /// Read an uncompressed dns name from the next `length` bytes.
+    /// Read an uncompressed dns name from the next `len` bytes.
     ///
     /// This function is mainly intended for EDNS where compression is forbidden.
     pub fn read_qname_uncompressed(&mut self, len: usize) -> anyhow::Result<DomainName> {
@@ -178,7 +172,7 @@ impl<'a> DnsMessageReader<'a> {
         let start = self.position;
         let end = start + len;
         let mut pos = start;
-        let mut name = String::new();
+        let mut labels: Vec<Vec<u8>> = Vec::new();
 
         loop {
             if pos >= end {
@@ -215,13 +209,8 @@ impl<'a> DnsMessageReader<'a> {
                 );
             }
 
-            let label_bytes = &self.buffer[pos..pos + label_len];
+            labels.push(self.buffer[pos..pos + label_len].to_vec());
             pos += label_len;
-
-            if !name.is_empty() {
-                name.push('.');
-            }
-            name.push_str(&String::from_utf8_lossy(label_bytes));
         }
 
         ensure!(
@@ -233,7 +222,7 @@ impl<'a> DnsMessageReader<'a> {
 
         self.position = end;
 
-        DomainName::from_ascii(name)
+        DomainName::from_labels(labels)
     }
 
     /// Read a specified number of bytes from the DNS message.
@@ -251,18 +240,6 @@ impl<'a> DnsMessageReader<'a> {
     }
 
     /// Return the number of unread bytes remaining in the reader's buffer.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    ///
-    /// use reso_dns::reader::DnsMessageReader;
-    /// let buf = [0u8, 1, 2];
-    /// let mut r = DnsMessageReader::new(&buf);
-    /// assert_eq!(r.remaining(), 3);
-    /// r.seek(1).unwrap();
-    /// assert_eq!(r.remaining(), 2);
-    /// ```
     #[inline]
     pub fn remaining(&self) -> usize {
         self.buffer.len() - self.position
@@ -274,6 +251,7 @@ pub trait DnsReadable: Sized {
     fn read_from(reader: &mut DnsMessageReader) -> anyhow::Result<Self>;
 }
 
+#[cfg(test)]
 mod tests {
     use crate::{DnsMessageWriter, domain_name::DomainName};
 
@@ -385,11 +363,21 @@ mod tests {
         assert_eq!(reader.remaining(), 0);
     }
 
+    /// Build wire format bytes from a list of raw labels (adds length prefixes + root terminator).
+    fn wire_name(labels: &[&[u8]]) -> Vec<u8> {
+        let mut out = Vec::new();
+        for label in labels {
+            out.push(label.len() as u8);
+            out.extend_from_slice(label);
+        }
+        out.push(0);
+        out
+    }
+
     #[test]
     fn test_read_qname_simple() {
         use super::DnsMessageReader;
-        // "example.com" encoded: 7 "example" 3 "com" 0
-        let data = vec![7, b'e', b'x', b'a', b'm', b'p', b'l', b'e', 3, b'c', b'o', b'm', 0];
+        let data = wire_name(&[b"example", b"com"]);
         let mut reader = DnsMessageReader::new(&data);
 
         let name = reader.read_qname().unwrap();
@@ -411,10 +399,11 @@ mod tests {
     fn test_read_qname_with_compression() {
         use super::DnsMessageReader;
         // "example.com" at offset 0, then "www.example.com" with pointer to offset 0
-        let mut data = vec![7, b'e', b'x', b'a', b'm', b'p', b'l', b'e', 3, b'c', b'o', b'm', 0];
+        let mut data = wire_name(&[b"example", b"com"]);
         let first_label_offset = 0;
         // Add "www" label then pointer to "example.com"
-        data.extend_from_slice(&[3, b'w', b'w', b'w']);
+        data.push(3);
+        data.extend_from_slice(b"www");
         data.push(0xC0); // Compression marker
         data.push(first_label_offset);
 
@@ -424,7 +413,7 @@ mod tests {
         let name1 = reader.read_qname().unwrap();
         assert_eq!(name1.as_str(), "example.com");
 
-        // Read second name with compression
+        // Read second name
         let name2 = reader.read_qname().unwrap();
         assert_eq!(name2.as_str(), "www.example.com");
     }
@@ -444,7 +433,7 @@ mod tests {
     fn test_read_qname_out_of_bounds() {
         use super::DnsMessageReader;
         // Label length claims more bytes than available
-        let data = vec![10, b'a', b'b', b'c']; // Says 10 bytes but only 3 follow
+        let data = vec![10, b'a', b'b', b'c']; // length says 10 but only 3 bytes follow
         let mut reader = DnsMessageReader::new(&data);
 
         assert!(reader.read_qname().is_err());
@@ -475,17 +464,19 @@ mod tests {
     fn test_read_qname_uncompressed_unterminated() {
         use super::DnsMessageReader;
         // Missing root label (0 byte)
-        let data = vec![3, b'c', b'o', b'm'];
+        // "com" label with no root terminator
+        let data = [3, b'c', b'o', b'm'];
         let mut reader = DnsMessageReader::new(&data);
 
-        assert!(reader.read_qname_uncompressed(4).is_err());
+        assert!(reader.read_qname_uncompressed(data.len()).is_err());
     }
 
     #[test]
     fn test_read_qname_uncompressed_extra_bytes() {
         use super::DnsMessageReader;
         // Has proper termination but extra bytes beyond the specified length
-        let data = vec![3, b'c', b'o', b'm', 0, 99]; // Extra byte
+        // "com" with root terminator + an extra trailing byte
+        let data = vec![3, b'c', b'o', b'm', 0, 99];
         let mut reader = DnsMessageReader::new(&data);
 
         // Read only the 5-byte qname (should fail because of extra byte check)
@@ -544,12 +535,46 @@ mod tests {
     }
 
     #[test]
+    fn test_read_qname_non_ascii_roundtrip() {
+        use super::DnsMessageReader;
+        // Wire format name with a non-ASCII label; [0x80, 0xFF, 0x00] . "com"
+        let wire = wire_name(&[&[0x80, 0xFF, 0x00], b"com"]);
+
+        let mut reader = DnsMessageReader::new(&wire);
+        let name = reader.read_qname().unwrap();
+
+        // The non-ASCII bytes should be escaped
+        assert_eq!(name.as_str(), "\\128\\255\\000.com");
+
+        // Write it back and verify identical wire bytes
+        let mut writer = DnsMessageWriter::new();
+        writer.write_qname_uncompressed(&name).unwrap();
+        let written = writer.into_bytes();
+        assert_eq!(&wire[..], &written[..]);
+    }
+
+    #[test]
+    fn test_read_qname_uncompressed_non_ascii_roundtrip() {
+        use super::DnsMessageReader;
+        // Label with dot-byte (0x2E) and backslash-byte (0x5C) in it
+        let wire = wire_name(&[&[0x2E, 0x5C]]);
+
+        let mut reader = DnsMessageReader::new(&wire);
+        let name = reader.read_qname_uncompressed(wire.len()).unwrap();
+
+        // Both should be escaped
+        assert_eq!(name.as_str(), "\\046\\092");
+
+        let mut writer = DnsMessageWriter::new();
+        writer.write_qname_uncompressed(&name).unwrap();
+        let written = writer.into_bytes();
+        assert_eq!(&wire[..], &written[..]);
+    }
+
+    #[test]
     fn test_multiple_labels_in_qname() {
         use super::DnsMessageReader;
-        // "mail.example.com"
-        let data = vec![
-            4, b'm', b'a', b'i', b'l', 7, b'e', b'x', b'a', b'm', b'p', b'l', b'e', 3, b'c', b'o', b'm', 0,
-        ];
+        let data = wire_name(&[b"mail", b"example", b"com"]);
         let mut reader = DnsMessageReader::new(&data);
 
         let name = reader.read_qname().unwrap();

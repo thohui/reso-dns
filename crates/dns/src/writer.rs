@@ -6,10 +6,25 @@ use once_cell::sync::OnceCell;
 
 use crate::domain_name::DomainName;
 
+/// Build a wire-format suffix key from a slice of raw label byte slices.
+///
+/// The key is the concatenation of each label prefixed by its length byte,
+/// followed by a root label (0). This is the exact wire encoding of the suffix.
+fn wire_suffix_key(labels: &[&[u8]]) -> Vec<u8> {
+    let len: usize = labels.iter().map(|l| 1 + l.len()).sum::<usize>() + 1;
+    let mut key = Vec::with_capacity(len);
+    for label in labels {
+        key.push(label.len() as u8);
+        key.extend_from_slice(label);
+    }
+    key.push(0);
+    key
+}
+
 pub struct DnsMessageWriter {
     buf: BytesMut,
     max_len: usize,
-    label_pointers: OnceCell<HashMap<String, u16>>,
+    label_pointers: OnceCell<HashMap<Vec<u8>, u16>>,
 }
 
 impl Default for DnsMessageWriter {
@@ -77,23 +92,19 @@ impl DnsMessageWriter {
 
     // Write a compressed qname to the buffer.
     pub fn write_qname(&mut self, name: &DomainName) -> anyhow::Result<()> {
-        let labels: Vec<&str> = name.label_iter().collect();
-
-        let is_root = labels.is_empty() || name.as_str() == ".";
-
-        if is_root {
-            // root label
+        if name.is_root() {
             return self.write_u8(0);
         }
 
-        let needed_space = name.len() + 1; // +1 for the terminator.
-        self.ensure_space(needed_space, "qname")?;
+        let labels: Vec<&[u8]> = name.label_iter().collect();
+
+        self.ensure_space(name.wire_len(), "qname")?;
 
         for i in 0..labels.len() {
-            let suffix = labels[i..].join(".");
+            let suffix_key = wire_suffix_key(&labels[i..]);
 
             let ptrs = self.label_pointers.get_or_init(|| HashMap::default());
-            if let Some(&offset) = ptrs.get(&suffix) {
+            if let Some(&offset) = ptrs.get(&suffix_key) {
                 let ptr = 0xC000 | offset;
                 self.write_u16(ptr)?;
                 return Ok(());
@@ -106,11 +117,11 @@ impl DnsMessageWriter {
                 .get_mut()
                 .ok_or(anyhow::anyhow!("expected label_pointers to be initialized"))?;
 
-            ptrs.insert(suffix, pos as u16);
+            ptrs.insert(suffix_key, pos as u16);
 
             let label = labels[i];
             self.write_u8(label.len() as u8)?;
-            self.write_bytes(label.as_bytes())?;
+            self.write_bytes(label)?;
         }
 
         self.write_u8(0)?;
@@ -122,18 +133,15 @@ impl DnsMessageWriter {
     ///
     /// This function is mainly intended for EDNS where compression is forbidden.
     pub fn write_qname_uncompressed(&mut self, name: &DomainName) -> anyhow::Result<()> {
-        let labels: Vec<&str> = name.label_iter().collect();
-
-        if labels.is_empty() {
-            // root label
+        if name.is_root() {
             return self.write_u8(0);
         }
 
-        let needed_space = name.len() + 1; // +1 for the terminator.
-        self.ensure_space(needed_space, "qname")?;
-        for label in &labels {
+        self.ensure_space(name.wire_len(), "qname")?;
+
+        for label in name.label_iter() {
             self.buf.put_u8(label.len() as u8);
-            self.buf.extend_from_slice(label.as_bytes());
+            self.buf.extend_from_slice(label);
         }
         self.buf.put_u8(0); // terminator
         Ok(())
