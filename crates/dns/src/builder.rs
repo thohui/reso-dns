@@ -1,3 +1,5 @@
+use crate::Edns;
+
 use super::message::{DnsFlags, DnsMessage, DnsOpcode, DnsQuestion, DnsRecord, DnsResponseCode};
 
 /// Builder for constructing DNS messages.
@@ -10,6 +12,7 @@ pub struct DnsMessageBuilder {
     authority_records: Vec<DnsRecord>,
     additional_records: Vec<DnsRecord>,
     response_code: Option<DnsResponseCode>,
+    edns: Option<Edns>,
 }
 
 impl DnsMessageBuilder {
@@ -34,6 +37,7 @@ impl DnsMessageBuilder {
             authority_records: Vec::new(),
             additional_records: Vec::new(),
             response_code: None,
+            edns: None,
         }
     }
 
@@ -97,6 +101,12 @@ impl DnsMessageBuilder {
         self
     }
 
+    /// Set the EDNS for the DNS message.
+    pub fn with_edns(mut self, edns: Edns) -> Self {
+        self.edns = Some(edns);
+        self
+    }
+
     /// Build the DNS message.
     pub fn build(self) -> DnsMessage {
         let mut message = DnsMessage::new(
@@ -108,10 +118,11 @@ impl DnsMessageBuilder {
             self.additional_records,
         );
 
+        message.set_edns(self.edns);
+
         if let Some(response_code) = self.response_code {
             message.set_response_code(response_code)
-        };
-
+        }
         message
     }
 }

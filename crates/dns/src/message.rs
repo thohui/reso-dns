@@ -184,6 +184,10 @@ impl DnsMessage {
         &self.additional_records
     }
 
+    pub fn set_edns(&mut self, edns: Option<Edns>) {
+        self.edns = edns
+    }
+
     /// EDNS
     pub fn edns(&self) -> &Option<Edns> {
         &self.edns
@@ -916,7 +920,7 @@ pub struct Edns {
 impl Default for Edns {
     fn default() -> Self {
         Self {
-            udp_payload_size: 4096,
+            udp_payload_size: 1232,
             extended_rcode: 0,
             version: 0,
             z_flags: 0,
@@ -1005,11 +1009,11 @@ impl DnsWritable for Edns {
 #[derive(Debug, Clone, PartialEq)]
 pub struct EdnsOption {
     /// EDNS option code
-    code: EdnsOptionCode,
+    pub code: EdnsOptionCode,
     /// EDNS option length.
-    len: u16,
+    pub len: u16,
     /// EDNS option data
-    data: Option<EdnsOptionData>,
+    pub data: Option<EdnsOptionData>,
 }
 
 u16_enum_with_unknown! {
