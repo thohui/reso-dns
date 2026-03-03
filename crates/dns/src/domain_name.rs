@@ -95,6 +95,9 @@ fn try_parse_decimal_escape(bytes: &[u8], pos: usize) -> Option<u8> {
     let d3 = ascii_digit_value(bytes[pos + 2])?;
 
     let value = d1 as u16 * 100 + d2 as u16 * 10 + d3 as u16;
+    if value > u8::MAX as u16 {
+        return None;
+    }
     Some(value as u8)
 }
 
