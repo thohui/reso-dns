@@ -117,7 +117,9 @@ impl DnsMessageWriter {
                 .get_mut()
                 .ok_or(anyhow::anyhow!("expected label_pointers to be initialized"))?;
 
-            ptrs.insert(suffix_key, pos as u16);
+            if pos <= 0x3FFF {
+                ptrs.insert(suffix_key, pos as u16);
+            }
 
             let label = labels[i];
             self.write_u8(label.len() as u8)?;
