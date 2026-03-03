@@ -22,7 +22,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && rm -rf /var/lib/apt/lists/*
 
 # create a non-root user to run the server
-RUN useradd -r -s /usr/sbin/nologin reso
+RUN useradd -r -s /usr/sbin/nologin reso \
+    && mkdir -p /data && chown reso:reso /data
 
 COPY --from=builder /build/target/release/reso /usr/local/bin/reso
 
