@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use bytes::Bytes;
 use futures::{FutureExt, StreamExt};
 use reso_context::DnsRequestCtx;
-use reso_dns::{DnsMessage, helpers};
+use reso_dns::{DnsMessage, helpers, message::EdnsOptionCode};
 use reso_resolver::{ResolveError, forwarder::resolver::ForwardResolver};
 use reso_server::{DnsServer, ErrorHandler, ServerMiddlewares, ServerState, SuccessHandler};
 use tokio_stream::wrappers::WatchStream;
@@ -24,7 +24,13 @@ pub fn success_handler() -> SuccessHandler<Global, Local> {
         async move {
             let message = ctx.message()?;
 
-            if !ctx.local().cache_hit {
+            let has_ecs = message
+                .edns()
+                .as_ref()
+                .map(|e| e.options.iter().any(|o| o.code == EdnsOptionCode::ClientSubnet))
+                .unwrap_or(false);
+
+            if !ctx.local().cache_hit && !has_ecs {
                 let resp_msg = DnsMessage::decode(resp)?;
                 let _ = ctx.global().cache.insert(message, &resp_msg).await;
             }
