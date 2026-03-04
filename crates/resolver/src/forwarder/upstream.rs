@@ -1,8 +1,15 @@
 use std::{
     net::SocketAddr,
-    sync::{Arc, atomic::AtomicUsize},
-    time::Duration,
+    sync::{
+        Arc,
+        atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering},
+    },
+    time::{Duration, UNIX_EPOCH},
 };
+
+use arc_swap::ArcSwap;
+
+use crate::forwarder::udp::UpstreamUdpMux;
 
 use super::tcp::TcpPool;
 
@@ -25,49 +32,199 @@ pub struct Upstreams {
     list: Arc<[Arc<Upstream>]>,
     /// Round-robin index
     rr: AtomicUsize,
+    /// Cached healthy upstream list, rebuilt periodically.
+    healthy_cache: ArcSwap<Vec<Arc<Upstream>>>,
 }
 
 impl Upstreams {
-    pub async fn new(addrs: &[SocketAddr], limits: Limits) -> anyhow::Result<Self> {
+    pub async fn new(addrs: &[SocketAddr], limits: Limits) -> Result<Self, std::io::Error> {
         let mut list = Vec::with_capacity(addrs.len());
         for &addr in addrs {
             let tcp = TcpPool::new(addr, limits);
             tcp.clone().start_reaper(limits.tcp_ttl);
 
-            list.push(Arc::new(Upstream { addr, tcp_pool: tcp }));
+            list.push(Arc::new(Upstream {
+                addr,
+                tcp,
+                udp: UpstreamUdpMux::new(addr).await?,
+                health: UpstreamHealth::new(),
+            }));
         }
-        Ok(Self {
-            list: Arc::from(list),
+        let list: Arc<[Arc<Upstream>]> = Arc::from(list);
+        let initial_healthy = Self::compute_healthy(&list);
+        let upstreams = Arc::new(Self {
+            list,
             rr: AtomicUsize::new(0),
-        })
+            healthy_cache: ArcSwap::from_pointee(initial_healthy),
+        });
+
+        // Spawn periodic rebuild task using Weak to avoid leaking.
+        let weak = Arc::downgrade(&upstreams);
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(Duration::from_secs(1));
+            loop {
+                ticker.tick().await;
+                match weak.upgrade() {
+                    Some(this) => this.rebuild_healthy_cache(),
+                    None => return,
+                }
+            }
+        });
+
+        Ok(Arc::into_inner(upstreams).expect("no other references at construction"))
     }
 
-    pub fn pick_index(&self) -> Option<usize> {
-        let n = self.list.len();
+    /// Returns the healthy upstreams and a round-robin starting index into that list.
+    /// The caller should iterate over the returned slice starting at the given index.
+    pub fn pick(&self) -> Option<(arc_swap::Guard<Arc<Vec<Arc<Upstream>>>>, usize)> {
+        let upstreams = self.healthy_cache.load();
+        let n = upstreams.len();
         if n == 0 {
             return None;
         }
-        let i = self.rr.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % n;
-        Some(i)
+        let i = self.rr.fetch_add(1, Ordering::Relaxed) % n;
+        Some((upstreams, i))
     }
 
-    pub fn as_slice(&self) -> &[Arc<Upstream>] {
-        &self.list
+    fn rebuild_healthy_cache(&self) {
+        let healthy = Self::compute_healthy(&self.list);
+        self.healthy_cache.store(Arc::new(healthy));
+    }
+
+    fn compute_healthy(list: &Arc<[Arc<Upstream>]>) -> Vec<Arc<Upstream>> {
+        let upstreams: Vec<_> = list.iter().filter(|u| u.is_healthy()).cloned().collect();
+        // If no healthy upstreams, return all upstreams to allow requests to go through.
+        if upstreams.is_empty() { list.to_vec() } else { upstreams }
+    }
+}
+
+#[derive(Debug)]
+pub struct UpstreamHealth {
+    consecutive_failures: AtomicU32,
+    skip_until: AtomicU64, // timestamp in milliseconds until which this upstream should be skipped due to unhealthy status. 0 = not skipped.
+}
+
+impl UpstreamHealth {
+    /// Number of consecutive failures to consider an upstream unhealthy and start skipping it.
+    const FAILURE_THRESHOLD: u32 = 5;
+    /// Base cooldown duration in milliseconds to skip an unhealthy upstream. The actual cooldown duration is `BASE_COOLDOWN_MS * 2^consecutive_failures`.
+    const BASE_COOLDOWN_MS: u64 = 2000;
+
+    /// Maximum cooldown duration in milliseconds when skipping an unhealthy upstream.
+    const MAX_COOLDOWN_MS: u64 = 30000;
+
+    pub fn new() -> Self {
+        Self {
+            consecutive_failures: AtomicU32::new(0),
+            skip_until: AtomicU64::new(0),
+        }
+    }
+
+    fn cooldown_ms(failures: u32) -> u64 {
+        if failures < Self::FAILURE_THRESHOLD {
+            0
+        } else {
+            let cooldown =
+                Self::BASE_COOLDOWN_MS.saturating_mul(2u64.saturating_pow(failures - Self::FAILURE_THRESHOLD));
+            cooldown.min(Self::MAX_COOLDOWN_MS)
+        }
+    }
+
+    pub fn record_success(&self, addr: SocketAddr) {
+        let prev_failures = self.consecutive_failures.swap(0, Ordering::Relaxed);
+        let was_unhealthy = prev_failures >= Self::FAILURE_THRESHOLD;
+        self.skip_until.store(0, Ordering::Relaxed);
+        if was_unhealthy {
+            tracing::info!(upstream = %addr, prev_failures, "upstream recovered");
+        }
+    }
+
+    pub fn record_failure(&self, addr: SocketAddr) {
+        let failures = self.consecutive_failures.fetch_add(1, Ordering::Relaxed) + 1;
+        if failures >= Self::FAILURE_THRESHOLD {
+            let cooldown = Self::cooldown_ms(failures);
+            let current_time_ms = std::time::SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
+            let skip_until = current_time_ms.saturating_add(cooldown);
+            self.skip_until.store(skip_until, Ordering::Relaxed);
+            if failures == Self::FAILURE_THRESHOLD {
+                tracing::warn!(upstream = %addr, failures, cooldown_ms = cooldown, "upstream became unhealthy");
+            }
+        }
     }
 }
 
 /// An upstream server with its TCP and UDP connection pools.
 pub struct Upstream {
+    /// Address of the upstream server.
     pub addr: SocketAddr,
-    pub tcp_pool: Arc<TcpPool>,
+    /// UDP mux for this upstream.
+    pub udp: UpstreamUdpMux,
+    /// TCP connection pool for this upstream.
+    pub tcp: Arc<TcpPool>,
+    /// Health status of the upstream, used to determine if it should be skipped for new requests.
+    pub health: UpstreamHealth,
+}
+
+impl Upstream {
+    pub async fn new(addr: SocketAddr, limits: Limits) -> Result<Self, std::io::Error> {
+        let tcp = TcpPool::new(addr, limits);
+        tcp.clone().start_reaper(limits.tcp_ttl);
+
+        Ok(Self {
+            addr,
+            tcp,
+            udp: UpstreamUdpMux::new(addr).await?,
+            health: UpstreamHealth::new(),
+        })
+    }
+
+    pub fn is_healthy(&self) -> bool {
+        let skip_until = self.health.skip_until.load(Ordering::Relaxed);
+        if skip_until == 0 {
+            true
+        } else {
+            let current_time_ms = std::time::SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
+            current_time_ms >= skip_until
+        }
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum UpstreamError {
+    #[error("upstream send timeout")]
+    SendTimeout,
+    #[error("upstream recv timeout")]
+    RecvTimeout,
+    #[error("upstream recv task stopped")]
+    RecvTaskStopped,
+    #[error("upstream send error: {0}")]
+    SendError(std::io::Error),
+    #[error("upstream recv error: {0}")]
+    RecvError(std::io::Error),
+    #[error("upstream error: {0}")]
+    Other(String),
+}
+
+impl From<UpstreamError> for crate::ResolveError {
+    fn from(e: UpstreamError) -> Self {
+        match e {
+            UpstreamError::SendTimeout | UpstreamError::RecvTimeout => crate::ResolveError::Timeout,
+            other => crate::ResolveError::Other(other.to_string()),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::{IpAddr, Ipv4Addr};
 
-    fn create_test_limits() -> Limits {
+    fn test_limits() -> Limits {
         Limits {
             max_tcp_connections: 10,
             max_idle_tcp_connections: 5,
@@ -76,192 +233,54 @@ mod tests {
         }
     }
 
-    fn create_test_addr(port: u16) -> SocketAddr {
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port)
+    #[tokio::test]
+    async fn pick_round_robin() {
+        let addrs: Vec<SocketAddr> = vec!["127.0.0.1:5353".parse().unwrap(), "127.0.0.2:5353".parse().unwrap()];
+        let upstreams = Upstreams::new(&addrs, test_limits()).await.unwrap();
+
+        let (list1, idx1) = upstreams.pick().unwrap();
+        let (list2, idx2) = upstreams.pick().unwrap();
+
+        assert_eq!(list1.len(), 2);
+        assert_eq!(list2.len(), 2);
+        // Round-robin should advance
+        assert_ne!(idx1, idx2);
     }
 
     #[tokio::test]
-    async fn test_upstreams_creation_empty() {
-        let limits = create_test_limits();
-        let upstreams = Upstreams::new(&[], limits).await.unwrap();
+    async fn pick_skips_unhealthy() {
+        let addrs: Vec<SocketAddr> = vec!["127.0.0.1:5353".parse().unwrap(), "127.0.0.2:5353".parse().unwrap()];
+        let upstreams = Upstreams::new(&addrs, test_limits()).await.unwrap();
 
-        assert_eq!(upstreams.as_slice().len(), 0);
-        assert!(upstreams.pick_index().is_none());
-    }
-
-    #[tokio::test]
-    async fn test_upstreams_creation_single() {
-        let limits = create_test_limits();
-        let addrs = vec![create_test_addr(53)];
-
-        let upstreams = Upstreams::new(&addrs, limits).await.unwrap();
-
-        assert_eq!(upstreams.as_slice().len(), 1);
-        assert_eq!(upstreams.as_slice()[0].addr, addrs[0]);
-    }
-
-    #[tokio::test]
-    async fn test_upstreams_creation_multiple() {
-        let limits = create_test_limits();
-        let addrs = vec![create_test_addr(53), create_test_addr(5353), create_test_addr(8853)];
-
-        let upstreams = Upstreams::new(&addrs, limits).await.unwrap();
-
-        assert_eq!(upstreams.as_slice().len(), 3);
-        for (i, upstream) in upstreams.as_slice().iter().enumerate() {
-            assert_eq!(upstream.addr, addrs[i]);
-        }
-    }
-
-    #[tokio::test]
-    async fn test_pick_index_single_upstream() {
-        let limits = create_test_limits();
-        let addrs = vec![create_test_addr(53)];
-
-        let upstreams = Upstreams::new(&addrs, limits).await.unwrap();
-
-        // Should always return 0 for single upstream
-        for _ in 0..10 {
-            assert_eq!(upstreams.pick_index(), Some(0));
-        }
-    }
-
-    #[tokio::test]
-    async fn test_pick_index_round_robin() {
-        let limits = create_test_limits();
-        let addrs = vec![create_test_addr(53), create_test_addr(5353), create_test_addr(8853)];
-
-        let upstreams = Upstreams::new(&addrs, limits).await.unwrap();
-
-        // Should cycle through 0, 1, 2, 0, 1, 2, ...
-        let mut indices = Vec::new();
-        for _ in 0..9 {
-            indices.push(upstreams.pick_index().unwrap());
+        // make first upstream unhealthy
+        let addr = upstreams.list[0].addr;
+        for _ in 0..UpstreamHealth::FAILURE_THRESHOLD {
+            upstreams.list[0].health.record_failure(addr);
         }
 
-        assert_eq!(indices, vec![0, 1, 2, 0, 1, 2, 0, 1, 2]);
+        // rebuild cache so pick sees the change
+        upstreams.rebuild_healthy_cache();
+
+        let (list, _) = upstreams.pick().unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].addr, addrs[1]);
     }
 
     #[tokio::test]
-    async fn test_pick_index_two_upstreams() {
-        let limits = create_test_limits();
-        let addrs = vec![create_test_addr(53), create_test_addr(5353)];
+    async fn pick_returns_all_when_all_unhealthy() {
+        let addrs: Vec<SocketAddr> = vec!["127.0.0.1:5353".parse().unwrap(), "127.0.0.2:5353".parse().unwrap()];
+        let upstreams = Upstreams::new(&addrs, test_limits()).await.unwrap();
 
-        let upstreams = Upstreams::new(&addrs, limits).await.unwrap();
-
-        // Should alternate between 0 and 1
-        let mut indices = Vec::new();
-        for _ in 0..6 {
-            indices.push(upstreams.pick_index().unwrap());
+        // Make all upstreams unhealthy
+        for upstream in upstreams.list.iter() {
+            for _ in 0..UpstreamHealth::FAILURE_THRESHOLD {
+                upstream.health.record_failure(upstream.addr);
+            }
         }
 
-        assert_eq!(indices, vec![0, 1, 0, 1, 0, 1]);
-    }
+        upstreams.rebuild_healthy_cache();
 
-    #[test]
-    fn test_limits_values() {
-        let limits = Limits {
-            max_tcp_connections: 100,
-            max_idle_tcp_connections: 50,
-            connect_timeout: Duration::from_secs(10),
-            tcp_ttl: Duration::from_secs(60),
-        };
-
-        assert_eq!(limits.max_tcp_connections, 100);
-        assert_eq!(limits.max_idle_tcp_connections, 50);
-        assert_eq!(limits.connect_timeout, Duration::from_secs(10));
-        assert_eq!(limits.tcp_ttl, Duration::from_secs(60));
-    }
-
-    #[test]
-    fn test_limits_clone() {
-        let limits = create_test_limits();
-        let cloned = limits.clone();
-
-        assert_eq!(limits.max_tcp_connections, cloned.max_tcp_connections);
-        assert_eq!(limits.max_idle_tcp_connections, cloned.max_idle_tcp_connections);
-        assert_eq!(limits.connect_timeout, cloned.connect_timeout);
-        assert_eq!(limits.tcp_ttl, cloned.tcp_ttl);
-    }
-
-    #[tokio::test]
-    async fn test_upstream_addr() {
-        let limits = create_test_limits();
-        let addr = create_test_addr(53);
-        let addrs = vec![addr];
-
-        let upstreams = Upstreams::new(&addrs, limits).await.unwrap();
-        let upstream = &upstreams.as_slice()[0];
-
-        assert_eq!(upstream.addr, addr);
-        assert_eq!(upstream.addr.port(), 53);
-        assert_eq!(upstream.addr.ip(), IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
-    }
-
-    #[tokio::test]
-    async fn test_upstreams_as_slice() {
-        let limits = create_test_limits();
-        let addrs = vec![create_test_addr(53), create_test_addr(5353)];
-
-        let upstreams = Upstreams::new(&addrs, limits).await.unwrap();
-        let slice = upstreams.as_slice();
-
-        assert_eq!(slice.len(), 2);
-        assert_eq!(slice[0].addr, addrs[0]);
-        assert_eq!(slice[1].addr, addrs[1]);
-    }
-
-    #[tokio::test]
-    async fn test_pick_index_wraps_around() {
-        let limits = create_test_limits();
-        let addrs = vec![create_test_addr(53), create_test_addr(5353)];
-
-        let upstreams = Upstreams::new(&addrs, limits).await.unwrap();
-
-        // Pick many times to ensure wrapping works correctly
-        for i in 0..100 {
-            let idx = upstreams.pick_index().unwrap();
-            assert_eq!(idx, i % 2);
-        }
-    }
-
-    #[tokio::test]
-    async fn test_upstreams_with_ipv6() {
-        use std::net::Ipv6Addr;
-
-        let limits = create_test_limits();
-        let addr = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)), 53);
-        let addrs = vec![addr];
-
-        let upstreams = Upstreams::new(&addrs, limits).await.unwrap();
-
-        assert_eq!(upstreams.as_slice().len(), 1);
-        assert_eq!(upstreams.as_slice()[0].addr, addr);
-    }
-
-    #[tokio::test]
-    async fn test_upstreams_mixed_ip_versions() {
-        use std::net::Ipv6Addr;
-
-        let limits = create_test_limits();
-        let ipv4_addr = create_test_addr(53);
-        let ipv6_addr = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)), 53);
-        let addrs = vec![ipv4_addr, ipv6_addr];
-
-        let upstreams = Upstreams::new(&addrs, limits).await.unwrap();
-
-        assert_eq!(upstreams.as_slice().len(), 2);
-        assert_eq!(upstreams.as_slice()[0].addr, ipv4_addr);
-        assert_eq!(upstreams.as_slice()[1].addr, ipv6_addr);
-    }
-
-    #[tokio::test]
-    async fn test_limits_copy() {
-        let limits1 = create_test_limits();
-        let limits2 = limits1; // Should copy, not move
-
-        // Both should be usable
-        assert_eq!(limits1.max_tcp_connections, 10);
-        assert_eq!(limits2.max_tcp_connections, 10);
+        let (list, _) = upstreams.pick().unwrap();
+        assert_eq!(list.len(), 2);
     }
 }

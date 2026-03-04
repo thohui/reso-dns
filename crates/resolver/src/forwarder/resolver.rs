@@ -66,7 +66,8 @@ where
             )));
         }
 
-        let key = CacheKey::try_from(query_message).or_else(|e| Err(ResolveError::Other(e)))?;
+        let key = CacheKey::try_from(query_message)
+            .map_err(|e| ResolveError::Other(e.to_string()))?;
 
         let upstreams = self.upstreams.clone();
 
@@ -88,7 +89,14 @@ where
             .await
             .map_err(|e| match e.downcast::<ResolveError>() {
                 Ok(e) => e,
-                Err(e) => ResolveError::Other(e),
+                Err(e) => {
+                    let msg = e.to_string();
+                    if msg.contains("inflight cancelled") {
+                        ResolveError::Timeout
+                    } else {
+                        ResolveError::Other(msg)
+                    }
+                }
             })?;
 
         let response = resp_arc.as_ref().clone().into_custom_response(query_message.id);

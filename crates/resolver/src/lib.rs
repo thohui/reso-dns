@@ -28,8 +28,8 @@ pub enum ResolveError {
     #[error("malformed response: {0}")]
     MalformedResponse(String),
 
-    #[error("unexpected error: {0}")]
-    Other(#[source] anyhow::Error),
+    #[error("{0}")]
+    Other(String),
 }
 
 impl ResolveError {

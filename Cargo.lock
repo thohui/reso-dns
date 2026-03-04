@@ -1787,6 +1787,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "crossbeam-queue",
+ "dashmap",
  "lru-cache",
  "moka",
  "once_cell",

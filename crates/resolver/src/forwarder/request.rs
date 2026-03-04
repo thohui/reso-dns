@@ -1,10 +1,14 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
-use super::{tcp::TcpPool, udp::UdpConn, upstream::Upstreams};
-use crate::ResolveError;
+use super::{tcp::TcpPool, upstream::Upstreams};
+use crate::{
+    ResolveError,
+    forwarder::upstream::{Upstream, UpstreamError},
+};
 use bytes::Bytes;
 use reso_context::{RequestBudget, RequestType};
 use reso_dns::helpers;
+use tracing::Instrument;
 
 pub struct UpstreamResolveRequest {
     request_type: RequestType,
@@ -33,12 +37,10 @@ impl UpstreamResolveRequest {
         /// Minimum amount of time needed to start a new attempt.
         const MIN_REMAINING_TO_START_ATTEMPT: Duration = Duration::from_millis(15);
 
-        let pools = self.upstreams.as_slice();
-        if pools.is_empty() {
-            return Err(ResolveError::Other(anyhow::anyhow!("no upstreams available")));
-        }
-
-        let start = self.upstreams.pick_index().unwrap(); // SAFE: we have alreay checked if the pool is not empty.
+        let (pools, start) = self
+            .upstreams
+            .pick()
+            .ok_or(ResolveError::Other("no upstreams available".into()))?;
 
         let request_tid = helpers::extract_transaction_id(&self.query)
             .ok_or(ResolveError::InvalidRequest("failed to extract tid from query".into()))?;
@@ -48,45 +50,65 @@ impl UpstreamResolveRequest {
 
         // Try each upstream in round robin order once.
         for off in 0..n {
-            // skip starting a new attempt if we're too close to deadline
-            let remaining = match self.request_budget.remaining() {
-                Some(r) => r,
-                None => break,
-            };
-
-            if remaining < MIN_REMAINING_TO_START_ATTEMPT {
+            if !self.has_budget(MIN_REMAINING_TO_START_ATTEMPT) {
                 return Err(ResolveError::Timeout);
             }
 
+            // pick the next upstream in round-robin order.
             let idx = (start + off) % n;
             let upstream = &pools[idx];
+            let span =
+                tracing::debug_span!("upstream_attempt", upstream = %upstream.addr, attempt = off + 1, total = n);
 
-            let attempt_res = match req_type {
-                RequestType::TCP | RequestType::DOH => self.resolve_tcp(&upstream.tcp_pool, &self.query).await,
-                RequestType::UDP => {
-                    match self.resolve_udp(upstream.addr, &self.query).await {
-                        Ok(resp) => match helpers::is_truncated(&resp) {
-                            Some(true) => {
-                                // TCP fallback for THIS upstream only.
-                                self.resolve_tcp(&upstream.tcp_pool, &self.query).await
-                            }
-                            Some(false) => Ok(resp),
-                            None => Err(anyhow::anyhow!("invalid UDP response")),
-                        },
-                        Err(e) => Err(e),
+            let attempt_res = async {
+                match req_type {
+                    RequestType::TCP | RequestType::DOH => self.resolve_tcp(&upstream.tcp, &self.query).await,
+                    RequestType::UDP => {
+                        match self.resolve_udp(upstream, &self.query).await {
+                            Ok(resp) => match helpers::is_truncated(&resp) {
+                                Some(true) => {
+                                    if !self.has_budget(MIN_REMAINING_TO_START_ATTEMPT) {
+                                        return Err(UpstreamError::SendTimeout);
+                                    }
+                                    // TCP fallback for THIS upstream only.
+                                    self.resolve_tcp(&upstream.tcp, &self.query).await
+                                }
+                                Some(false) => Ok(resp),
+                                None => Err(UpstreamError::Other("invalid UDP response".into())),
+                            },
+                            Err(e) => Err(e),
+                        }
                     }
                 }
-            };
+            }
+            .instrument(span)
+            .await;
 
             let resp = match attempt_res {
-                Ok(r) => r,
-                Err(e) => {
+                Ok(r) => {
+                    upstream.health.record_success(upstream.addr);
+                    r
+                }
+                Err(ref e) => {
+                    if matches!(
+                        e,
+                        UpstreamError::SendTimeout
+                            | UpstreamError::RecvTimeout
+                            | UpstreamError::SendError(_)
+                            | UpstreamError::RecvError(_)
+                            | UpstreamError::RecvTaskStopped
+                    ) {
+                        upstream.health.record_failure(upstream.addr);
+                    }
                     tracing::warn!(
                         upstream = %upstream.addr,
                         req_type = ?req_type,
+                        attempt = off + 1,
+                        total = n,
                         error = %e,
                         "forward attempt failed"
                     );
+
                     continue;
                 }
             };
@@ -117,11 +139,16 @@ impl UpstreamResolveRequest {
             return Ok(resp);
         }
 
-        Err(ResolveError::Other(anyhow::anyhow!("all upstreams failed")))
+        Err(ResolveError::Other("all upstreams failed".into()))
     }
 
-    /// Resolve the upstreqm request over tcp.
-    async fn resolve_tcp(&self, pool: &TcpPool, query: &[u8]) -> anyhow::Result<Bytes> {
+    /// Check if the request budget has at least `min` remaining.
+    fn has_budget(&self, min: Duration) -> bool {
+        self.request_budget.remaining().is_some_and(|r| r >= min)
+    }
+
+    /// Resolve the upstream request over tcp.
+    async fn resolve_tcp(&self, pool: &TcpPool, query: &[u8]) -> Result<Bytes, UpstreamError> {
         let deadline = self.request_budget.deadline();
         let mut conn = pool.get_or_connect(deadline).await?;
 
@@ -140,9 +167,8 @@ impl UpstreamResolveRequest {
     }
 
     /// Resolve the upstream request over udp.
-    async fn resolve_udp(&self, upstream_addr: SocketAddr, query: &[u8]) -> anyhow::Result<Bytes> {
+    async fn resolve_udp(&self, upstream: &Upstream, query: &[u8]) -> Result<Bytes, UpstreamError> {
         let deadline = self.request_budget.deadline();
-        let connection = UdpConn::new(upstream_addr).await?;
-        connection.send_and_receive(query, deadline).await
+        upstream.udp.send_and_receive(query, deadline).await
     }
 }
