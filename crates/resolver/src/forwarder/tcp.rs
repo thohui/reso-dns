@@ -6,19 +6,18 @@ use std::{
     },
 };
 
-use anyhow::Context;
 use bytes::{Bytes, BytesMut};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
     sync::OwnedSemaphorePermit,
-    time::{Duration, Instant, timeout, timeout_at},
+    time::{Duration, Instant, timeout_at},
 };
 
 use crossbeam_queue::SegQueue;
 use tokio::sync::Semaphore;
 
-use super::upstream::Limits;
+use super::upstream::{Limits, UpstreamError};
 
 /// A pool of TCP connections to a specific upstream server.
 /// Existing connections are reused if possible, otherwise new connections are created
@@ -48,11 +47,16 @@ impl TcpPool {
 
     /// Start a background task that reaps expired idle tcp connections.
     pub fn start_reaper(self: Arc<Self>, interval: Duration) {
-        let this = self.clone();
+        // Use a weak reference to avoid keeping the pool alive if it is dropped.
+        let weak = Arc::downgrade(&self);
         tokio::spawn(async move {
             let mut ticker = tokio::time::interval(interval);
             loop {
                 ticker.tick().await;
+                let this = match weak.upgrade() {
+                    Some(pool) => pool,
+                    None => return,
+                };
                 let now = Instant::now();
                 let mut dropped = 0;
                 for _ in 0..this.idle_count.load(Ordering::Relaxed) {
@@ -69,7 +73,7 @@ impl TcpPool {
                     }
                 }
                 if dropped > 0 {
-                    tracing::info!("reaper dropped {} expired tcp conns to {}", dropped, this.addr);
+                    tracing::debug!("reaper dropped {} expired tcp conns to {}", dropped, this.addr);
                 }
             }
         });
@@ -86,27 +90,29 @@ impl TcpPool {
     }
 
     /// Get an idle conn or connect a new one if under cap.
-    pub async fn get_or_connect(&self, deadline: Instant) -> anyhow::Result<TcpConn> {
+    pub async fn get_or_connect(&self, deadline: Instant) -> Result<TcpConn, UpstreamError> {
         tokio::select! {
             biased;
-            _ = tokio::time::sleep_until(deadline) => Err(anyhow::anyhow!("deadline reached")),
-            res = self.get_or_connect_inner() => res
+            _ = tokio::time::sleep_until(deadline) => Err(UpstreamError::SendTimeout),
+            res = self.get_or_connect_inner(deadline) => res
         }
     }
 
-    async fn get_or_connect_inner(&self) -> anyhow::Result<TcpConn> {
+    async fn get_or_connect_inner(&self, deadline: Instant) -> Result<TcpConn, UpstreamError> {
         if let Some(c) = self.try_get() {
+            tracing::debug!(upstream = %self.addr, "reusing idle tcp connection");
             return Ok(c);
         }
 
-        let permit = self
-            .connections
-            .clone()
-            .try_acquire_owned()
-            .map_err(|_| anyhow::anyhow!("upstream {} at max concurrent connection attempts", self.addr))?;
+        let permit = self.connections.clone().try_acquire_owned().map_err(|_| {
+            UpstreamError::Other(format!("upstream {} at max concurrent connection attempts", self.addr))
+        })?;
+
+        tracing::debug!(upstream = %self.addr, "opening new tcp connection");
 
         TcpConn::connect(
             self.addr,
+            deadline,
             self.limits.connect_timeout,
             permit,
             Instant::now() + self.limits.tcp_ttl,
@@ -137,18 +143,23 @@ pub struct TcpConn {
 
 impl TcpConn {
     /// Establish a new TCP connection to the given address with a timeout and a permit.
+    /// The effective timeout is `min(now + connect_timeout, deadline)`.
     async fn connect(
         addr: SocketAddr,
-        to: Duration,
+        deadline: Instant,
+        connect_timeout: Duration,
         _permit: OwnedSemaphorePermit,
         ttl: Instant,
-    ) -> anyhow::Result<Self> {
-        let s = timeout(to, TcpStream::connect(addr))
+    ) -> Result<Self, UpstreamError> {
+        // TCP connect can take a long time if the server is unresponsive, so we apply the timeout to the connect operation itself rather than the whole get_or_connect
+        let effective_deadline = (Instant::now() + connect_timeout).min(deadline);
+        let s = timeout_at(effective_deadline, TcpStream::connect(addr))
             .await
-            .context("tcp connect timeout")??;
+            .map_err(|_| UpstreamError::SendTimeout)?
+            .map_err(UpstreamError::SendError)?;
 
         // this allows us to avoid delays in sending small packets, which we are doing in the send_and_receive method.
-        s.set_nodelay(true)?;
+        s.set_nodelay(true).map_err(UpstreamError::SendError)?;
 
         const MAX_RECEIVE_BUFFER_SIZE: usize = 65_536;
 
@@ -161,9 +172,12 @@ impl TcpConn {
     }
 
     /// Send a DNS query and receive the response over this TCP connection.
-    pub async fn send_and_receive(&mut self, query: &[u8], deadline: Instant) -> anyhow::Result<Bytes> {
+    pub async fn send_and_receive(&mut self, query: &[u8], deadline: Instant) -> Result<Bytes, UpstreamError> {
         if query.len() > u16::MAX as usize {
-            anyhow::bail!("query too large for DNS/TCP: {}", query.len());
+            return Err(UpstreamError::Other(format!(
+                "query too large for DNS/TCP: {}",
+                query.len()
+            )));
         }
 
         // write length + body
@@ -171,17 +185,20 @@ impl TcpConn {
         let lenb = (query.len() as u16).to_be_bytes();
         timeout_at(deadline, self.stream.write_all(&lenb))
             .await
-            .context("write len timeout")??;
+            .map_err(|_| UpstreamError::SendTimeout)?
+            .map_err(UpstreamError::SendError)?;
 
         timeout_at(deadline, self.stream.write_all(query))
             .await
-            .context("write body timeout")??;
+            .map_err(|_| UpstreamError::SendTimeout)?
+            .map_err(UpstreamError::SendError)?;
 
         // read resp
         let mut resp_lenb = [0u8; 2];
         timeout_at(deadline, self.stream.read_exact(&mut resp_lenb))
             .await
-            .context("read len timeout")??;
+            .map_err(|_| UpstreamError::RecvTimeout)?
+            .map_err(UpstreamError::RecvError)?;
         let n = u16::from_be_bytes(resp_lenb) as usize;
 
         if self.buffer.capacity() < n {
@@ -192,7 +209,8 @@ impl TcpConn {
 
         timeout_at(deadline, self.stream.read_exact(&mut self.buffer[..]))
             .await
-            .context("read body timeout")??;
+            .map_err(|_| UpstreamError::RecvTimeout)?
+            .map_err(UpstreamError::RecvError)?;
 
         let resp = self.buffer.split().freeze();
         Ok(resp)
