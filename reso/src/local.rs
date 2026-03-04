@@ -14,6 +14,9 @@ pub struct Local {
 
     /// When the request was started
     pub time_started: Instant,
+
+    /// Whether the request was rate limited.
+    pub rate_limited: bool,
 }
 
 impl Local {
@@ -30,6 +33,7 @@ impl Default for Local {
             metrics_recorded: Default::default(),
             blocked: Default::default(),
             time_started: Instant::now(),
+            rate_limited: Default::default(),
         }
     }
 }

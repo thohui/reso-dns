@@ -26,10 +26,16 @@ export interface ConfigModel {
 
 export type ActiveResolver = 'forwarder';
 
+export interface RateLimitConfig {
+	window_duration: number;
+	max_queries_per_window: number;
+}
+
 export interface DnsConfig {
 	timeout: number;
 	active: ActiveResolver;
 	forwarder: ForwarderConfig;
+	rate_limit: RateLimitConfig;
 }
 
 export type Upstream = string;

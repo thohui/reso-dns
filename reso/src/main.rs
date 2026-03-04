@@ -22,6 +22,7 @@ mod global;
 mod local;
 mod metrics;
 mod middleware;
+mod ratelimit;
 mod server_builder;
 mod services;
 mod utils;

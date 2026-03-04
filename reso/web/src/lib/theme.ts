@@ -42,12 +42,14 @@ const config = defineConfig({
 					error: { value: '#f87171' },
 					blocked: { value: '#fb923c' },
 					cached: { value: '#60a5fa' },
+					rate_limited: { value: '#fbbf24' },
 					info: { value: '#60a5fa' },
 					warn: { value: '#fbbf24' },
 					successMuted: { value: 'rgba(52,211,153,0.12)' },
 					errorMuted: { value: 'rgba(248,113,113,0.12)' },
 					blockedMuted: { value: 'rgba(251,146,60,0.12)' },
 					cachedMuted: { value: 'rgba(96,165,250,0.12)' },
+					rate_limitedMuted: { value: 'rgba(251,191,36,0.12)' },
 					warnMuted: { value: 'rgba(250,204,21,0.12)' },
 				},
 				neutral: {
@@ -66,9 +68,9 @@ export function hexToRgba(hex: string, alpha: number) {
 	const full =
 		h.length === 3
 			? h
-					.split('')
-					.map((c) => c + c)
-					.join('')
+				.split('')
+				.map((c) => c + c)
+				.join('')
 			: h;
 	const r = parseInt(full.slice(0, 2), 16);
 	const g = parseInt(full.slice(2, 4), 16);

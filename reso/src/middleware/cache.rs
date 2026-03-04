@@ -4,7 +4,7 @@ use reso_cache::{CacheKey, CacheResult, NegKind};
 use reso_context::{DnsMiddleware, DnsRequestCtx};
 use reso_dns::{DnsFlags, DnsMessage, DnsMessageBuilder, DnsOpcode, DnsResponseCode, Edns, message::EdnsOptionCode};
 
-use crate::{global::Global, local::Local};
+use crate::{global::Global, local::Local, middleware::echo_edns};
 
 fn cache_response_flags(query: &DnsMessage) -> DnsFlags {
     DnsFlags::new(
@@ -17,15 +17,6 @@ fn cache_response_flags(query: &DnsMessage) -> DnsFlags {
         false,
         query.flags.checking_disabled,
     )
-}
-
-fn echo_edns(query: &DnsMessage, mut builder: DnsMessageBuilder) -> DnsMessageBuilder {
-    if let Some(edns) = query.edns() {
-        let mut response_edns = Edns::default();
-        response_edns.set_do_bit(edns.do_bit());
-        builder = builder.with_edns(response_edns);
-    }
-    builder
 }
 
 /// Caching middleware that serves responses from cache if available.

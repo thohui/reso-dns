@@ -12,10 +12,11 @@ use crate::{
     global::{Global, SharedGlobal},
     local::Local,
     metrics::event::{ErrorLogEvent, QueryLogEvent},
-    middleware::{blocklist::BlocklistMiddleware, cache::CacheMiddleware},
+    middleware::{blocklist::BlocklistMiddleware, cache::CacheMiddleware, ratelimit::RateLimitMiddleware},
+    ratelimit::RateLimitConfig,
     services::{
         self,
-        config::model::{ActiveResolver, Upstream},
+        config::model::{ActiveResolver, Config, Upstream},
     },
 };
 
@@ -56,6 +57,7 @@ pub fn success_handler() -> SuccessHandler<Global, Local> {
                 dur_ms: local.time_elapsed().as_millis() as u64,
                 cache_hit: local.cache_hit,
                 blocked: local.blocked,
+                rate_limited: local.rate_limited,
             });
 
             Ok(())
@@ -102,9 +104,17 @@ pub fn error_handler() -> ErrorHandler<Global, Local> {
     })
 }
 
-pub fn server_middlewares() -> ServerMiddlewares<Global, Local> {
-    let middlewares: ServerMiddlewares<Global, Local> =
-        Arc::new(vec![Arc::new(BlocklistMiddleware), Arc::new(CacheMiddleware)]);
+pub fn server_middlewares(config: &Config) -> ServerMiddlewares<Global, Local> {
+    let ratelimit_config = RateLimitConfig {
+        window_duration: Duration::from_secs(config.dns.rate_limit.window_duration as u64),
+        max_queries_per_window: config.dns.rate_limit.max_queries_per_window,
+    };
+
+    let middlewares: ServerMiddlewares<Global, Local> = Arc::new(vec![
+        Arc::new(RateLimitMiddleware::new(ratelimit_config)),
+        Arc::new(BlocklistMiddleware),
+        Arc::new(CacheMiddleware),
+    ]);
     middlewares
 }
 
@@ -132,7 +142,7 @@ async fn create_server_state(
     Ok(ServerState {
         timeout: Duration::from_millis(config.dns.timeout),
         global: global.clone(),
-        middlewares: server_middlewares(),
+        middlewares: server_middlewares(config),
         on_error: Some(error_handler()),
         on_success: Some(success_handler()),
         resolver: Arc::new(resolver),
