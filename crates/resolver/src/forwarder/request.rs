@@ -68,7 +68,7 @@ impl UpstreamResolveRequest {
                             Ok(resp) => match helpers::is_truncated(&resp) {
                                 Some(true) => {
                                     if !self.has_budget(MIN_REMAINING_TO_START_ATTEMPT) {
-                                        return Err(UpstreamError::SendTimeout);
+                                        return Err(UpstreamError::Timeout);
                                     }
                                     // TCP fallback for THIS upstream only.
                                     self.resolve_tcp(&upstream.tcp, &self.query).await

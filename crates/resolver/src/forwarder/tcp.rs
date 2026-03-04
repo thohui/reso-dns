@@ -151,6 +151,7 @@ impl TcpConn {
         _permit: OwnedSemaphorePermit,
         ttl: Instant,
     ) -> Result<Self, UpstreamError> {
+        // TCP connect can take a long time if the server is unresponsive, so we apply the timeout to the connect operation itself rather than the whole get_or_connect
         let effective_deadline = (Instant::now() + connect_timeout).min(deadline);
         let s = timeout_at(effective_deadline, TcpStream::connect(addr))
             .await

@@ -197,6 +197,8 @@ impl Upstream {
 
 #[derive(thiserror::Error, Debug)]
 pub enum UpstreamError {
+    #[error("upstream request timed out")]
+    Timeout,
     #[error("upstream send timeout")]
     SendTimeout,
     #[error("upstream recv timeout")]

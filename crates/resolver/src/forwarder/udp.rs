@@ -77,9 +77,16 @@ impl UpstreamUdpMux {
         // closed error rather than silently hanging until timeout.
         self.pending.insert(query_id, Pending(tx));
 
-        if let Err(_) = tokio::time::timeout_at(deadline, self.socket.send(query)).await {
-            self.pending.remove(&query_id);
-            return Err(UpstreamError::SendTimeout);
+        match tokio::time::timeout_at(deadline, self.socket.send(query)).await {
+            Err(_elapsed) => {
+                self.pending.remove(&query_id);
+                return Err(UpstreamError::SendTimeout);
+            }
+            Ok(Err(io_err)) => {
+                self.pending.remove(&query_id);
+                return Err(UpstreamError::SendError(io_err));
+            }
+            Ok(Ok(_)) => {}
         }
 
         match tokio::time::timeout_at(deadline, rx).await {
