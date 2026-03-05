@@ -16,6 +16,7 @@ pub struct ActivityLog {
     pub rcode: Option<i64>,
     pub blocked: Option<bool>,
     pub cache_hit: Option<bool>,
+    pub rate_limited: Option<bool>,
     pub dur_ms: u64,
 
     pub error_type: Option<i64>,
@@ -42,7 +43,8 @@ impl ActivityLog {
                       cache_hit,
                       dur_ms,
                       error_type,
-                      error_message
+                      error_message,
+                      rate_limited
                     FROM activity_log
                     ORDER BY
                       ts_ms DESC,
@@ -67,6 +69,7 @@ impl ActivityLog {
                         dur_ms: row.get(10)?,
                         error_type: row.get(11)?,
                         error_message: row.get(12)?,
+                        rate_limited: row.get(13)?,
                     })
                 })?;
 

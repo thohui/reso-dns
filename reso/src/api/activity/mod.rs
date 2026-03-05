@@ -87,12 +87,14 @@ impl TryFrom<ActivityLog> for Activity {
                 let rcode = r.rcode.context("query row missing rcode")? as u16;
                 let blocked = r.blocked.context("query row missing blocked")?;
                 let cache_hit = r.cache_hit.context("query row missing cache_hit")?;
+                let rate_limited = r.rate_limited.unwrap_or(false);
 
                 ActivityKind::Query(ActivityQuery {
                     source_id: r.source_id,
                     rcode,
                     blocked,
                     cache_hit,
+                    rate_limited,
                 })
             }
             "error" => {
@@ -135,6 +137,7 @@ pub struct ActivityQuery {
     pub rcode: u16,
     pub blocked: bool,
     pub cache_hit: bool,
+    pub rate_limited: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -1,9 +1,11 @@
+use std::time::Duration;
 use std::{collections::HashMap, net::SocketAddr, str::FromStr};
 
 use anyhow::{Context, Result, bail};
-use chrono::Duration;
 use serde::{Deserialize, Serialize};
 use url::Url;
+
+use crate::ratelimit;
 
 /// Config
 #[derive(Serialize, Deserialize)]
@@ -19,12 +21,31 @@ pub struct DnsConfig {
     pub active: ActiveResolver,
     /// Forwarder config.
     pub forwarder: ForwarderConfig,
+
+    pub rate_limit: RateLimitConfigModel,
 }
 
 #[derive(Serialize, Deserialize)]
 pub enum ActiveResolver {
     #[serde(rename = "forwarder")]
     Forwarder,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RateLimitConfigModel {
+    /// Duration of each rate limit window in seconds.
+    pub window_duration: usize,
+    /// Maximum number of queries allowed per window.
+    pub max_queries_per_window: usize,
+}
+
+impl From<ratelimit::RateLimitConfig> for RateLimitConfigModel {
+    fn from(config: ratelimit::RateLimitConfig) -> Self {
+        Self {
+            window_duration: config.window_duration.as_secs() as usize,
+            max_queries_per_window: config.max_queries_per_window,
+        }
+    }
 }
 
 /// Runtime endpoint type (hostname or IP + port).
@@ -140,11 +161,25 @@ impl Config {
             .map(|specs| specs.into_iter().map(UpstreamSpec).collect())
             .unwrap_or(defaults.dns.forwarder.upstreams);
 
+        let window_duration = map
+            .get("dns.rate_limit.window_duration")
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(defaults.dns.rate_limit.window_duration);
+
+        let max_queries_per_window = map
+            .get("dns.rate_limit.max_queries_per_window")
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(defaults.dns.rate_limit.max_queries_per_window);
+
         Self {
             dns: DnsConfig {
                 timeout,
                 active,
                 forwarder: ForwarderConfig { upstreams },
+                rate_limit: RateLimitConfigModel {
+                    window_duration: window_duration,
+                    max_queries_per_window,
+                },
             },
         }
     }
@@ -154,15 +189,22 @@ impl Config {
             ActiveResolver::Forwarder => "forwarder",
         };
 
-        let upstreams_json = serde_json::to_string(
-            &self.dns.forwarder.upstreams.iter().map(|u| &u.0).collect::<Vec<_>>(),
-        )
-        .unwrap_or_else(|_| "[]".to_string());
+        let upstreams_json =
+            serde_json::to_string(&self.dns.forwarder.upstreams.iter().map(|u| &u.0).collect::<Vec<_>>())
+                .unwrap_or_else(|_| "[]".to_string());
 
         vec![
             ("dns.timeout".to_string(), self.dns.timeout.to_string()),
             ("dns.active".to_string(), active_str.to_string()),
             ("dns.forwarder.upstreams".to_string(), upstreams_json),
+            (
+                "dns.rate_limit.window_duration".to_string(),
+                self.dns.rate_limit.window_duration.to_string(),
+            ),
+            (
+                "dns.rate_limit.max_queries_per_window".to_string(),
+                self.dns.rate_limit.max_queries_per_window.to_string(),
+            ),
         ]
     }
 }
@@ -171,9 +213,13 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             dns: DnsConfig {
-                timeout: Duration::seconds(3).num_milliseconds() as u64,
+                timeout: Duration::from_secs(3).as_millis() as u64,
                 active: ActiveResolver::Forwarder,
                 forwarder: ForwarderConfig { upstreams: vec![] },
+                rate_limit: RateLimitConfigModel {
+                    window_duration: Duration::from_secs(30).as_secs() as usize,
+                    max_queries_per_window: 100,
+                },
             },
         }
     }

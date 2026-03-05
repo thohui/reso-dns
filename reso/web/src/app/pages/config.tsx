@@ -10,7 +10,7 @@ import {
 } from '@chakra-ui/react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus, RotateCcw, Save, Server, Timer, Trash2 } from 'lucide-react';
+import { Plus, RotateCcw, Save, Server, Shield, Timer, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import z from 'zod';
@@ -31,6 +31,8 @@ import { hexToRgba } from '../../lib/theme';
 const schema = z.object({
 	upstreams: z.array(UpstreamSpecSchema),
 	timeout: z.coerce.number().min(1),
+	rate_limit_window: z.coerce.number().int().min(1),
+	rate_limit_max: z.coerce.number().int().min(1),
 });
 
 export default function ConfigPage() {
@@ -43,6 +45,8 @@ export default function ConfigPage() {
 		defaultValues: {
 			upstreams: config.data.dns.forwarder.upstreams,
 			timeout: config.data.dns.timeout,
+			rate_limit_window: config.data.dns.rate_limit.window_duration,
+			rate_limit_max: config.data.dns.rate_limit.max_queries_per_window,
 		},
 	});
 
@@ -60,6 +64,10 @@ export default function ConfigPage() {
 					...config.data.dns.forwarder,
 					upstreams: data.upstreams,
 				},
+				rate_limit: {
+					window_duration: data.rate_limit_window,
+					max_queries_per_window: data.rate_limit_max,
+				},
 			},
 		};
 
@@ -69,6 +77,8 @@ export default function ConfigPage() {
 				form.reset({
 					upstreams: data.dns.forwarder.upstreams,
 					timeout: data.dns.timeout,
+					rate_limit_window: data.dns.rate_limit.window_duration,
+					rate_limit_max: data.dns.rate_limit.max_queries_per_window,
 				});
 				// Update cache
 				queryClient.setQueryData(useConfigQueryKey, () => data);
@@ -293,10 +303,51 @@ export default function ConfigPage() {
 					description='Maximum upstream response wait time per query (ms).'
 				>
 					<Field.Root invalid={!!form.formState.errors.timeout}>
-						<Input type='number' {...form.register('timeout')} />
+						<Input type='number' {...form.register('timeout', { valueAsNumber: true })} />
 						{form.formState.errors.timeout?.message && (
 							<Field.ErrorText color='status.error'>
 								{form.formState.errors.timeout.message}
+							</Field.ErrorText>
+						)}
+					</Field.Root>
+				</ConfigField>
+			</ConfigSection>
+
+			<ConfigSection
+				title='Rate Limiting'
+				description='Limit the number of queries per client within a time window.'
+				icon={Shield}
+			>
+				<ConfigField
+					label='Window Duration'
+					description='Length of each rate limit window (seconds).'
+				>
+					<Field.Root invalid={!!form.formState.errors.rate_limit_window}>
+						<Input type='number'
+							min={1}
+							step={1}
+							{...form.register('rate_limit_window', { valueAsNumber: true })}
+						/>
+						{form.formState.errors.rate_limit_window?.message && (
+							<Field.ErrorText color='status.error'>
+								{form.formState.errors.rate_limit_window.message}
+							</Field.ErrorText>
+						)}
+					</Field.Root>
+				</ConfigField>
+				<ConfigField
+					label='Max Queries'
+					description='Maximum queries allowed per client per window.'
+				>
+					<Field.Root invalid={!!form.formState.errors.rate_limit_max}>
+						<Input type='number'
+							min={1}
+							step={1}
+							{...form.register('rate_limit_max', { valueAsNumber: true })}
+						/>
+						{form.formState.errors.rate_limit_max?.message && (
+							<Field.ErrorText color='status.error'>
+								{form.formState.errors.rate_limit_max.message}
 							</Field.ErrorText>
 						)}
 					</Field.Root>

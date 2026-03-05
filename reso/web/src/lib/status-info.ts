@@ -43,14 +43,7 @@ export function getStatusInfo(activity: Activity): StatusInfo {
 		};
 	}
 
-	if (q.d.rcode !== 0) {
-		return {
-			label: 'warning',
-			color: 'status.warn',
-			bg: 'status.warnMuted',
-			icon: AlertTriangle,
-		};
-	}
+
 
 	if (q.d.cache_hit) {
 		return {
@@ -59,6 +52,25 @@ export function getStatusInfo(activity: Activity): StatusInfo {
 			bg: 'status.cachedMuted',
 			icon: Zap,
 			text: 'Served from cache',
+		};
+	}
+
+	if (q.d.rate_limited) {
+		return {
+			label: 'rate limited',
+			color: 'status.rate_limited',
+			bg: 'status.rate_limitedMuted',
+			icon: AlertTriangle,
+			text: 'Rate limited',
+		};
+	}
+
+	if (q.d.rcode !== 0) {
+		return {
+			label: 'warning',
+			color: 'status.warn',
+			bg: 'status.warnMuted',
+			icon: AlertTriangle,
 		};
 	}
 

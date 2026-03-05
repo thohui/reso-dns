@@ -26,6 +26,8 @@ pub struct QueryLogEvent {
     pub cache_hit: bool,
     /// Blocked
     pub blocked: bool,
+    /// Rate limited
+    pub rate_limited: bool,
 }
 
 impl QueryLogEvent {
@@ -40,6 +42,7 @@ impl QueryLogEvent {
             qname: self.qname.to_string(),
             qtype: self.qtype.to_u16() as i64,
             rcode: self.rcode.to_u16() as i64,
+            rate_limited: self.rate_limited,
         }
     }
 }
@@ -96,6 +99,7 @@ mod tests {
             dur_ms: 50,
             cache_hit: false,
             blocked: false,
+            rate_limited: false,
         };
 
         assert_eq!(event.ts_ms, 1234567890);
@@ -121,6 +125,7 @@ mod tests {
             dur_ms: 100,
             cache_hit: true,
             blocked: false,
+            rate_limited: true,
         };
 
         let db_model = event.into_db_model();
@@ -134,6 +139,7 @@ mod tests {
         assert_eq!(db_model.dur_ms, 100);
         assert!(db_model.cache_hit);
         assert!(!db_model.blocked);
+        assert!(db_model.rate_limited);
     }
 
     #[test]
@@ -148,6 +154,7 @@ mod tests {
             dur_ms: 5,
             cache_hit: true,
             blocked: false,
+            rate_limited: false,
         };
 
         let db_model = event.into_db_model();
@@ -167,6 +174,7 @@ mod tests {
             dur_ms: 10,
             cache_hit: false,
             blocked: true,
+            rate_limited: false,
         };
 
         let db_model = event.into_db_model();
@@ -253,6 +261,7 @@ mod tests {
             dur_ms: 10,
             cache_hit: false,
             blocked: false,
+            rate_limited: false,
         };
 
         let cloned = event.clone();
@@ -293,6 +302,7 @@ mod tests {
             dur_ms: 15,
             cache_hit: false,
             blocked: false,
+            rate_limited: false,
         };
 
         let debug_str = format!("{:?}", event);
@@ -337,6 +347,7 @@ mod tests {
                 dur_ms: 10,
                 cache_hit: false,
                 blocked: false,
+                rate_limited: false,
             };
 
             let db_model = event.into_db_model();
@@ -365,6 +376,7 @@ mod tests {
                 dur_ms: 10,
                 cache_hit: false,
                 blocked: false,
+                rate_limited: false,
             };
 
             let db_model = event.into_db_model();
@@ -402,6 +414,7 @@ mod tests {
             dur_ms: 0,
             cache_hit: true,
             blocked: false,
+            rate_limited: false,
         };
 
         let db_model = event.into_db_model();

@@ -1,4 +1,3 @@
-import { getStatusInfo } from '../../lib/status-info';
 import {
 	Box,
 	Heading,
@@ -10,13 +9,14 @@ import {
 	VStack,
 } from '@chakra-ui/react';
 import { Clock } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
 	type Activity,
 	getRecordType,
 	getTransportLabel,
 	type QueryActivity,
 } from '../../lib/api/activity';
+import { getStatusInfo } from '../../lib/status-info';
 import { ActivityDetailDrawer } from './ActivityDetailDrawer';
 
 function formatTimestamp(ts: number): string {
@@ -167,8 +167,11 @@ function LogDetailRow({
 	);
 }
 
-export function LogsGrid({ activities }: { activities: Activity[] }) {
-	const [filter, setFilter] = useState('all');
+
+type ActivityFilter = 'all' | 'queries' | 'blocked' | 'errors' | 'cached' | 'rate_limited';
+
+export function LogsGrid({ activities }: { activities: Activity[]; }) {
+	const [filter, setFilter] = useState<ActivityFilter>('all');
 	const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
 		null,
 	);
@@ -200,22 +203,24 @@ export function LogsGrid({ activities }: { activities: Activity[] }) {
 		if (filter === 'errors') return a.kind === 'error';
 		if (filter === 'cached')
 			return a.kind === 'query' && (a as QueryActivity).d.cache_hit;
+		if (filter === 'rate_limited')
+			return a.kind === 'query' && (a as QueryActivity).d.rate_limited;
 		return true;
 	});
 
-	const counts = {
-		all: activities.length,
-		queries: activities.filter(
-			(a) => a.kind === 'query' && !(a as QueryActivity).d.blocked,
-		).length,
-		blocked: activities.filter(
-			(a) => a.kind === 'query' && (a as QueryActivity).d.blocked,
-		).length,
-		errors: activities.filter((a) => a.kind === 'error').length,
-		cached: activities.filter(
-			(a) => a.kind === 'query' && (a as QueryActivity).d.cache_hit,
-		).length,
-	};
+	const counts = useMemo(() => {
+		let queries = 0, blocked = 0, errors = 0, cached = 0, rate_limited = 0;
+		for (const a of activities) {
+			if (a.kind === 'error') { errors++; continue; }
+			if (a.kind === 'query') {
+				const d = (a as QueryActivity).d;
+				if (d.blocked) blocked++; else queries++;
+				if (d.cache_hit) cached++;
+				if (d.rate_limited) rate_limited++;
+			}
+		}
+		return { all: activities.length, queries, blocked, errors, cached, rate_limited };
+	}, [activities]);
 
 	return (
 		<Box>
@@ -231,7 +236,9 @@ export function LogsGrid({ activities }: { activities: Activity[] }) {
 			<Tabs.Root
 				defaultValue='all'
 				mb='6'
-				onValueChange={(e) => setFilter(e.value)}
+				onValueChange={(e) => {
+					setFilter(e.value as ActivityFilter);
+				}}
 			>
 				<Tabs.List bg='bg.panel' borderRadius='lg' p='1' gap='1'>
 					<Tabs.Trigger
@@ -269,6 +276,15 @@ export function LogsGrid({ activities }: { activities: Activity[] }) {
 						_selected={{ bg: 'bg.subtle', color: 'fg' }}
 					>
 						Cached ({counts.cached})
+					</Tabs.Trigger>
+					<Tabs.Trigger
+						value='rate_limited'
+						px='4'
+						py='2'
+						color='fg.muted'
+						_selected={{ bg: 'bg.subtle', color: 'fg' }}
+					>
+						Rate Limited ({counts.rate_limited})
 					</Tabs.Trigger>
 					<Tabs.Trigger
 						value='errors'

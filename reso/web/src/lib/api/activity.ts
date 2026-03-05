@@ -35,6 +35,7 @@ export interface QueryActivity extends ActivityBase {
 		rcode: number;
 		blocked: boolean;
 		cache_hit: boolean;
+		rate_limited: boolean;
 	};
 }
 
