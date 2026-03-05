@@ -40,7 +40,9 @@ impl RateLimiter {
         };
 
         if now.duration_since(entry.start) >= self.config.window_duration {
-            self.windows.invalidate(&ip).await;
+            entry.start = now;
+            entry.query_count = 1;
+            self.windows.insert(ip, entry).await;
             true
         } else {
             if entry.query_count < self.config.max_queries_per_window {
