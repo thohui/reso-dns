@@ -208,22 +208,19 @@ export function LogsGrid({ activities }: { activities: Activity[]; }) {
 		return true;
 	});
 
-	const counts = useMemo(() => ({
-		all: activities.length,
-		queries: activities.filter(
-			(a) => a.kind === 'query' && !(a as QueryActivity).d.blocked,
-		).length,
-		blocked: activities.filter(
-			(a) => a.kind === 'query' && (a as QueryActivity).d.blocked,
-		).length,
-		errors: activities.filter((a) => a.kind === 'error').length,
-		cached: activities.filter(
-			(a) => a.kind === 'query' && (a as QueryActivity).d.cache_hit,
-		).length,
-		rate_limited: activities.filter(
-			(a) => a.kind === 'query' && (a as QueryActivity).d.rate_limited,
-		).length,
-	}), [activities]);
+	const counts = useMemo(() => {
+		let queries = 0, blocked = 0, errors = 0, cached = 0, rate_limited = 0;
+		for (const a of activities) {
+			if (a.kind === 'error') { errors++; continue; }
+			if (a.kind === 'query') {
+				const d = (a as QueryActivity).d;
+				if (d.blocked) blocked++; else queries++;
+				if (d.cache_hit) cached++;
+				if (d.rate_limited) rate_limited++;
+			}
+		}
+		return { all: activities.length, queries, blocked, errors, cached, rate_limited };
+	}, [activities]);
 
 	return (
 		<Box>
