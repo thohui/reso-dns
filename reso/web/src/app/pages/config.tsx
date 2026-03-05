@@ -31,8 +31,8 @@ import { hexToRgba } from '../../lib/theme';
 const schema = z.object({
 	upstreams: z.array(UpstreamSpecSchema),
 	timeout: z.coerce.number().min(1),
-	rate_limit_window: z.coerce.number().min(1),
-	rate_limit_max: z.coerce.number().min(1),
+	rate_limit_window: z.coerce.number().int().min(1),
+	rate_limit_max: z.coerce.number().int().min(1),
 });
 
 export default function ConfigPage() {
@@ -323,7 +323,11 @@ export default function ConfigPage() {
 					description='Length of each rate limit window (seconds).'
 				>
 					<Field.Root invalid={!!form.formState.errors.rate_limit_window}>
-						<Input type='number' {...form.register('rate_limit_window', { valueAsNumber: true })} />
+						<Input type='number'
+							min={1}
+							step={1}
+							{...form.register('rate_limit_window', { valueAsNumber: true })}
+						/>
 						{form.formState.errors.rate_limit_window?.message && (
 							<Field.ErrorText color='status.error'>
 								{form.formState.errors.rate_limit_window.message}
@@ -336,7 +340,11 @@ export default function ConfigPage() {
 					description='Maximum queries allowed per client per window.'
 				>
 					<Field.Root invalid={!!form.formState.errors.rate_limit_max}>
-						<Input type='number' {...form.register('rate_limit_max', { valueAsNumber: true })} />
+						<Input type='number'
+							min={1}
+							step={1}
+							{...form.register('rate_limit_max', { valueAsNumber: true })}
+						/>
 						{form.formState.errors.rate_limit_max?.message && (
 							<Field.ErrorText color='status.error'>
 								{form.formState.errors.rate_limit_max.message}

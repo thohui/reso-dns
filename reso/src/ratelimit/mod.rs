@@ -3,14 +3,15 @@ use std::{
     time::{Duration, Instant},
 };
 
-use dashmap::DashMap;
+use moka::future::Cache;
 use serde::{Deserialize, Serialize};
 
 pub struct RateLimiter {
-    windows: DashMap<IpAddr, RateWindow>,
+    windows: Cache<IpAddr, RateWindow>,
     config: RateLimitConfig,
 }
 
+#[derive(Clone, Debug)]
 struct RateWindow {
     start: Instant,
     query_count: usize,
@@ -19,26 +20,32 @@ struct RateWindow {
 impl RateLimiter {
     pub fn new(config: RateLimitConfig) -> Self {
         Self {
-            windows: DashMap::new(),
+            windows: Cache::builder().time_to_live(Duration::from_mins(1)).build(),
             config,
         }
     }
 
-    pub fn check(&self, ip: IpAddr) -> bool {
+    pub async fn check(&self, ip: IpAddr) -> bool {
         let now = Instant::now();
+        let mut entry = match self.windows.get(&ip).await {
+            Some(entry) => entry,
+            None => {
+                let entry = RateWindow {
+                    start: now,
+                    query_count: 1,
+                };
+                self.windows.insert(ip, entry.clone()).await;
+                return true;
+            }
+        };
 
-        let mut entry = self.windows.entry(ip).or_insert_with(|| RateWindow {
-            start: now,
-            query_count: 0,
-        });
-
-        if now.duration_since(entry.start) > self.config.window_duration {
-            entry.start = now;
-            entry.query_count = 1;
+        if now.duration_since(entry.start) >= self.config.window_duration {
+            self.windows.invalidate(&ip).await;
             true
         } else {
             if entry.query_count < self.config.max_queries_per_window {
                 entry.query_count += 1;
+                self.windows.insert(ip, entry).await;
                 true
             } else {
                 false

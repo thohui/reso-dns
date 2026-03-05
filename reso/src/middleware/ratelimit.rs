@@ -24,7 +24,7 @@ impl RateLimitMiddleware {
 fn ratelimit_response_flags(query: &DnsMessage) -> DnsFlags {
     DnsFlags::new(
         true,
-        DnsOpcode::Query,
+        query.flags.opcode,
         false,
         false,
         query.flags.recursion_desired,
@@ -37,7 +37,7 @@ fn ratelimit_response_flags(query: &DnsMessage) -> DnsFlags {
 #[async_trait]
 impl DnsMiddleware<Global, Local> for RateLimitMiddleware {
     async fn on_query(&self, ctx: &DnsRequestCtx<Global, Local>) -> anyhow::Result<Option<bytes::Bytes>> {
-        if self.limiter.check(ctx.request_address().ip()) {
+        if self.limiter.check(ctx.request_address().ip()).await {
             Ok(None)
         } else {
             let message = ctx.message()?;
