@@ -3,7 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use moka::future::Cache;
+use moka::{future::Cache, ops::compute::Op};
 use serde::{Deserialize, Serialize};
 
 pub struct RateLimiter {
@@ -27,32 +27,39 @@ impl RateLimiter {
 
     pub async fn check(&self, ip: IpAddr) -> bool {
         let now = Instant::now();
-        let mut entry = match self.windows.get(&ip).await {
-            Some(entry) => entry,
-            None => {
-                let entry = RateWindow {
-                    start: now,
-                    query_count: 1,
-                };
-                self.windows.insert(ip, entry.clone()).await;
-                return true;
-            }
-        };
+        let window_duration = self.config.window_duration;
+        let max_queries = self.config.max_queries_per_window;
 
-        if now.duration_since(entry.start) >= self.config.window_duration {
-            entry.start = now;
-            entry.query_count = 1;
-            self.windows.insert(ip, entry).await;
-            true
-        } else {
-            if entry.query_count < self.config.max_queries_per_window {
-                entry.query_count += 1;
-                self.windows.insert(ip, entry).await;
-                true
-            } else {
-                false
-            }
-        }
+        let result = self
+            .windows
+            .entry(ip)
+            .and_compute_with(|maybe_entry| async move {
+                match maybe_entry {
+                    Some(entry) => {
+                        let window = entry.into_value();
+                        if now.duration_since(window.start) >= window_duration {
+                            Op::Put(RateWindow {
+                                start: now,
+                                query_count: 1,
+                            })
+                        } else if window.query_count < max_queries {
+                            Op::Put(RateWindow {
+                                query_count: window.query_count + 1,
+                                ..window
+                            })
+                        } else {
+                            Op::Nop
+                        }
+                    }
+                    None => Op::Put(RateWindow {
+                        start: now,
+                        query_count: 1,
+                    }),
+                }
+            })
+            .await;
+
+        !matches!(result, moka::ops::compute::CompResult::Unchanged(_))
     }
 }
 
