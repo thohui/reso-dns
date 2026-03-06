@@ -243,12 +243,14 @@ export function LogsGrid({ activities, page, totalPages, total, onPageChange }: 
 				{FILTERS.map(({ key, label, color }) => {
 					const active = filter === key;
 					return (
-						<Box
+						<Button
 							key={key}
-							as='button'
+							variant='ghost'
 							onClick={() => setFilter(key)}
 							px='3'
 							py='1.5'
+							minH='auto'
+							h='auto'
 							borderRadius='full'
 							fontSize='xs'
 							fontWeight='500'
@@ -259,6 +261,8 @@ export function LogsGrid({ activities, page, totalPages, total, onPageChange }: 
 							bg={active ? 'bg.subtle' : 'transparent'}
 							color={active ? (color ?? 'fg') : 'fg.muted'}
 							_hover={{ bg: 'bg.subtle', borderColor: color ?? 'fg.subtle' }}
+							aria-pressed={active}
+							aria-label={`${label} filter`}
 						>
 							<HStack gap='1.5'>
 								{color && (
@@ -277,7 +281,7 @@ export function LogsGrid({ activities, page, totalPages, total, onPageChange }: 
 									{counts[key]}
 								</Text>
 							</HStack>
-						</Box>
+						</Button>
 					);
 				})}
 			</HStack>
