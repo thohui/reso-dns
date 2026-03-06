@@ -11,7 +11,8 @@ impl PagedQuery {
         self.skip.unwrap_or(0)
     }
     pub fn top(&self) -> i64 {
-        self.top.unwrap_or(25)
+        const MAX_TOP: i64 = 1000;
+        self.top.unwrap_or(25).min(MAX_TOP)
     }
 }
 
