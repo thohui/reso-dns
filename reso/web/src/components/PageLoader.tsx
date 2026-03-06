@@ -8,7 +8,7 @@ export function PageLoader() {
 			<Text
 				fontSize='sm'
 				color='fg.faint'
-				fontFamily="'JetBrains Mono', monospace"
+				fontFamily="'Mozilla Text', sans-serif"
 				letterSpacing='0.05em'
 			>
 				Loading...

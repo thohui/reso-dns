@@ -64,24 +64,13 @@ export function DashboardLayout() {
 						fontWeight='600'
 						fontSize='sm'
 						letterSpacing='-0.02em'
-						fontFamily="'JetBrains Mono', monospace"
+						fontFamily="'Mozilla Text', sans-serif"
 					>
 						[ResoDNS]
 					</Text>
 				</HStack>
 
 				<VStack gap='0.5' align='stretch' flex='1'>
-					<Text
-						fontSize='xs'
-						color='fg.faint'
-						fontWeight='500'
-						textTransform='uppercase'
-						letterSpacing='0.05em'
-						px='3'
-						mb='2'
-					>
-						Navigation
-					</Text>
 					{menuItems.map((item) => {
 						const isActive = location.pathname === item.path;
 						return (

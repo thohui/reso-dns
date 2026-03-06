@@ -33,7 +33,7 @@ export default function NotFoundPage() {
 						size='lg'
 						fontWeight='600'
 						letterSpacing='-0.02em'
-						fontFamily="'JetBrains Mono', monospace"
+						fontFamily="'Mozilla Text', sans-serif"
 					>
 						404
 					</Heading>

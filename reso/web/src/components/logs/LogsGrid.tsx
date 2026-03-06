@@ -58,7 +58,7 @@ function LogDetailRow({
 			<Table.Cell
 				py='3'
 				px='4'
-				fontFamily="'JetBrains Mono', monospace"
+				fontFamily="'Mozilla Text', sans-serif"
 				fontSize='sm'
 				color='fg.muted'
 			>
@@ -86,7 +86,7 @@ function LogDetailRow({
 
 			<Table.Cell py='3' px='4'>
 				<HStack gap='2'>
-					<Text fontFamily="'JetBrains Mono', monospace" fontSize='sm'>
+					<Text fontFamily="'Mozilla Text', sans-serif" fontSize='sm'>
 						{activity.qname || '-'}
 					</Text>
 					{activity.qtype !== null && (
@@ -96,7 +96,7 @@ function LogDetailRow({
 							borderRadius='md'
 							fontSize='xs'
 							fontWeight='500'
-							fontFamily="'JetBrains Mono', monospace"
+							fontFamily="'Mozilla Text', sans-serif"
 							bg='accent.muted'
 							color='accent.fg'
 						>
@@ -109,7 +109,7 @@ function LogDetailRow({
 			<Table.Cell
 				py='3'
 				px='4'
-				fontFamily="'JetBrains Mono', monospace"
+				fontFamily="'Mozilla Text', sans-serif"
 				fontSize='sm'
 				color='fg.muted'
 			>
@@ -124,7 +124,7 @@ function LogDetailRow({
 					borderRadius='md'
 					fontSize='xs'
 					fontWeight='500'
-					fontFamily="'JetBrains Mono', monospace"
+					fontFamily="'Mozilla Text', sans-serif"
 					bg='accent.muted'
 					color='accent.fg'
 				>
@@ -147,7 +147,7 @@ function LogDetailRow({
 				<HStack gap='1' justify='flex-end'>
 					<Icon as={Clock} boxSize='3' color='fg.subtle' />
 					<Text
-						fontFamily="'JetBrains Mono', monospace"
+						fontFamily="'Mozilla Text', sans-serif"
 						fontSize='sm'
 						color={
 							activity.duration > 1000
