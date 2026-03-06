@@ -1,11 +1,10 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{fmt, net::SocketAddr, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwap;
 use doh::run_doh;
-use futures::future::BoxFuture;
-use reso_context::{DnsMiddleware, DnsRequestCtx, DnsResponse};
+use reso_context::{DnsMiddleware, DnsRequestCtx, DnsResponse, ErrorType};
 use reso_dns::DnsResponseCode;
-use reso_resolver::{DynResolver, ResolveError, ResolveErrorType};
+use reso_resolver::{DynResolver, ResolveError};
 use tcp::run_tcp;
 use udp::run_udp;
 
@@ -29,32 +28,28 @@ impl ServerError {
         }
     }
 
-    /// Get the error type for metrics purposes.
-    pub fn error_type(&self) -> ResolveErrorType {
+    pub fn error_type(&self) -> ErrorType {
         match self {
             ServerError::ResolveError(e) => e.error_type(),
-            ServerError::MiddlewareError(_) => ResolveErrorType::Other,
-        }
-    }
-
-    /// Get a string representation of the error for logging purposes.
-    pub fn to_string(&self) -> String {
-        match self {
-            ServerError::ResolveError(e) => e.to_string(),
-            ServerError::MiddlewareError(e) => e.to_string(),
+            ServerError::MiddlewareError(_) => ErrorType::Other,
         }
     }
 }
 
-pub type ErrorHandler<G, L> =
-    Arc<dyn for<'a> Fn(&'a DnsRequestCtx<G, L>, &'a ServerError) -> BoxFuture<'a, ()> + Send + Sync>;
+impl fmt::Display for ServerError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ServerError::ResolveError(e) => write!(f, "{}", e),
+            ServerError::MiddlewareError(e) => write!(f, "{}", e),
+        }
+    }
+}
 
 pub type ServerMiddlewares<G, L> = Arc<Vec<Arc<dyn DnsMiddleware<G, L> + 'static>>>;
 
 pub struct ServerState<G, L> {
     pub resolver: Arc<DynResolver<G, L>>,
     pub middlewares: ServerMiddlewares<G, L>,
-    pub on_error: Option<ErrorHandler<G, L>>,
     pub global: Arc<G>,
     pub timeout: Duration,
 }
@@ -113,27 +108,57 @@ where
     } = &*state;
 
     for (i, middleware) in state.middlewares.iter().enumerate() {
-        if let Some(response) = middleware.on_query(ctx).await.map_err(ServerError::MiddlewareError)? {
-            let mut response = response;
-            // Only run on_response for middlewares that had their on_query called.
-            for response_middleware in middlewares[..=i].iter().rev() {
-                response_middleware
+        match middleware.on_query(ctx).await {
+            Ok(Some(response)) => {
+                let mut response = response;
+                // Only run on_response for middlewares that had their on_query called.
+                for response_middleware in middlewares[..=i].iter().rev() {
+                    response_middleware
+                        .on_response(ctx, &mut response)
+                        .await
+                        .map_err(ServerError::MiddlewareError)?;
+                }
+                return Ok(response);
+            }
+            Ok(None) => {}
+            Err(e) => {
+                let error = ServerError::MiddlewareError(e);
+                notify_error(ctx, &middlewares[..i], &error).await;
+                return Err(error);
+            }
+        }
+    }
+
+    match resolver.resolve(ctx).await {
+        Ok(mut response) => {
+            for middleware in middlewares.iter().rev() {
+                middleware
                     .on_response(ctx, &mut response)
                     .await
                     .map_err(ServerError::MiddlewareError)?;
             }
-            return Ok(response);
+            Ok(response)
+        }
+        Err(e) => {
+            let error = ServerError::ResolveError(e);
+            notify_error(ctx, middlewares, &error).await;
+            Err(error)
         }
     }
+}
 
-    let mut response = resolver.resolve(ctx).await.map_err(ServerError::ResolveError)?;
-
+/// Notify middlewares that an error occurred, in reverse order.
+async fn notify_error<G, L>(
+    ctx: &mut DnsRequestCtx<G, L>,
+    middlewares: &[Arc<dyn DnsMiddleware<G, L> + 'static>],
+    error: &ServerError,
+) where
+    G: Send + Sync + 'static,
+    L: Send + Sync,
+{
+    let error_type = error.error_type();
+    let message = error.to_string();
     for middleware in middlewares.iter().rev() {
-        middleware
-            .on_response(ctx, &mut response)
-            .await
-            .map_err(ServerError::MiddlewareError)?;
+        middleware.on_error(ctx, &error_type, &message).await;
     }
-
-    Ok(response)
 }

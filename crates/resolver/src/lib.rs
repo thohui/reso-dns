@@ -1,9 +1,6 @@
-use bytes::Bytes;
-
 use async_trait::async_trait;
-use once_cell::sync::OnceCell;
-use reso_context::{DnsRequestCtx, DnsResponse};
-use reso_dns::{DnsMessage, DnsResponseCode};
+use reso_context::{DnsRequestCtx, DnsResponse, ErrorType};
+use reso_dns::DnsResponseCode;
 use thiserror::Error;
 
 /// Trait for DNS resolvers that can resolve DNS requests.
@@ -44,24 +41,15 @@ impl ResolveError {
         }
     }
 
-    pub fn error_type(&self) -> ResolveErrorType {
+    pub fn error_type(&self) -> ErrorType {
         match self {
-            Self::Timeout => ResolveErrorType::Timeout,
-            Self::InvalidRequest(_) => ResolveErrorType::InvalidRequest,
-            ResolveError::InvalidResponse(_) => ResolveErrorType::InvalidResponse,
-            ResolveError::MalformedResponse(_) => ResolveErrorType::MalformedResponse,
-            ResolveError::Other(_) => ResolveErrorType::Other,
+            Self::Timeout => ErrorType::Timeout,
+            Self::InvalidRequest(_) => ErrorType::InvalidRequest,
+            Self::InvalidResponse(_) => ErrorType::InvalidResponse,
+            Self::MalformedResponse(_) => ErrorType::MalformedResponse,
+            Self::Other(_) => ErrorType::Other,
         }
     }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ResolveErrorType {
-    Timeout,
-    InvalidRequest,
-    InvalidResponse,
-    MalformedResponse,
-    Other,
 }
 
 pub mod forwarder;

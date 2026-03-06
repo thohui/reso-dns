@@ -6,6 +6,16 @@ use once_cell::sync::OnceCell;
 use reso_dns::DnsMessage;
 use tokio::time::Instant;
 
+/// Classifies the kind of error that occurred during request processing.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ErrorType {
+    Timeout,
+    InvalidRequest,
+    InvalidResponse,
+    MalformedResponse,
+    Other,
+}
+
 /// The type of DNS request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -47,7 +57,7 @@ impl<G, L> DnsRequestCtx<G, L> {
             raw,
             message: OnceCell::new(),
             global,
-            local: local,
+            local,
         }
     }
 
@@ -123,11 +133,14 @@ impl DnsResponse {
 /// Trait for DNS middlewares that can process DNS requests.
 #[async_trait]
 pub trait DnsMiddleware<G, L>: Send + Sync {
-    async fn on_query(&self, ctx: &mut DnsRequestCtx<G, L>) -> anyhow::Result<Option<DnsResponse>> {
-        return Ok(None);
+    async fn on_query(&self, _ctx: &mut DnsRequestCtx<G, L>) -> anyhow::Result<Option<DnsResponse>> {
+        Ok(None)
     }
-    async fn on_response(&self, ctx: &mut DnsRequestCtx<G, L>, response: &mut DnsResponse) -> anyhow::Result<()> {
+    async fn on_response(&self, _ctx: &mut DnsRequestCtx<G, L>, _response: &mut DnsResponse) -> anyhow::Result<()> {
         Ok(())
+    }
+    /// Called when an error occurs during request processing.
+    async fn on_error(&self, _ctx: &mut DnsRequestCtx<G, L>, _error: &ErrorType, _message: &str) {
     }
 }
 

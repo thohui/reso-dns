@@ -166,22 +166,16 @@ where
             return Ok(Response::builder()
                 .status(200)
                 .header("Content-Type", "application/dns-message")
-                .body(Full::new(resp.bytes()))
-                .unwrap());
+                .body(Full::new(resp.bytes()))?);
         }
         Err(e) => {
             let resp = match ctx.message() {
                 Ok(m) => Response::builder()
                     .status(200)
                     .header("Content-Type", "application/dns-message")
-                    .body(Full::new(create_error_message(&m, &e)?))
-                    .unwrap(),
-                Err(_) => Response::builder().status(500).body(Full::new(Bytes::new())).unwrap(),
+                    .body(Full::new(create_error_message(&m, &e)?))?,
+                Err(_) => Response::builder().status(500).body(Full::new(Bytes::new()))?,
             };
-
-            if let Some(on_error) = &state.on_error {
-                let _ = on_error(&ctx, &e).await;
-            }
 
             return Ok(resp);
         }

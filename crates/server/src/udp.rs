@@ -46,7 +46,6 @@ where
 
                 let state = state.load_full();
                 let global = state.global.clone();
-                let on_error = state.on_error.clone();
 
                 inflight.spawn(async move {
                     let mut ctx = DnsRequestCtx::new(state.timeout, client, RequestType::UDP, raw, global, L::default());
@@ -54,7 +53,6 @@ where
                     match handle_request(&mut ctx, state).await {
                         Ok(resp) => {
                             let _ = sock.send_to(&resp.bytes(), client).await;
-
                         },
                         Err(e) => {
                             if let Ok(message) = ctx.message() {
@@ -62,13 +60,9 @@ where
                                 if let Err(err) = res {
                                     tracing::warn!("failed to write error response to client {}: {}", client, err);
                                 }
-                                if let Some(cb) = &on_error {
-                                    let _ = cb(&ctx, &e).await;
-                                }
                             }
                         }
                     }
-
                 });
             }
             _ = shutdown.cancelled() => {

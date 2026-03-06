@@ -108,10 +108,10 @@ impl DnsMiddleware<Global, Local> for CacheMiddleware {
             .unwrap_or(false);
 
         let should_cache =
-            !ctx.local().cache_hit && !has_ecs && ctx.local().blocked == false && ctx.local().rate_limited == false;
+            !ctx.local().cache_hit && !has_ecs && !ctx.local().blocked && !ctx.local().rate_limited;
 
         if should_cache {
-            let _ = ctx.global().cache.insert(message, response.message()?).await;
+            ctx.global().cache.insert(message, response.message()?).await;
         }
 
         Ok(())

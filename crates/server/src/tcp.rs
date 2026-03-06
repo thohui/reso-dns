@@ -42,7 +42,6 @@ where
 
                 let state = state.load_full();
                 let global = state.global.clone();
-                let on_error = state.on_error.clone();
 
                 inflight.spawn(async move {
                     let mut len_buf = [0u8; 2];
@@ -81,9 +80,6 @@ where
                                 if let Err(err) = res {
                                     tracing::warn!("failed to write error response to client {}: {}", client, err);
                                 }
-                            }
-                            if let Some(cb) = &on_error {
-                                let _ = cb(&ctx, &e).await;
                             }
                         }
                     }

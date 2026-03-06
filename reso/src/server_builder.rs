@@ -1,16 +1,13 @@
 use std::{sync::Arc, time::Duration};
 
-use futures::{FutureExt, StreamExt};
-use reso_context::DnsRequestCtx;
-use reso_dns::helpers;
+use futures::StreamExt;
 use reso_resolver::forwarder::resolver::ForwardResolver;
-use reso_server::{DnsServer, ErrorHandler, ServerError, ServerMiddlewares, ServerState};
+use reso_server::{DnsServer, ServerMiddlewares, ServerState};
 use tokio_stream::wrappers::WatchStream;
 
 use crate::{
     global::{Global, SharedGlobal},
     local::Local,
-    metrics::event::ErrorLogEvent,
     middleware::{
         blocklist::BlocklistMiddleware, cache::CacheMiddleware, metrics::MetricsMiddleware,
         ratelimit::RateLimitMiddleware,
@@ -21,42 +18,6 @@ use crate::{
         config::model::{ActiveResolver, Config, Upstream},
     },
 };
-
-pub fn error_handler() -> ErrorHandler<Global, Local> {
-    Arc::new(|ctx: &DnsRequestCtx<Global, Local>, err: &ServerError| {
-        async move {
-            let local = ctx.local();
-            let ts_ms: i64 = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("failed to get the system time")
-                .as_millis() as i64;
-
-            let mut qname = None;
-            let mut qtype = None;
-
-            // try to get qname and qtype
-            if let Ok(msg) = ctx.message() {
-                qname = msg.questions().first().map(|q| q.qname.to_string());
-                qtype = msg.questions().first().map(|q| q.qtype.to_u16() as i64);
-            }
-
-            let _ = ctx.global().metrics.error(ErrorLogEvent {
-                ts_ms,
-                client: ctx.request_address().to_string(),
-                transport: ctx.request_type(),
-                message: err.to_string(),
-                r#type: err.error_type(),
-                dur_ms: local.time_elapsed().as_millis() as u64,
-                qname,
-                qtype,
-            });
-
-            let id = helpers::extract_transaction_id(&ctx.raw()).unwrap_or(0);
-            tracing::debug!("error processing request: {}: {:?}", id, err.to_string());
-        }
-        .boxed()
-    })
-}
 
 pub fn server_middlewares(global: &SharedGlobal, config: &Config) -> ServerMiddlewares<Global, Local> {
     let ratelimit_config = RateLimitConfig {
@@ -98,7 +59,6 @@ async fn create_server_state(
         timeout: Duration::from_millis(config.dns.timeout),
         global: global.clone(),
         middlewares: server_middlewares(global, config),
-        on_error: Some(error_handler()),
         resolver: Arc::new(resolver),
     })
 }
