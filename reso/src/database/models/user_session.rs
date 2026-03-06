@@ -1,5 +1,6 @@
+use anyhow::Context;
 use chrono::Utc;
-use rusqlite::{params, OptionalExtension};
+use rusqlite::{OptionalExtension, params};
 use uuid::Uuid;
 
 use crate::{database::DatabaseConnection, utils::uuid::EntityId};
@@ -46,7 +47,8 @@ impl UserSession {
             )?;
             Ok(())
         })
-        .await?;
+        .await
+        .context("failed to insert user session")?;
 
         Ok(())
     }
@@ -70,7 +72,8 @@ impl UserSession {
                 )
                 .optional()
             })
-            .await?)
+            .await
+            .context("failed to find user session by id")?)
     }
 
     pub async fn delete(self, db: &DatabaseConnection) -> anyhow::Result<()> {
@@ -87,7 +90,8 @@ impl UserSession {
             c.execute("DELETE FROM user_sessions where user_id = ?", params![user_id.id()])?;
             Ok(())
         })
-        .await?;
+        .await
+        .context("failed to delete user session")?;
         Ok(())
     }
 

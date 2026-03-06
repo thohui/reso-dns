@@ -1,6 +1,7 @@
+use anyhow::Context;
 use chrono::Utc;
-use serde::Serialize;
 use rusqlite::params;
+use serde::Serialize;
 
 use crate::database::DatabaseConnection;
 
@@ -31,7 +32,8 @@ impl BlockedDomain {
             )?;
             Ok(())
         })
-        .await?;
+        .await
+        .context("failed to insert blocked domain")?;
         Ok(())
     }
 
@@ -40,7 +42,8 @@ impl BlockedDomain {
             c.execute("DELETE FROM blocklist where domain = ?1", params![self.domain])?;
             Ok(())
         })
-        .await?;
+        .await
+        .context("failed to delete blocked domain")?;
         Ok(())
     }
 
@@ -64,7 +67,8 @@ impl BlockedDomain {
                 })?;
                 iter.collect::<rusqlite::Result<Vec<_>>>()
             })
-            .await?)
+            .await
+            .context("failed to list blocked domains")?)
     }
 
     pub async fn list_all(db: &DatabaseConnection) -> anyhow::Result<Vec<Self>> {
@@ -86,7 +90,8 @@ impl BlockedDomain {
                 })?;
                 iter.collect::<rusqlite::Result<Vec<_>>>()
             })
-            .await?)
+            .await
+            .context("failed to list all blocked domains")?)
     }
 
     pub async fn toggle(domain: &str, db: &DatabaseConnection) -> anyhow::Result<()> {
@@ -98,7 +103,8 @@ impl BlockedDomain {
             )?;
             Ok(())
         })
-        .await?;
+        .await
+        .context("failed to toggle blocked domain")?;
         Ok(())
     }
 

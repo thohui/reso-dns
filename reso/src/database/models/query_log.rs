@@ -1,3 +1,4 @@
+use anyhow::Context;
 use rusqlite::params;
 
 use crate::database::DatabaseConnection;
@@ -52,7 +53,8 @@ impl DnsQueryLog {
             )?;
             Ok(())
         })
-        .await?;
+        .await
+        .context("failed to insert DNS query log")?;
 
         Ok(())
     }
@@ -124,7 +126,8 @@ impl DnsQueryLog {
             tx.commit()?;
             Ok(())
         })
-        .await?;
+        .await
+        .context("failed to batch insert DNS query logs")?;
 
         Ok(())
     }
@@ -159,7 +162,8 @@ impl DnsQueryLog {
 
                 iter.collect::<std::result::Result<Vec<_>, rusqlite::Error>>()
             })
-            .await?)
+            .await
+            .context("failed to list DNS query logs")?)
     }
 }
 
@@ -168,7 +172,8 @@ pub async fn delete_before(db: &DatabaseConnection, cutoff_ts_ms: i64) -> anyhow
         c.execute("DELETE FROM dns_query_log WHERE ts_ms < ?1", params![cutoff_ts_ms])?;
         Ok(())
     })
-    .await?;
+    .await
+    .context("failed to delete old DNS query logs")?;
 
     Ok(())
 }

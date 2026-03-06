@@ -1,3 +1,4 @@
+use anyhow::Context;
 use rusqlite::params;
 
 use crate::database::DatabaseConnection;
@@ -73,12 +74,14 @@ impl ActivityLog {
 
                 iter.collect::<Result<Vec<_>, rusqlite::Error>>()
             })
-            .await?)
+            .await
+            .context("failed to list activity logs")?)
     }
 
     pub async fn row_count(db: &DatabaseConnection) -> anyhow::Result<i64> {
         Ok(db
             .interact(|c| c.query_row("SELECT COUNT(*) FROM activity_log", [], |r| r.get(0)))
-            .await?)
+            .await
+            .context("failed to count activity logs")?)
     }
 }

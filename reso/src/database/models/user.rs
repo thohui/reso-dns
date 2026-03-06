@@ -1,5 +1,6 @@
+use anyhow::Context;
 use chrono::Utc;
-use rusqlite::{params, OptionalExtension};
+use rusqlite::{OptionalExtension, params};
 use uuid::Uuid;
 
 use crate::{database::DatabaseConnection, utils::uuid::EntityId};
@@ -36,8 +37,8 @@ impl User {
             )?;
             Ok(())
         })
-        .await?;
-
+        .await
+        .context("failed to insert user")?;
         Ok(())
     }
 
@@ -61,7 +62,8 @@ impl User {
                 )
                 .optional()
             })
-            .await?)
+            .await
+            .context("failed to find user by name")?)
     }
 
     pub async fn find_by_id(db: &DatabaseConnection, id: &EntityId<Self>) -> anyhow::Result<Option<Self>> {
@@ -83,7 +85,8 @@ impl User {
                 )
                 .optional()
             })
-            .await?)
+            .await
+            .context("failed to find user by id")?)
     }
 
     pub async fn count(db: &DatabaseConnection) -> anyhow::Result<i64> {
@@ -106,7 +109,8 @@ impl User {
                 })?;
                 iter.collect::<rusqlite::Result<Vec<_>>>()
             })
-            .await?)
+            .await
+            .context("failed to list users")?)
     }
 }
 

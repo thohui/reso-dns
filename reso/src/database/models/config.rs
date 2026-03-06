@@ -1,3 +1,4 @@
+use anyhow::Context;
 use std::collections::HashMap;
 
 use rusqlite::params;
@@ -24,7 +25,8 @@ impl ConfigSetting {
                 };
                 Ok::<_, rusqlite::Error>(result)
             })
-            .await?)
+            .await
+            .context("failed to get config setting")?)
     }
 
     pub async fn all(db: &DatabaseConnection) -> anyhow::Result<HashMap<String, String>> {
@@ -40,7 +42,8 @@ impl ConfigSetting {
                 }
                 Ok::<_, rusqlite::Error>(map)
             })
-            .await?)
+            .await
+            .context("failed to get all config settings")?)
     }
 
     pub async fn set(db: &DatabaseConnection, key: &str, value: &str) -> anyhow::Result<()> {
@@ -58,7 +61,8 @@ impl ConfigSetting {
             )?;
             Ok(())
         })
-        .await?;
+        .await
+        .context("failed to set config setting")?;
 
         Ok(())
     }
@@ -80,7 +84,8 @@ impl ConfigSetting {
             tx.commit()?;
             Ok::<_, rusqlite::Error>(())
         })
-        .await?;
+        .await
+        .context("failed to batch set config settings")?;
 
         Ok(())
     }
