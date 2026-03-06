@@ -1,5 +1,5 @@
 use chrono::Utc;
-use tokio_rusqlite::{OptionalExtension, params, rusqlite};
+use rusqlite::{params, OptionalExtension};
 use uuid::Uuid;
 
 use crate::{database::DatabaseConnection, utils::uuid::EntityId};
@@ -25,13 +25,11 @@ impl User {
     }
 
     pub async fn insert(self, db: &DatabaseConnection) -> anyhow::Result<()> {
-        let conn = db.conn().await;
-
-        conn.call(move |c| -> rusqlite::Result<()> {
+        db.interact(move |c| {
             c.execute(
                 r#"
 					INSERT INTO users
-						(id, name, password_hash, created_at) 
+						(id, name, password_hash, created_at)
 					VALUES (?1, ?2, ?3, ?4)
 					"#,
                 params![self.id.id(), self.name, self.password_hash, self.created_at],
@@ -44,13 +42,11 @@ impl User {
     }
 
     pub async fn find_by_name(db: &DatabaseConnection, name: impl Into<String>) -> anyhow::Result<Option<Self>> {
-        let conn = db.conn().await;
-
         let name = name.into();
 
-        let user = conn
-            .call(move |c| {
-                c.query_one(
+        Ok(db
+            .interact(move |c| {
+                c.query_row(
                     "SELECT id, name, password_hash, created_at FROM users WHERE name = ?1",
                     params![name],
                     |f| {
@@ -65,18 +61,15 @@ impl User {
                 )
                 .optional()
             })
-            .await?;
-        Ok(user)
+            .await?)
     }
 
     pub async fn find_by_id(db: &DatabaseConnection, id: &EntityId<Self>) -> anyhow::Result<Option<Self>> {
-        let conn = db.conn().await;
-
         let id = id.id().clone();
 
-        let user = conn
-            .call(move |c| {
-                c.query_one(
+        Ok(db
+            .interact(move |c| {
+                c.query_row(
                     "SELECT id, name, password_hash, created_at FROM users WHERE id = ?1",
                     params![id],
                     |f| {
@@ -90,25 +83,18 @@ impl User {
                 )
                 .optional()
             })
-            .await?;
-        Ok(user)
+            .await?)
     }
 
     pub async fn count(db: &DatabaseConnection) -> anyhow::Result<i64> {
-        let conn = db.conn().await;
-
-        let count = conn
-            .call(|c| c.query_one("SELECT COUNT(*) FROM users", [], |r| r.get(0)))
-            .await?;
-
-        Ok(count)
+        Ok(db
+            .interact(|c| c.query_row("SELECT COUNT(*) FROM users", [], |r| r.get(0)))
+            .await?)
     }
 
     pub async fn list(db: &DatabaseConnection) -> anyhow::Result<Vec<Self>> {
-        let conn = db.conn().await;
-
-        let raw: Vec<Self> = conn
-            .call(|c| {
+        Ok(db
+            .interact(|c| {
                 let mut stmt = c.prepare("SELECT id, name, password_hash, created_at FROM users")?;
                 let iter = stmt.query_map([], |r| {
                     Ok(Self {
@@ -120,9 +106,7 @@ impl User {
                 })?;
                 iter.collect::<rusqlite::Result<Vec<_>>>()
             })
-            .await?;
-
-        Ok(raw)
+            .await?)
     }
 }
 

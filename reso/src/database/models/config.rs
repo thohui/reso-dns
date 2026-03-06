@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use tokio_rusqlite::{params, rusqlite};
+use rusqlite::params;
 
 use crate::database::DatabaseConnection;
 
@@ -11,12 +11,11 @@ pub struct ConfigSetting {
 }
 
 impl ConfigSetting {
-    pub async fn get(conn: &DatabaseConnection, key: &str) -> anyhow::Result<Option<String>> {
-        let conn = conn.conn().await;
+    pub async fn get(db: &DatabaseConnection, key: &str) -> anyhow::Result<Option<String>> {
         let key = key.to_string();
 
-        let value = conn
-            .call(move |c| {
+        Ok(db
+            .interact(move |c| {
                 let mut stmt = c.prepare("SELECT value FROM config_settings WHERE key = ?1")?;
                 let mut rows = stmt.query(params![key])?;
                 let result = match rows.next()? {
@@ -25,16 +24,12 @@ impl ConfigSetting {
                 };
                 Ok::<_, rusqlite::Error>(result)
             })
-            .await?;
-
-        Ok(value)
+            .await?)
     }
 
-    pub async fn all(conn: &DatabaseConnection) -> anyhow::Result<HashMap<String, String>> {
-        let conn = conn.conn().await;
-
-        let map = conn
-            .call(move |c| {
+    pub async fn all(db: &DatabaseConnection) -> anyhow::Result<HashMap<String, String>> {
+        Ok(db
+            .interact(move |c| {
                 let mut stmt = c.prepare("SELECT key, value FROM config_settings")?;
                 let iter = stmt.query_map(params![], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
 
@@ -45,13 +40,10 @@ impl ConfigSetting {
                 }
                 Ok::<_, rusqlite::Error>(map)
             })
-            .await?;
-
-        Ok(map)
+            .await?)
     }
 
-    pub async fn set(conn: &DatabaseConnection, key: &str, value: &str) -> anyhow::Result<()> {
-        let conn = conn.conn().await;
+    pub async fn set(db: &DatabaseConnection, key: &str, value: &str) -> anyhow::Result<()> {
         let key = key.to_string();
         let value = value.to_string();
 
@@ -59,25 +51,24 @@ impl ConfigSetting {
             .duration_since(std::time::UNIX_EPOCH)?
             .as_millis() as i64;
 
-        conn.call(move |c| {
+        db.interact(move |c| {
             c.execute(
                 "INSERT OR REPLACE INTO config_settings (key, value, updated_at) VALUES (?1, ?2, ?3)",
                 params![key, value, updated_at],
-            )
+            )?;
+            Ok(())
         })
         .await?;
 
         Ok(())
     }
 
-    pub async fn batch_set(conn: &DatabaseConnection, entries: Vec<(String, String)>) -> anyhow::Result<()> {
-        let conn = conn.conn().await;
-
+    pub async fn batch_set(db: &DatabaseConnection, entries: Vec<(String, String)>) -> anyhow::Result<()> {
         let updated_at: i64 = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)?
             .as_millis() as i64;
 
-        conn.call(move |c| {
+        db.interact(move |c| {
             let tx = c.transaction()?;
             {
                 let mut stmt =
@@ -170,10 +161,9 @@ mod tests {
             .unwrap()
             .as_millis() as i64;
 
-        let conn = db.conn().await;
-        let updated_at = conn
-            .call(|c| {
-                c.query_one(
+        let updated_at: i64 = db
+            .interact(|c| {
+                c.query_row(
                     "SELECT updated_at FROM config_settings WHERE key = ?1",
                     params!["dns.timeout"],
                     |r| r.get::<_, i64>(0),

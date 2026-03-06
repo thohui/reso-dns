@@ -66,7 +66,7 @@ pub struct Activity {
     pub timestamp: i64,
     pub transport: u8,
     pub client: Option<String>,
-    pub duration: u64,
+    pub duration: i64,
     pub qname: Option<String>,
     pub qtype: Option<i64>,
     #[serde(flatten)]

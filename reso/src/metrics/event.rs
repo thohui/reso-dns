@@ -76,7 +76,7 @@ impl ErrorLogEvent {
             client: self.client,
             message: self.message,
             r#type: self.r#type as i64,
-            dur_ms: self.dur_ms,
+            dur_ms: self.dur_ms as i64,
             qname: self.qname,
             qtype: self.qtype,
         }

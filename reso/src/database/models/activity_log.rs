@@ -1,5 +1,4 @@
-use anyhow::Context;
-use tokio_rusqlite::{params, rusqlite};
+use rusqlite::params;
 
 use crate::database::DatabaseConnection;
 
@@ -17,17 +16,16 @@ pub struct ActivityLog {
     pub blocked: Option<bool>,
     pub cache_hit: Option<bool>,
     pub rate_limited: Option<bool>,
-    pub dur_ms: u64,
+    pub dur_ms: i64,
 
     pub error_type: Option<i64>,
     pub error_message: Option<String>,
 }
 
 impl ActivityLog {
-    pub async fn list(conn: &DatabaseConnection, limit: usize, offset: usize) -> anyhow::Result<Vec<Self>> {
-        let conn = conn.conn().await;
-        let rows: Vec<ActivityLog> = conn
-            .call(move |c| {
+    pub async fn list(db: &DatabaseConnection, limit: i64, offset: i64) -> anyhow::Result<Vec<Self>> {
+        Ok(db
+            .interact(move |c| {
                 let mut stmt = c.prepare(
                     r#"
                     SELECT
@@ -75,17 +73,12 @@ impl ActivityLog {
 
                 iter.collect::<Result<Vec<_>, rusqlite::Error>>()
             })
-            .await
-            .context("list activity_log rows")?;
-
-        Ok(rows)
+            .await?)
     }
 
-    pub async fn row_count(conn: &DatabaseConnection) -> anyhow::Result<usize> {
-        let conn = conn.conn().await;
-
-        Ok(conn
-            .call(|c| c.query_row("SELECT COUNT(*) FROM activity_log", [], |r| r.get(0)))
+    pub async fn row_count(db: &DatabaseConnection) -> anyhow::Result<i64> {
+        Ok(db
+            .interact(|c| c.query_row("SELECT COUNT(*) FROM activity_log", [], |r| r.get(0)))
             .await?)
     }
 }

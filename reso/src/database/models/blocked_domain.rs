@@ -1,6 +1,6 @@
 use chrono::Utc;
 use serde::Serialize;
-use tokio_rusqlite::{params, rusqlite};
+use rusqlite::params;
 
 use crate::database::DatabaseConnection;
 
@@ -23,31 +23,30 @@ impl BlockedDomain {
 }
 
 impl BlockedDomain {
-    pub async fn insert(self, conn: &DatabaseConnection) -> anyhow::Result<()> {
-        let conn = conn.conn().await;
-        conn.call(move |c| {
+    pub async fn insert(self, db: &DatabaseConnection) -> anyhow::Result<()> {
+        db.interact(move |c| {
             c.execute(
                 "INSERT INTO blocklist (domain, created_at, enabled) VALUES (?1, ?2, ?3)",
                 params![self.domain.as_str(), self.created_at, self.enabled],
-            )
+            )?;
+            Ok(())
         })
         .await?;
         Ok(())
     }
 
     pub async fn delete(self, db: &DatabaseConnection) -> anyhow::Result<()> {
-        let conn = db.conn().await;
-
-        conn.call(move |c| c.execute("DELETE FROM blocklist where domain = ?1", params![self.domain]))
-            .await?;
+        db.interact(move |c| {
+            c.execute("DELETE FROM blocklist where domain = ?1", params![self.domain])?;
+            Ok(())
+        })
+        .await?;
         Ok(())
     }
 
-    pub async fn list(conn: &DatabaseConnection, limit: usize, offset: usize) -> anyhow::Result<Vec<Self>> {
-        let conn = conn.conn().await;
-
-        let domains: Vec<BlockedDomain> = conn
-            .call(move |c| {
+    pub async fn list(db: &DatabaseConnection, limit: i64, offset: i64) -> anyhow::Result<Vec<Self>> {
+        Ok(db
+            .interact(move |c| {
                 let mut stmt = c.prepare(
                     r#"
                     SELECT domain, created_at, enabled
@@ -65,16 +64,12 @@ impl BlockedDomain {
                 })?;
                 iter.collect::<rusqlite::Result<Vec<_>>>()
             })
-            .await?;
-
-        Ok(domains)
+            .await?)
     }
 
-    pub async fn list_all(conn: &DatabaseConnection) -> anyhow::Result<Vec<Self>> {
-        let conn = conn.conn().await;
-
-        let domains: Vec<BlockedDomain> = conn
-            .call(move |c| {
+    pub async fn list_all(db: &DatabaseConnection) -> anyhow::Result<Vec<Self>> {
+        Ok(db
+            .interact(move |c| {
                 let mut stmt = c.prepare(
                     r#"
                     SELECT domain, created_at, enabled
@@ -91,28 +86,25 @@ impl BlockedDomain {
                 })?;
                 iter.collect::<rusqlite::Result<Vec<_>>>()
             })
-            .await?;
-
-        Ok(domains)
+            .await?)
     }
 
-    pub async fn toggle(domain: &str, conn: &DatabaseConnection) -> anyhow::Result<()> {
+    pub async fn toggle(domain: &str, db: &DatabaseConnection) -> anyhow::Result<()> {
         let domain = domain.to_string();
-        let conn = conn.conn().await;
-        conn.call(move |c| {
+        db.interact(move |c| {
             c.execute(
                 "UPDATE blocklist SET enabled = NOT enabled WHERE domain = ?1",
                 params![domain],
-            )
+            )?;
+            Ok(())
         })
         .await?;
         Ok(())
     }
 
-    pub async fn row_count(conn: &DatabaseConnection) -> anyhow::Result<usize> {
-        let conn = conn.conn().await;
-        Ok(conn
-            .call(|c| c.query_row("SELECT COUNT(*) FROM blocklist", [], |r| r.get(0)))
+    pub async fn row_count(db: &DatabaseConnection) -> anyhow::Result<i64> {
+        Ok(db
+            .interact(|c| c.query_row("SELECT COUNT(*) FROM blocklist", [], |r| r.get(0)))
             .await?)
     }
 }
