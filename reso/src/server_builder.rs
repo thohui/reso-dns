@@ -53,8 +53,6 @@ pub fn error_handler() -> ErrorHandler<Global, Local> {
 
             let id = helpers::extract_transaction_id(&ctx.raw()).unwrap_or(0);
             tracing::debug!("error processing request: {}: {:?}", id, err.to_string());
-
-            Ok(())
         }
         .boxed()
     })

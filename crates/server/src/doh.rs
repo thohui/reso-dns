@@ -2,17 +2,15 @@ use std::{fs, io};
 
 use std::{net::SocketAddr, sync::Arc};
 
-use anyhow::Context;
 use arc_swap::ArcSwap;
 use base64::{Engine, engine::GeneralPurpose};
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
 use hyper::server::conn::http2;
 use hyper::{Method, Request, Response, body::Incoming, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
 use reso_context::{DnsRequestCtx, RequestType};
 use reso_dns::{DnsMessage, DnsMessageBuilder};
-use reso_resolver::ResolveError;
 use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use tokio::net::TcpListener;
@@ -151,7 +149,7 @@ where
         L::default(),
     );
 
-    let response = handle_request(&ctx, state).await;
+    let response = handle_request(&ctx, state.clone()).await;
 
     match response {
         Ok(resp) => {
@@ -162,11 +160,20 @@ where
                 .unwrap());
         }
         Err(e) => {
-            return Ok(Response::builder()
-                .status(200)
-                .header("Content-Type", "application/dns-message")
-                .body(Full::new(create_error_message(ctx.message().unwrap(), &e)?))
-                .unwrap());
+            let resp = match ctx.message() {
+                Ok(m) => Response::builder()
+                    .status(200)
+                    .header("Content-Type", "application/dns-message")
+                    .body(Full::new(create_error_message(&m, &e)?))
+                    .unwrap(),
+                Err(_) => Response::builder().status(500).body(Full::new(Bytes::new())).unwrap(),
+            };
+
+            if let Some(on_error) = &state.on_error {
+                let _ = on_error(&ctx, &e).await;
+            }
+
+            return Ok(resp);
         }
     }
 }
@@ -192,7 +199,6 @@ async fn extract_bytes_from_get(req: Req) -> anyhow::Result<Bytes> {
 async fn extract_bytes_from_post(req: Req, max_size: usize) -> anyhow::Result<Bytes> {
     use hyper::header::{CONTENT_LENGTH, CONTENT_TYPE};
 
-    // Be tolerant: case-insensitive, ignore parameters.
     let content_type_ok = req
         .headers()
         .get(CONTENT_TYPE)
@@ -263,7 +269,6 @@ fn error(err: String) -> io::Error {
     io::Error::new(io::ErrorKind::Other, err)
 }
 
-// Create error message
 fn create_error_message(message: &DnsMessage, error: &ServerError) -> anyhow::Result<Bytes> {
     let payload = DnsMessageBuilder::new()
         .with_id(message.id)
@@ -271,12 +276,5 @@ fn create_error_message(message: &DnsMessage, error: &ServerError) -> anyhow::Re
         .with_response(error.response_code())
         .build()
         .encode()?;
-
-    let len = u16::try_from(payload.len()).context("DNS payload exceeds 65535 bytes")?;
-    let mut resp = BytesMut::with_capacity(2 + payload.len());
-
-    resp.put_u16(len);
-    resp.extend_from_slice(&payload);
-
-    Ok(resp.freeze())
+    Ok(payload)
 }

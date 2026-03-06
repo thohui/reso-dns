@@ -1,12 +1,6 @@
-use std::sync::Arc;
-
 use reso_context::{DnsMiddleware, DnsRequestCtx, DnsResponse};
 
-use crate::{
-    global::Global,
-    local::Local,
-    metrics::{event::QueryLogEvent, service::MetricsHandle},
-};
+use crate::{global::Global, local::Local, metrics::event::QueryLogEvent};
 
 /// Middleware that logs query metrics and optionally caches responses.
 pub struct MetricsMiddleware;
@@ -14,7 +8,6 @@ pub struct MetricsMiddleware;
 #[async_trait::async_trait]
 impl DnsMiddleware<Global, Local> for MetricsMiddleware {
     async fn on_response(&self, ctx: &DnsRequestCtx<Global, Local>, response: &mut DnsResponse) -> anyhow::Result<()> {
-        tracing::info!("on_response metrics svc");
         let message = ctx.message()?;
 
         let local = ctx.local();

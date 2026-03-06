@@ -46,9 +46,8 @@ impl ServerError {
     }
 }
 
-pub type ErrorHandler<G, L> = Arc<
-    dyn for<'a> Fn(&'a DnsRequestCtx<G, L>, &'a ServerError) -> BoxFuture<'a, Result<(), ServerError>> + Send + Sync,
->;
+pub type ErrorHandler<G, L> =
+    Arc<dyn for<'a> Fn(&'a DnsRequestCtx<G, L>, &'a ServerError) -> BoxFuture<'a, ()> + Send + Sync>;
 
 pub type ServerMiddlewares<G, L> = Arc<Vec<Arc<dyn DnsMiddleware<G, L> + 'static>>>;
 
