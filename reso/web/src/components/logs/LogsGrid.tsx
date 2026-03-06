@@ -1,20 +1,10 @@
-import {
-	Box,
-	Heading,
-	HStack,
-	Icon,
-	Table,
-	Tabs,
-	Text,
-	VStack,
-} from '@chakra-ui/react';
-import { Clock } from 'lucide-react';
+import { Box, Button, HStack, Icon, Table, Text } from '@chakra-ui/react';
+import { ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import {
 	type Activity,
 	getRecordType,
 	getTransportLabel,
-	type QueryActivity,
 } from '../../lib/api/activity';
 import { getStatusInfo } from '../../lib/status-info';
 import { ActivityDetailDrawer } from './ActivityDetailDrawer';
@@ -60,7 +50,7 @@ function LogDetailRow({
 			<Table.Cell
 				py='3'
 				px='4'
-				fontFamily="'JetBrains Mono', monospace"
+				fontFamily="'Mozilla Text', sans-serif"
 				fontSize='sm'
 				color='fg.muted'
 			>
@@ -88,7 +78,7 @@ function LogDetailRow({
 
 			<Table.Cell py='3' px='4'>
 				<HStack gap='2'>
-					<Text fontFamily="'JetBrains Mono', monospace" fontSize='sm'>
+					<Text fontFamily="'Mozilla Text', sans-serif" fontSize='sm'>
 						{activity.qname || '-'}
 					</Text>
 					{activity.qtype !== null && (
@@ -98,7 +88,7 @@ function LogDetailRow({
 							borderRadius='md'
 							fontSize='xs'
 							fontWeight='500'
-							fontFamily="'JetBrains Mono', monospace"
+							fontFamily="'Mozilla Text', sans-serif"
 							bg='accent.muted'
 							color='accent.fg'
 						>
@@ -111,7 +101,7 @@ function LogDetailRow({
 			<Table.Cell
 				py='3'
 				px='4'
-				fontFamily="'JetBrains Mono', monospace"
+				fontFamily="'Mozilla Text', sans-serif"
 				fontSize='sm'
 				color='fg.muted'
 			>
@@ -126,7 +116,7 @@ function LogDetailRow({
 					borderRadius='md'
 					fontSize='xs'
 					fontWeight='500'
-					fontFamily="'JetBrains Mono', monospace"
+					fontFamily="'Mozilla Text', sans-serif"
 					bg='accent.muted'
 					color='accent.fg'
 				>
@@ -149,7 +139,7 @@ function LogDetailRow({
 				<HStack gap='1' justify='flex-end'>
 					<Icon as={Clock} boxSize='3' color='fg.subtle' />
 					<Text
-						fontFamily="'JetBrains Mono', monospace"
+						fontFamily="'Mozilla Text', sans-serif"
 						fontSize='sm'
 						color={
 							activity.duration > 1000
@@ -167,10 +157,38 @@ function LogDetailRow({
 	);
 }
 
+type ActivityFilter =
+	| 'all'
+	| 'queries'
+	| 'blocked'
+	| 'errors'
+	| 'cached'
+	| 'rate_limited';
 
-type ActivityFilter = 'all' | 'queries' | 'blocked' | 'errors' | 'cached' | 'rate_limited';
+const FILTERS: { key: ActivityFilter; label: string; color?: string }[] = [
+	{ key: 'all', label: 'All' },
+	{ key: 'queries', label: 'Queries', color: 'status.success' },
+	{ key: 'blocked', label: 'Blocked', color: 'status.blocked' },
+	{ key: 'cached', label: 'Cached', color: 'status.cached' },
+	{ key: 'rate_limited', label: 'Rate Limited', color: 'status.rate_limited' },
+	{ key: 'errors', label: 'Errors', color: 'status.error' },
+];
 
-export function LogsGrid({ activities }: { activities: Activity[]; }) {
+interface LogsGridProps {
+	activities: Activity[];
+	page: number;
+	totalPages: number;
+	total: number;
+	onPageChange: (page: number) => void;
+}
+
+export function LogsGrid({
+	activities,
+	page,
+	totalPages,
+	total,
+	onPageChange,
+}: LogsGridProps) {
 	const [filter, setFilter] = useState<ActivityFilter>('all');
 	const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
 		null,
@@ -194,109 +212,106 @@ export function LogsGrid({ activities }: { activities: Activity[]; }) {
 		[],
 	);
 
-	const filteredActivities = activities.filter((a) => {
+	const filteredActivities = activities.filter((activity) => {
 		if (filter === 'all') return true;
+
 		if (filter === 'queries')
-			return a.kind === 'query' && !(a as QueryActivity).d.blocked;
+			return activity.kind === 'query' && !activity.d.blocked;
 		if (filter === 'blocked')
-			return a.kind === 'query' && (a as QueryActivity).d.blocked;
-		if (filter === 'errors') return a.kind === 'error';
+			return activity.kind === 'query' && activity.d.blocked;
+		if (filter === 'errors') return activity.kind === 'error';
 		if (filter === 'cached')
-			return a.kind === 'query' && (a as QueryActivity).d.cache_hit;
+			return activity.kind === 'query' && activity.d.cache_hit;
 		if (filter === 'rate_limited')
-			return a.kind === 'query' && (a as QueryActivity).d.rate_limited;
+			return activity.kind === 'query' && activity.d.rate_limited;
 		return true;
 	});
 
 	const counts = useMemo(() => {
-		let queries = 0, blocked = 0, errors = 0, cached = 0, rate_limited = 0;
-		for (const a of activities) {
-			if (a.kind === 'error') { errors++; continue; }
-			if (a.kind === 'query') {
-				const d = (a as QueryActivity).d;
-				if (d.blocked) blocked++; else queries++;
-				if (d.cache_hit) cached++;
-				if (d.rate_limited) rate_limited++;
+		let queries = 0,
+			blocked = 0,
+			errors = 0,
+			cached = 0,
+			rate_limited = 0;
+		for (const activity of activities) {
+			if (activity.kind === 'error') {
+				errors++;
+				continue;
+			}
+
+			if (activity.kind === 'query') {
+				if (activity.d.blocked) {
+					blocked++;
+				} else {
+					queries++;
+				}
+
+				if (activity.d.cache_hit) cached++;
+				if (activity.d.rate_limited) rate_limited++;
 			}
 		}
-		return { all: activities.length, queries, blocked, errors, cached, rate_limited };
+		return {
+			all: activities.length,
+			queries,
+			blocked,
+			errors,
+			cached,
+			rate_limited,
+		};
 	}, [activities]);
 
 	return (
 		<Box>
-			<HStack justify='space-between' mb='6' align='flex-end'>
-				<VStack align='flex-start' gap='1'>
-					<Heading size='lg'>DNS Query Logs</Heading>
-					<Text color='fg.muted' fontSize='sm'>
-						{activities.length} total entries
-					</Text>
-				</VStack>
+			<HStack gap='2' mb='4' flexWrap='wrap'>
+				{FILTERS.map(({ key, label, color }) => {
+					const active = filter === key;
+					return (
+						<Button
+							key={key}
+							variant='ghost'
+							onClick={() => setFilter(key)}
+							px='3'
+							py='1.5'
+							minH='auto'
+							h='auto'
+							borderRadius='full'
+							fontSize='xs'
+							fontWeight='500'
+							cursor='pointer'
+							transition='all 0.15s ease'
+							borderWidth='1px'
+							borderColor={active ? (color ?? 'fg.subtle') : 'border'}
+							bg={active ? 'bg.subtle' : 'transparent'}
+							color={active ? (color ?? 'fg') : 'fg.muted'}
+							_hover={{ bg: 'bg.subtle', borderColor: color ?? 'fg.subtle' }}
+							aria-pressed={active}
+							aria-label={`${label} filter`}
+						>
+							<HStack gap='1.5'>
+								{color && (
+									<Box
+										w='1.5'
+										h='1.5'
+										borderRadius='full'
+										bg={color}
+										opacity={active ? 1 : 0.5}
+									/>
+								)}
+								<Text fontSize='xs' lineHeight='1'>
+									{label}
+								</Text>
+								<Text
+									fontSize='xs'
+									color={active ? 'fg.subtle' : 'fg.faint'}
+									lineHeight='1'
+								>
+									{counts[key]}
+								</Text>
+							</HStack>
+						</Button>
+					);
+				})}
 			</HStack>
-
-			<Tabs.Root
-				defaultValue='all'
-				mb='6'
-				onValueChange={(e) => {
-					setFilter(e.value as ActivityFilter);
-				}}
-			>
-				<Tabs.List bg='bg.panel' borderRadius='lg' p='1' gap='1'>
-					<Tabs.Trigger
-						value='all'
-						px='4'
-						py='2'
-						color='fg.muted'
-						_selected={{ bg: 'bg.subtle', color: 'fg' }}
-					>
-						All ({counts.all})
-					</Tabs.Trigger>
-					<Tabs.Trigger
-						value='queries'
-						px='4'
-						py='2'
-						color='fg.muted'
-						_selected={{ bg: 'bg.subtle', color: 'fg' }}
-					>
-						Queries ({counts.queries})
-					</Tabs.Trigger>
-					<Tabs.Trigger
-						value='blocked'
-						px='4'
-						py='2'
-						color='fg.muted'
-						_selected={{ bg: 'bg.subtle', color: 'fg' }}
-					>
-						Blocked ({counts.blocked})
-					</Tabs.Trigger>
-					<Tabs.Trigger
-						value='cached'
-						px='4'
-						py='2'
-						color='fg.muted'
-						_selected={{ bg: 'bg.subtle', color: 'fg' }}
-					>
-						Cached ({counts.cached})
-					</Tabs.Trigger>
-					<Tabs.Trigger
-						value='rate_limited'
-						px='4'
-						py='2'
-						color='fg.muted'
-						_selected={{ bg: 'bg.subtle', color: 'fg' }}
-					>
-						Rate Limited ({counts.rate_limited})
-					</Tabs.Trigger>
-					<Tabs.Trigger
-						value='errors'
-						px='4'
-						py='2'
-						color='fg.muted'
-						_selected={{ bg: 'bg.subtle', color: 'fg' }}
-					>
-						Errors ({counts.errors})
-					</Tabs.Trigger>
-				</Tabs.List>
-			</Tabs.Root>
 
 			<Box
 				bg='bg.panel'
@@ -407,6 +422,41 @@ export function LogsGrid({ activities }: { activities: Activity[]; }) {
 					</Table.Root>
 				</Box>
 			</Box>
+
+			{totalPages > 1 && (
+				<HStack justify='space-between' mt='4' px='1'>
+					<Text fontSize='xs' color='fg.muted'>
+						{total.toLocaleString()} total entries
+					</Text>
+					<HStack gap='2'>
+						<Button
+							size='xs'
+							variant='ghost'
+							color='fg.muted'
+							_hover={{ bg: 'bg.subtle' }}
+							disabled={page === 0}
+							onClick={() => onPageChange(page - 1)}
+						>
+							<Icon as={ChevronLeft} boxSize='3.5' />
+							Prev
+						</Button>
+						<Text fontSize='xs' color='fg.muted'>
+							{page + 1} / {totalPages}
+						</Text>
+						<Button
+							size='xs'
+							variant='ghost'
+							color='fg.muted'
+							_hover={{ bg: 'bg.subtle' }}
+							disabled={page >= totalPages - 1}
+							onClick={() => onPageChange(page + 1)}
+						>
+							Next
+							<Icon as={ChevronRight} boxSize='3.5' />
+						</Button>
+					</HStack>
+				</HStack>
+			)}
 
 			<ActivityDetailDrawer
 				activity={selectedActivity}

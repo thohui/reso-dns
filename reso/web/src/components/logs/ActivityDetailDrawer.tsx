@@ -25,7 +25,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 			<Text fontSize='xs' color='fg.faint' textTransform='uppercase'>
 				{label}
 			</Text>
-			<Text fontSize='sm' fontFamily="'JetBrains Mono', monospace" color='fg'>
+			<Text fontSize='sm' fontFamily="'Mozilla Text', sans-serif" color='fg'>
 				{value}
 			</Text>
 		</HStack>

@@ -65,7 +65,7 @@ function ActivityRow({ activity }: { activity: Activity }) {
 			<HStack gap='3'>
 				<Icon as={status.icon} boxSize='3.5' color={status.color} />
 				<Text
-					fontFamily="'JetBrains Mono', monospace"
+					fontFamily="'Mozilla Text', sans-serif"
 					fontSize='xs'
 					fontWeight='500'
 				>
@@ -92,7 +92,7 @@ function ActivityRow({ activity }: { activity: Activity }) {
 					borderRadius='md'
 					fontSize='xs'
 					fontWeight='500'
-					fontFamily="'JetBrains Mono', monospace"
+					fontFamily="'Mozilla Text', sans-serif"
 					bg='accent.muted'
 					color='accent.fg'
 				>
@@ -101,7 +101,7 @@ function ActivityRow({ activity }: { activity: Activity }) {
 				<Text
 					color='fg.faint'
 					fontSize='xs'
-					fontFamily="'JetBrains Mono', monospace"
+					fontFamily="'Mozilla Text', sans-serif"
 				>
 					{time}
 				</Text>

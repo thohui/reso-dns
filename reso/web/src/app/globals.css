@@ -1,4 +1,22 @@
-@import "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap";
+@font-face {
+	font-family: "Inter";
+	font-style: normal;
+	font-weight: 300 700;
+	font-display: swap;
+	src:
+		url("../assets/fonts/Inter-latin.woff2") format("woff2"),
+		url("../assets/fonts/Inter-latin-ext.woff2") format("woff2");
+}
+
+@font-face {
+	font-family: "Mozilla Text";
+	font-style: normal;
+	font-weight: 400 700;
+	font-display: swap;
+	src:
+		url("../assets/fonts/MozillaText-latin.woff2") format("woff2"),
+		url("../assets/fonts/MozillaText-latin-ext.woff2") format("woff2");
+}
 
 body {
 	-webkit-font-smoothing: antialiased;

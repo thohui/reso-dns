@@ -1,8 +1,30 @@
+import { Heading } from '@chakra-ui/react';
+import { useState } from 'react';
 import { LogsGrid } from '../../components/logs/LogsGrid';
 import { useActivities } from '../../hooks/useActivities';
 
-export default function LogsPage() {
-	const activities = useActivities(100, 0);
+const PAGE_SIZE = 100;
 
-	return <LogsGrid activities={activities?.data?.items ?? []} />;
+export default function LogsPage() {
+	const [page, setPage] = useState(0);
+	const activities = useActivities(PAGE_SIZE, page * PAGE_SIZE);
+
+	const data = activities?.data;
+	const total = data?.total ?? 0;
+	const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+	return (
+		<>
+			<Heading size='lg' mb={8}>
+				Logs
+			</Heading>
+			<LogsGrid
+				activities={data?.items ?? []}
+				page={page}
+				totalPages={totalPages}
+				total={total}
+				onPageChange={setPage}
+			/>
+		</>
+	);
 }

@@ -160,7 +160,7 @@ export function BlocklistGrid({
 													color={entry.enabled ? 'status.error' : 'fg.subtle'}
 												/>
 												<Text
-													fontFamily="'JetBrains Mono', monospace"
+													fontFamily="'Mozilla Text', sans-serif"
 													fontSize='sm'
 													fontWeight='500'
 												>

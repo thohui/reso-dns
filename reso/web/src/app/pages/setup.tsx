@@ -108,7 +108,7 @@ export default function SetupPage() {
 							size='lg'
 							fontWeight='600'
 							letterSpacing='-0.02em'
-							fontFamily="'JetBrains Mono', monospace"
+							fontFamily="'Mozilla Text', sans-serif"
 						>
 							[ResoDNS]
 						</Heading>
