@@ -29,7 +29,17 @@ pub async fn list(
 ) -> Result<Json<PagedResponse<BlockedDomain>>, ApiError> {
     let top = query.top();
     let skip = query.skip();
-    let blocked_domains = match BlockedDomain::list(&global.database, query.top(), query.skip()).await {
+
+    let db_top: i64 = top.try_into().map_err(|_| {
+        tracing::error!("top out of range: {}", top);
+        ApiError::bad_request()
+    })?;
+    let db_skip: i64 = skip.try_into().map_err(|_| {
+        tracing::error!("skip out of range: {}", skip);
+        ApiError::bad_request()
+    })?;
+
+    let blocked_domains = match BlockedDomain::list(&global.database, db_top, db_skip).await {
         Ok(domains) => domains,
         Err(e) => {
             tracing::error!("failed list blocked domains: {:?}", e);
@@ -37,8 +47,11 @@ pub async fn list(
         }
     };
 
-    let count = match BlockedDomain::row_count(&global.database).await {
-        Ok(count) => count,
+    let count: u64 = match BlockedDomain::row_count(&global.database).await {
+        Ok(count) => count.try_into().map_err(|_| {
+            tracing::error!("negative row count: {}", count);
+            ApiError::server_error()
+        })?,
         Err(e) => {
             tracing::error!("failed to get blocked domain row count: {:?}", e);
             return Err(ApiError::server_error());

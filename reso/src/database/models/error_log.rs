@@ -1,5 +1,5 @@
 use anyhow::Context;
-use tokio_rusqlite::{params, rusqlite};
+use rusqlite::params;
 
 use crate::database::DatabaseConnection;
 
@@ -10,16 +10,14 @@ pub struct DnsErrorLog {
     pub client: String,
     pub message: String,
     pub r#type: i64,
-    pub dur_ms: u64,
+    pub dur_ms: i64,
     pub qname: Option<String>,
     pub qtype: Option<i64>,
 }
 
 impl DnsErrorLog {
-    pub async fn insert(self, conn: &DatabaseConnection) -> anyhow::Result<()> {
-        let conn = conn.conn().await;
-
-        conn.call(move |c| -> rusqlite::Result<()> {
+    pub async fn insert(self, db: &DatabaseConnection) -> anyhow::Result<()> {
+        db.interact(move |c| {
             c.execute(
                 r#"
             INSERT INTO dns_error_log
@@ -41,17 +39,15 @@ impl DnsErrorLog {
             Ok(())
         })
         .await
-        .context("insert dns_error_log row")?;
+        .context("failed to insert DNS error log")?;
 
         Ok(())
     }
 
-    pub async fn batch_insert(conn: &DatabaseConnection, rows: &[Self]) -> anyhow::Result<()> {
+    pub async fn batch_insert(db: &DatabaseConnection, rows: &[Self]) -> anyhow::Result<()> {
         if rows.is_empty() {
             return Ok(());
         }
-
-        let conn = conn.conn().await;
 
         #[derive(Clone)]
         struct RowOwned {
@@ -60,7 +56,7 @@ impl DnsErrorLog {
             pub client: String,
             pub message: String,
             pub r#type: i64,
-            pub dur_ms: u64,
+            pub dur_ms: i64,
             pub qname: Option<String>,
             pub qtype: Option<i64>,
         }
@@ -72,14 +68,14 @@ impl DnsErrorLog {
                 transport: r.transport,
                 client: r.client.clone(),
                 message: r.message.clone(),
-                r#type: r.r#type.clone(),
+                r#type: r.r#type,
                 dur_ms: r.dur_ms,
                 qname: r.qname.clone(),
                 qtype: r.qtype,
             })
             .collect();
 
-        conn.call(move |c| -> rusqlite::Result<()> {
+        db.interact(move |c| {
             let tx = c.transaction()?;
 
             {
@@ -110,16 +106,14 @@ impl DnsErrorLog {
             Ok(())
         })
         .await
-        .context("batch insert dns_error_log rows")?;
+        .context("failed to batch insert DNS error logs")?;
 
         Ok(())
     }
 
-    pub async fn list(conn: &DatabaseConnection, limit: i64, offset: i64) -> anyhow::Result<Vec<Self>> {
-        let conn = conn.conn().await;
-
-        let items = conn
-            .call(move |c| {
+    pub async fn list(db: &DatabaseConnection, limit: i64, offset: i64) -> anyhow::Result<Vec<Self>> {
+        Ok(db
+            .interact(move |c| {
                 let mut stmt = c.prepare(
                     r#"
                     SELECT
@@ -146,19 +140,16 @@ impl DnsErrorLog {
                 iter.collect::<std::result::Result<Vec<_>, rusqlite::Error>>()
             })
             .await
-            .context("list dns_error_log rows")?;
-
-        Ok(items)
+            .context("failed to list DNS error logs")?)
     }
 
-    pub async fn delete_before(conn: &DatabaseConnection, cutoff_ts_ms: i64) -> anyhow::Result<()> {
-        let conn = conn.conn().await;
-
-        conn.call(move |c| -> rusqlite::Result<usize> {
-            c.execute("DELETE FROM dns_error_log WHERE ts_ms < ?1", params![cutoff_ts_ms])
+    pub async fn delete_before(db: &DatabaseConnection, cutoff_ts_ms: i64) -> anyhow::Result<()> {
+        db.interact(move |c| {
+            c.execute("DELETE FROM dns_error_log WHERE ts_ms < ?1", params![cutoff_ts_ms])?;
+            Ok(())
         })
         .await
-        .context("delete dns_error_log rows")?;
+        .context("failed to delete old DNS error logs")?;
 
         Ok(())
     }

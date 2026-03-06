@@ -1,6 +1,6 @@
 use anyhow::Context;
 use chrono::Utc;
-use tokio_rusqlite::{OptionalExtension, params, rusqlite};
+use rusqlite::{OptionalExtension, params};
 use uuid::Uuid;
 
 use crate::{database::DatabaseConnection, utils::uuid::EntityId};
@@ -36,13 +36,11 @@ impl UserSession {
     }
 
     pub async fn insert(self, db: &DatabaseConnection) -> anyhow::Result<()> {
-        let conn = db.conn().await;
-
-        conn.call(move |c| -> rusqlite::Result<()> {
+        db.interact(move |c| {
             c.execute(
                 r#"
 					INSERT INTO user_sessions
-						(id, user_id, created_at, expires_at) 
+						(id, user_id, created_at, expires_at)
 					VALUES (?1, ?2, ?3, ?4)
 					"#,
                 params![self.id.id(), self.user_id.id(), self.created_at, self.expires_at],
@@ -50,17 +48,15 @@ impl UserSession {
             Ok(())
         })
         .await
-        .context("insert user_session")?;
+        .context("failed to insert user session")?;
 
         Ok(())
     }
 
     pub async fn find_by_id(db: &DatabaseConnection, id: EntityId<Self>) -> anyhow::Result<Option<Self>> {
-        let conn = db.conn().await;
-
-        let user = conn
-            .call(move |c| {
-                c.query_one(
+        Ok(db
+            .interact(move |c| {
+                c.query_row(
                     "SELECT id, user_id,  created_at, expires_at FROM user_sessions WHERE id = ?1",
                     params![id.id()],
                     |f| {
@@ -77,23 +73,25 @@ impl UserSession {
                 .optional()
             })
             .await
-            .context("find user_session by id")?;
-        Ok(user)
+            .context("failed to find user session by id")?)
     }
 
     pub async fn delete(self, db: &DatabaseConnection) -> anyhow::Result<()> {
-        let conn = db.conn().await;
-        conn.call(move |c| c.execute("DELETE FROM user_sessions where id = ?", params![self.id.id()]))
-            .await
-            .context("delete user session by id")?;
+        db.interact(move |c| {
+            c.execute("DELETE FROM user_sessions where id = ?", params![self.id.id()])?;
+            Ok(())
+        })
+        .await?;
         Ok(())
     }
 
     pub async fn delete_by_user_id(db: &DatabaseConnection, user_id: EntityId<User>) -> anyhow::Result<()> {
-        let conn = db.conn().await;
-        conn.call(move |c| c.execute("DELETE FROM user_sessions where user_id = ?", params![user_id.id()]))
-            .await
-            .context("delete user_session by user_id")?;
+        db.interact(move |c| {
+            c.execute("DELETE FROM user_sessions where user_id = ?", params![user_id.id()])?;
+            Ok(())
+        })
+        .await
+        .context("failed to delete user session")?;
         Ok(())
     }
 
