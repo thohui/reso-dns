@@ -30,7 +30,16 @@ pub async fn activity(
     let top = pagination.top();
     let skip = pagination.skip();
 
-    let activity_logs = match ActivityLog::list(conn, top as i64, skip as i64).await {
+    let db_top: i64 = top.try_into().map_err(|_| {
+        tracing::error!("top out of range: {}", top);
+        ApiError::bad_request()
+    })?;
+    let db_skip: i64 = skip.try_into().map_err(|_| {
+        tracing::error!("skip out of range: {}", skip);
+        ApiError::bad_request()
+    })?;
+
+    let activity_logs = match ActivityLog::list(conn, db_top, db_skip).await {
         Ok(activities) => activities,
         Err(e) => {
             tracing::error!("failed to get activity logs: {:?}", e);
@@ -38,8 +47,11 @@ pub async fn activity(
         }
     };
 
-    let row_count = match ActivityLog::row_count(conn).await {
-        Ok(count) => count as u64,
+    let row_count: u64 = match ActivityLog::row_count(conn).await {
+        Ok(count) => count.try_into().map_err(|_| {
+            tracing::error!("negative row count: {}", count);
+            ApiError::server_error()
+        })?,
         Err(e) => {
             tracing::error!("failed to get activity logs: {:?}", e);
             return Err(ApiError::server_error());

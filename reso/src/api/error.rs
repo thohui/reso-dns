@@ -47,6 +47,14 @@ impl ApiError {
             jar: None,
         }
     }
+    pub fn bad_request() -> Self {
+        Self {
+            status_code: StatusCode::BAD_REQUEST,
+            error: Cow::Borrowed("bad_request"),
+            message: Cow::Borrowed("Bad request."),
+            jar: None,
+        }
+    }
     pub fn server_error() -> Self {
         Self {
             status_code: StatusCode::INTERNAL_SERVER_ERROR,
