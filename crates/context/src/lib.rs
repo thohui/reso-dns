@@ -94,23 +94,45 @@ impl<G, L> DnsRequestCtx<G, L> {
     }
 }
 
+pub struct DnsResponse {
+    bytes: Bytes,
+    message: OnceCell<DnsMessage>,
+}
+
+impl DnsResponse {
+    pub fn from_bytes(bytes: Bytes) -> Self {
+        Self {
+            bytes,
+            message: OnceCell::new(),
+        }
+    }
+
+    pub fn from_parsed(raw: Bytes, message: DnsMessage) -> Self {
+        Self {
+            bytes: raw,
+            message: OnceCell::with_value(message),
+        }
+    }
+
+    pub fn bytes(&self) -> Bytes {
+        // this fine, as the bytes are cheap to clone.
+        self.bytes.clone()
+    }
+
+    pub fn message(&self) -> anyhow::Result<&DnsMessage> {
+        self.message.get_or_try_init(|| DnsMessage::decode(&self.bytes))
+    }
+}
+
 /// Trait for DNS middlewares that can process DNS requests.
 #[async_trait]
 pub trait DnsMiddleware<G, L>: Send + Sync {
-    async fn on_query(&self, ctx: &DnsRequestCtx<G, L>) -> anyhow::Result<Option<Bytes>>;
-}
-
-/// Run the middlewares in order, returning the first response found.
-pub async fn run_middlewares<G, L>(
-    mws: std::sync::Arc<Vec<Arc<dyn DnsMiddleware<G, L>>>>,
-    ctx: &DnsRequestCtx<G, L>,
-) -> anyhow::Result<Option<Bytes>> {
-    for m in mws.iter() {
-        if let Some(resp) = m.on_query(ctx).await? {
-            return Ok(Some(resp));
-        }
+    async fn on_query(&self, ctx: &DnsRequestCtx<G, L>) -> anyhow::Result<Option<DnsResponse>> {
+        return Ok(None);
     }
-    Ok(None)
+    async fn on_response(&self, ctx: &DnsRequestCtx<G, L>, response: &mut DnsResponse) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 /// A budget for processing a DNS request, based on a deadline.

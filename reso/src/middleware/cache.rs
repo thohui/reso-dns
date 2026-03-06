@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use bytes::Bytes;
 use reso_cache::{CacheKey, CacheResult, NegKind};
-use reso_context::{DnsMiddleware, DnsRequestCtx};
+use reso_context::{DnsMiddleware, DnsRequestCtx, DnsResponse};
 use reso_dns::{DnsFlags, DnsMessage, DnsMessageBuilder, DnsOpcode, DnsResponseCode, Edns, message::EdnsOptionCode};
 
 use crate::{global::Global, local::Local, middleware::echo_edns};
@@ -24,7 +24,7 @@ pub struct CacheMiddleware;
 
 #[async_trait]
 impl DnsMiddleware<Global, Local> for CacheMiddleware {
-    async fn on_query(&self, ctx: &DnsRequestCtx<Global, Local>) -> anyhow::Result<Option<Bytes>> {
+    async fn on_query(&self, ctx: &DnsRequestCtx<Global, Local>) -> anyhow::Result<Option<DnsResponse>> {
         let message = ctx.message()?;
 
         // Skip cache if the query has EDNS Client Subnet, since that would
@@ -51,14 +51,18 @@ impl DnsMiddleware<Global, Local> for CacheMiddleware {
                     NegKind::NoData => DnsResponseCode::NoError,
                 };
 
-                let builder = DnsMessageBuilder::new()
-                    .with_id(message.id)
-                    .with_flags(cache_response_flags(message))
-                    .with_response(response_code)
-                    .with_questions(message.questions().to_vec())
-                    .with_authority_records(vec![result.soa_record]);
+                let builder = echo_edns(
+                    message,
+                    DnsMessageBuilder::new()
+                        .with_id(message.id)
+                        .with_flags(cache_response_flags(message))
+                        .with_response(response_code)
+                        .with_questions(message.questions().to_vec())
+                        .with_authority_records(vec![result.soa_record]),
+                );
 
-                Ok(Some(echo_edns(message, builder).build().encode()?))
+                let bytes = builder.build().encode()?;
+                Ok(Some(DnsResponse::from_bytes(bytes)))
             }
 
             CacheResult::Positive { records, ttl } => {
@@ -80,10 +84,30 @@ impl DnsMiddleware<Global, Local> for CacheMiddleware {
                     .with_questions(message.questions().to_vec())
                     .with_answers(answers);
 
-                Ok(Some(echo_edns(message, builder).build().encode()?))
+                let bytes = echo_edns(message, builder).build().encode()?;
+                Ok(Some(DnsResponse::from_bytes(bytes)))
             }
 
             CacheResult::Miss => Ok(None),
         }
+    }
+
+    async fn on_response(&self, ctx: &DnsRequestCtx<Global, Local>, response: &mut DnsResponse) -> anyhow::Result<()> {
+        let message = ctx.message()?;
+
+        let has_ecs = message
+            .edns()
+            .as_ref()
+            .map(|e| e.options.iter().any(|o| o.code == EdnsOptionCode::ClientSubnet))
+            .unwrap_or(false);
+
+        let should_cache =
+            !ctx.local().cache_hit && !has_ecs && ctx.local().blocked == false && ctx.local().rate_limited == false;
+
+        if should_cache {
+            let _ = ctx.global().cache.insert(message, response.message()?).await;
+        }
+
+        Ok(())
     }
 }

@@ -1,14 +1,15 @@
 use bytes::Bytes;
 
 use async_trait::async_trait;
-use reso_context::DnsRequestCtx;
-use reso_dns::DnsResponseCode;
+use once_cell::sync::OnceCell;
+use reso_context::{DnsRequestCtx, DnsResponse};
+use reso_dns::{DnsMessage, DnsResponseCode};
 use thiserror::Error;
 
 /// Trait for DNS resolvers that can resolve DNS requests.
 #[async_trait]
 pub trait DnsResolver<G: Send + Sync, L> {
-    async fn resolve(&self, ctx: &DnsRequestCtx<G, L>) -> Result<Bytes, ResolveError>;
+    async fn resolve(&self, ctx: &DnsRequestCtx<G, L>) -> Result<DnsResponse, ResolveError>;
 }
 /// DynResolver
 pub type DynResolver<G, L> = dyn DnsResolver<G, L> + Send + Sync;

@@ -3,22 +3,51 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 use arc_swap::ArcSwap;
 use doh::run_doh;
 use futures::future::BoxFuture;
-use reso_context::{DnsMiddleware, DnsRequestCtx};
-use reso_resolver::{DynResolver, ResolveError};
+use reso_context::{DnsMiddleware, DnsRequestCtx, DnsResponse};
+use reso_dns::DnsResponseCode;
+use reso_resolver::{DynResolver, ResolveError, ResolveErrorType};
 use tcp::run_tcp;
 use udp::run_udp;
+
+use crate::udp::DohConfig;
 
 mod doh;
 mod tcp;
 mod udp;
 
-pub use crate::udp::DohConfig;
+pub enum ServerError {
+    ResolveError(ResolveError),
+    MiddlewareError(anyhow::Error),
+}
 
-pub type SuccessHandler<G, L> =
-    Arc<dyn for<'a> Fn(&'a DnsRequestCtx<G, L>, &'a bytes::Bytes) -> BoxFuture<'a, anyhow::Result<()>> + Send + Sync>;
+impl ServerError {
+    /// Get the appropriate DNS response code for this error.
+    pub fn response_code(&self) -> DnsResponseCode {
+        match self {
+            ServerError::ResolveError(e) => e.response_code(),
+            ServerError::MiddlewareError(_) => DnsResponseCode::ServerFailure,
+        }
+    }
+
+    /// Get the error type for metrics purposes.
+    pub fn error_type(&self) -> ResolveErrorType {
+        match self {
+            ServerError::ResolveError(e) => e.error_type(),
+            ServerError::MiddlewareError(_) => ResolveErrorType::Other,
+        }
+    }
+
+    /// Get a string representation of the error for logging purposes.
+    pub fn to_string(&self) -> String {
+        match self {
+            ServerError::ResolveError(e) => e.to_string(),
+            ServerError::MiddlewareError(e) => e.to_string(),
+        }
+    }
+}
 
 pub type ErrorHandler<G, L> = Arc<
-    dyn for<'a> Fn(&'a DnsRequestCtx<G, L>, &'a ResolveError) -> BoxFuture<'a, Result<(), ResolveError>> + Send + Sync,
+    dyn for<'a> Fn(&'a DnsRequestCtx<G, L>, &'a ServerError) -> BoxFuture<'a, Result<(), ServerError>> + Send + Sync,
 >;
 
 pub type ServerMiddlewares<G, L> = Arc<Vec<Arc<dyn DnsMiddleware<G, L> + 'static>>>;
@@ -26,7 +55,6 @@ pub type ServerMiddlewares<G, L> = Arc<Vec<Arc<dyn DnsMiddleware<G, L> + 'static
 pub struct ServerState<G, L> {
     pub resolver: Arc<DynResolver<G, L>>,
     pub middlewares: ServerMiddlewares<G, L>,
-    pub on_success: Option<SuccessHandler<G, L>>,
     pub on_error: Option<ErrorHandler<G, L>>,
     pub global: Arc<G>,
     pub timeout: Duration,
@@ -70,4 +98,42 @@ impl<L: Default + Send + Sync + 'static, G: Send + Sync + 'static> DnsServer<G, 
     pub async fn serve_doh(&self, bind_addr: SocketAddr, config: DohConfig) -> anyhow::Result<()> {
         run_doh(config, bind_addr, &self.state).await
     }
+}
+
+/// Generic request handler that every protocol handler can call into.
+pub async fn handle_request<G, L>(
+    ctx: &DnsRequestCtx<G, L>,
+    state: Arc<ServerState<G, L>>,
+) -> Result<DnsResponse, ServerError>
+where
+    G: Send + Sync + 'static,
+    L: Send + Sync,
+{
+    let ServerState {
+        resolver, middlewares, ..
+    } = &*state;
+
+    for (i, middleware) in state.middlewares.iter().enumerate() {
+        if let Some(response) = middleware.on_query(&ctx).await.map_err(ServerError::MiddlewareError)? {
+            let mut response = response;
+            for response_middleware in middlewares.iter().rev() {
+                response_middleware
+                    .on_response(&ctx, &mut response)
+                    .await
+                    .map_err(ServerError::MiddlewareError)?;
+            }
+            return Ok(response);
+        }
+    }
+
+    let mut response = resolver.resolve(&ctx).await.map_err(ServerError::ResolveError)?;
+
+    for middleware in middlewares.iter().rev() {
+        middleware
+            .on_response(&ctx, &mut response)
+            .await
+            .map_err(ServerError::MiddlewareError)?;
+    }
+
+    Ok(response)
 }

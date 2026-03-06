@@ -8,7 +8,7 @@ use reso_context::DnsRequestCtx;
 use reso_dns::DnsMessage;
 use reso_inflight::Inflight;
 
-use crate::{DnsResolver, ResolveError};
+use crate::{DnsResolver, DnsResponse, ResolveError};
 
 use super::{
     request::UpstreamResolveRequest,
@@ -54,7 +54,7 @@ where
     G: Send + Sync + 'static,
     L: Send + Sync,
 {
-    async fn resolve(&self, ctx: &DnsRequestCtx<G, L>) -> Result<Bytes, ResolveError> {
+    async fn resolve(&self, ctx: &DnsRequestCtx<G, L>) -> Result<DnsResponse, ResolveError> {
         let query_message = ctx
             .message()
             .or_else(|e| Err(ResolveError::InvalidRequest(e.to_string())))?;
@@ -66,8 +66,7 @@ where
             )));
         }
 
-        let key = CacheKey::try_from(query_message)
-            .map_err(|e| ResolveError::Other(e.to_string()))?;
+        let key = CacheKey::try_from(query_message).map_err(|e| ResolveError::Other(e.to_string()))?;
 
         let upstreams = self.upstreams.clone();
 
@@ -121,7 +120,7 @@ where
                 "upstream response question does not match request question".to_string(),
             ));
         }
-        Ok(response)
+        Ok(DnsResponse::from_parsed(response, response_message))
     }
 }
 

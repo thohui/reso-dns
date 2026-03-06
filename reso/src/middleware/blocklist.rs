@@ -1,6 +1,5 @@
 use async_trait::async_trait;
-use bytes::Bytes;
-use reso_context::{DnsMiddleware, DnsRequestCtx};
+use reso_context::{DnsMiddleware, DnsRequestCtx, DnsResponse};
 use reso_dns::{DnsMessageBuilder, DnsResponseCode};
 
 use crate::{global::Global, local::Local};
@@ -10,7 +9,7 @@ pub struct BlocklistMiddleware;
 
 #[async_trait]
 impl DnsMiddleware<Global, Local> for BlocklistMiddleware {
-    async fn on_query(&self, ctx: &DnsRequestCtx<Global, Local>) -> anyhow::Result<Option<Bytes>> {
+    async fn on_query(&self, ctx: &DnsRequestCtx<Global, Local>) -> anyhow::Result<Option<DnsResponse>> {
         let message = ctx.message()?;
 
         if let Some(question) = message.questions().first() {
@@ -24,7 +23,7 @@ impl DnsMiddleware<Global, Local> for BlocklistMiddleware {
 
                 ctx.local_mut().blocked = true;
 
-                return Ok(Some(resp_bytes));
+                return Ok(Some(DnsResponse::from_bytes(resp_bytes)));
             }
         }
 

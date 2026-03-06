@@ -3,12 +3,11 @@ use std::{net::SocketAddr, sync::Arc};
 use arc_swap::ArcSwap;
 use bytes::BytesMut;
 use reso_context::{DnsRequestCtx, RequestType};
-use reso_dns::{DnsMessage, DnsMessageBuilder};
-use reso_resolver::ResolveError;
+use reso_dns::{DnsMessage, DnsMessageBuilder, DnsResponseCode};
 use serde::{Deserialize, Serialize};
 use tokio::{net::UdpSocket, task::JoinSet};
 
-use crate::ServerState;
+use crate::{ServerError, ServerState, handle_request};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct DohConfig {
@@ -57,44 +56,30 @@ where
                 let sock = socket.clone();
 
                 let state = state.load_full();
-                let resolver = state.resolver.clone();
-                let middlewares = state.middlewares.clone();
                 let global = state.global.clone();
-                let on_success = state.on_success.clone();
                 let on_error = state.on_error.clone();
 
                 inflight.spawn(async move {
                     let ctx = DnsRequestCtx::new(state.timeout, client, RequestType::UDP, raw, global, L::default());
 
-                    if let Ok(Some(resp)) = reso_context::run_middlewares(middlewares, &ctx).await {
-                        let _ = sock.send_to(&resp, client).await;
-
-                        if let Some(cb) = &on_success {
-                            let _ = cb(&ctx, &resp).await;
-                        }
-                        return;
-                    }
-
-                    match resolver.resolve(&ctx).await {
+                    match handle_request(&ctx, state).await {
                         Ok(resp) => {
-                            let _ = sock.send_to(&resp, client).await;
+                            let _ = sock.send_to(&resp.bytes(), client).await;
 
-                            if let Some(cb) = &on_success {
-                                let _ = cb(&ctx, &resp).await;
-                            }
-                        }
+                        },
                         Err(e) => {
                             if let Ok(message) = ctx.message() {
                                 let res = write_udp_server_error_response(message, &sock, &client, &e).await;
                                 if let Err(err) = res {
                                     tracing::warn!("failed to write error response to client {}: {}", client, err);
                                 }
-                            }
-                            if let Some(cb) = &on_error {
-                                let _ = cb(&ctx, &e).await;
+                                if let Some(cb) = &on_error {
+                                    let _ = cb(&ctx, &e).await;
+                                }
                             }
                         }
                     }
+
                 });
             }
             _ = shutdown.cancelled() => {
@@ -121,7 +106,7 @@ async fn write_udp_server_error_response(
     message: &DnsMessage,
     socket: &UdpSocket,
     client: &SocketAddr,
-    error: &ResolveError,
+    error: &ServerError,
 ) -> anyhow::Result<()> {
     let bytes = DnsMessageBuilder::new()
         .with_id(message.id)

@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use reso_context::{DnsMiddleware, DnsRequestCtx};
+use reso_context::{DnsMiddleware, DnsRequestCtx, DnsResponse};
 use reso_dns::{DnsFlags, DnsMessage, DnsMessageBuilder, DnsOpcode, DnsResponseCode};
 
 use crate::{
@@ -36,24 +36,23 @@ fn ratelimit_response_flags(query: &DnsMessage) -> DnsFlags {
 
 #[async_trait]
 impl DnsMiddleware<Global, Local> for RateLimitMiddleware {
-    async fn on_query(&self, ctx: &DnsRequestCtx<Global, Local>) -> anyhow::Result<Option<bytes::Bytes>> {
+    async fn on_query(&self, ctx: &DnsRequestCtx<Global, Local>) -> anyhow::Result<Option<DnsResponse>> {
         if self.limiter.check(ctx.request_address().ip()).await {
             Ok(None)
         } else {
             let message = ctx.message()?;
             ctx.local_mut().rate_limited = true;
-            Ok(Some(
-                echo_edns(
-                    message,
-                    DnsMessageBuilder::new()
-                        .with_id(message.id)
-                        .with_response(DnsResponseCode::Refused)
-                        .with_flags(ratelimit_response_flags(message))
-                        .with_questions(message.questions().to_vec()),
-                )
-                .build()
-                .encode()?,
-            ))
+            let builder = echo_edns(
+                message,
+                DnsMessageBuilder::new()
+                    .with_id(message.id)
+                    .with_response(DnsResponseCode::Refused)
+                    .with_flags(ratelimit_response_flags(message))
+                    .with_questions(message.questions().to_vec()),
+            );
+
+            let bytes = builder.build().encode()?;
+            Ok(Some(DnsResponse::from_bytes(bytes)))
         }
     }
 }

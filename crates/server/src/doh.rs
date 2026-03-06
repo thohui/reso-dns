@@ -18,7 +18,7 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 
-use crate::{DohConfig, ServerState};
+use crate::{DohConfig, ServerError, ServerState, handle_request};
 
 type Req = Request<Incoming>;
 type Res = Response<Full<Bytes>>;
@@ -142,54 +142,31 @@ where
         }
     };
 
-    let middlewares = state.middlewares.clone();
-    let global = state.global.clone();
-    let on_success = state.on_success.clone();
-    let on_error = state.on_error.clone();
+    let ctx = DnsRequestCtx::new(
+        state.timeout,
+        addr,
+        RequestType::DOH,
+        bytes,
+        state.global.clone(),
+        L::default(),
+    );
 
-    let ctx = DnsRequestCtx::new(state.timeout, addr, RequestType::DOH, bytes, global, L::default());
+    let response = handle_request(&ctx, state).await;
 
-    if let Ok(Some(bytes)) = reso_context::run_middlewares(middlewares, &ctx).await {
-        let resp = Response::builder()
-            .status(200)
-            .header("Content-Type", "application/dns-message")
-            .body(Full::new(bytes.clone()))?;
-
-        tokio::spawn(async move {
-            if let Some(on_success) = on_success {
-                let _ = on_success(&ctx, &bytes).await;
-            }
-        });
-
-        return Ok(resp);
-    }
-
-    match state.resolver.resolve(&ctx).await {
-        Ok(b) => {
-            let resp = Response::builder()
+    match response {
+        Ok(resp) => {
+            return Ok(Response::builder()
                 .status(200)
                 .header("Content-Type", "application/dns-message")
-                .body(Full::new(b.clone()))?;
-
-            tokio::spawn(async move {
-                if let Some(on_success) = on_success {
-                    let _ = on_success(&ctx, &b).await;
-                }
-            });
-
-            Ok(resp)
+                .body(Full::new(resp.bytes()))
+                .unwrap());
         }
         Err(e) => {
-            let message = ctx.message()?;
-            let resp_bytes = create_error_message(message, &e)?;
-            let resp = Response::builder().status(502).body(Full::new(resp_bytes))?;
-
-            tokio::spawn(async move {
-                if let Some(on_error) = on_error {
-                    let _ = on_error(&ctx, &e).await;
-                }
-            });
-            Ok(resp)
+            return Ok(Response::builder()
+                .status(200)
+                .header("Content-Type", "application/dns-message")
+                .body(Full::new(create_error_message(ctx.message().unwrap(), &e)?))
+                .unwrap());
         }
     }
 }
@@ -287,7 +264,7 @@ fn error(err: String) -> io::Error {
 }
 
 // Create error message
-fn create_error_message(message: &DnsMessage, error: &ResolveError) -> anyhow::Result<Bytes> {
+fn create_error_message(message: &DnsMessage, error: &ServerError) -> anyhow::Result<Bytes> {
     let payload = DnsMessageBuilder::new()
         .with_id(message.id)
         .with_questions(message.questions().to_vec())
