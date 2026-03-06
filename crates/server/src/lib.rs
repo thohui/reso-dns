@@ -101,7 +101,7 @@ impl<L: Default + Send + Sync + 'static, G: Send + Sync + 'static> DnsServer<G, 
 
 /// Generic request handler that every protocol handler can call into.
 pub async fn handle_request<G, L>(
-    mut ctx: &mut DnsRequestCtx<G, L>,
+    ctx: &mut DnsRequestCtx<G, L>,
     state: Arc<ServerState<G, L>>,
 ) -> Result<DnsResponse, ServerError>
 where
@@ -113,16 +113,12 @@ where
     } = &*state;
 
     for (i, middleware) in state.middlewares.iter().enumerate() {
-        if let Some(response) = middleware
-            .on_query(&mut ctx)
-            .await
-            .map_err(ServerError::MiddlewareError)?
-        {
+        if let Some(response) = middleware.on_query(ctx).await.map_err(ServerError::MiddlewareError)? {
             let mut response = response;
             // Only run on_response for middlewares that had their on_query called.
             for response_middleware in middlewares[..=i].iter().rev() {
                 response_middleware
-                    .on_response(&mut ctx, &mut response)
+                    .on_response(ctx, &mut response)
                     .await
                     .map_err(ServerError::MiddlewareError)?;
             }
@@ -130,11 +126,11 @@ where
         }
     }
 
-    let mut response = resolver.resolve(&ctx).await.map_err(ServerError::ResolveError)?;
+    let mut response = resolver.resolve(ctx).await.map_err(ServerError::ResolveError)?;
 
     for middleware in middlewares.iter().rev() {
         middleware
-            .on_response(&mut ctx, &mut response)
+            .on_response(ctx, &mut response)
             .await
             .map_err(ServerError::MiddlewareError)?;
     }
