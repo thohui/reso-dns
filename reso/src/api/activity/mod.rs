@@ -30,7 +30,7 @@ pub async fn activity(
     let top = pagination.top();
     let skip = pagination.skip();
 
-    let activity_logs = match ActivityLog::list(conn, top, skip).await {
+    let activity_logs = match ActivityLog::list(conn, top as i64, skip as i64).await {
         Ok(activities) => activities,
         Err(e) => {
             tracing::error!("failed to get activity logs: {:?}", e);
@@ -39,7 +39,7 @@ pub async fn activity(
     };
 
     let row_count = match ActivityLog::row_count(conn).await {
-        Ok(count) => count,
+        Ok(count) => count as u64,
         Err(e) => {
             tracing::error!("failed to get activity logs: {:?}", e);
             return Err(ApiError::server_error());
@@ -66,7 +66,7 @@ pub struct Activity {
     pub timestamp: i64,
     pub transport: u8,
     pub client: Option<String>,
-    pub duration: i64,
+    pub duration: u64,
     pub qname: Option<String>,
     pub qtype: Option<i64>,
     #[serde(flatten)]
@@ -115,7 +115,10 @@ impl TryFrom<ActivityLog> for Activity {
             transport,
             client: Some(r.client),
             kind,
-            duration: r.dur_ms,
+            duration: r
+                .dur_ms
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("duration out of range: {}", r.dur_ms))?,
             qname: r.qname,
             qtype: r.qtype,
         })
