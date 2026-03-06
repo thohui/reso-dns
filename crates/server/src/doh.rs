@@ -16,7 +16,7 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 
-use crate::{DohConfig, ServerError, ServerState, handle_request};
+use crate::{ServerError, ServerState, handle_request};
 
 type Req = Request<Incoming>;
 type Res = Response<Full<Bytes>>;
@@ -39,6 +39,16 @@ where
     fn execute(&self, fut: F) {
         tokio::task::spawn(fut);
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DohConfig {
+    /// Port to listen on for DoH requests.
+    pub port: u16,
+    /// Path to the TLS certificate file in PEM format.
+    pub cert_path: String,
+    /// Path to the TLS private key file in PEM format.
+    pub key_path: String,
 }
 
 /// Run the DNS server over DoH.
@@ -140,7 +150,7 @@ where
         }
     };
 
-    let ctx = DnsRequestCtx::new(
+    let mut ctx = DnsRequestCtx::new(
         state.timeout,
         addr,
         RequestType::DOH,
@@ -149,7 +159,7 @@ where
         L::default(),
     );
 
-    let response = handle_request(&ctx, state.clone()).await;
+    let response = handle_request(&mut ctx, state.clone()).await;
 
     match response {
         Ok(resp) => {

@@ -9,7 +9,7 @@ pub struct BlocklistMiddleware;
 
 #[async_trait]
 impl DnsMiddleware<Global, Local> for BlocklistMiddleware {
-    async fn on_query(&self, ctx: &DnsRequestCtx<Global, Local>) -> anyhow::Result<Option<DnsResponse>> {
+    async fn on_query(&self, ctx: &mut DnsRequestCtx<Global, Local>) -> anyhow::Result<Option<DnsResponse>> {
         let message = ctx.message()?;
 
         if let Some(question) = message.questions().first() {

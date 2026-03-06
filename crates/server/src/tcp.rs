@@ -4,7 +4,7 @@ use anyhow::Context;
 use arc_swap::ArcSwap;
 use bytes::Bytes;
 use reso_context::{DnsRequestCtx, RequestType};
-use reso_dns::{DnsMessage, DnsMessageBuilder, DnsResponseCode};
+use reso_dns::{DnsMessage, DnsMessageBuilder};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
@@ -62,7 +62,7 @@ where
 
                     let bytes = Bytes::from(buf);
 
-                    let ctx = DnsRequestCtx::new(
+                    let mut ctx = DnsRequestCtx::new(
                         state.timeout,
                         client.into(),
                         RequestType::TCP,
@@ -71,7 +71,7 @@ where
                         L::default(),
                     );
 
-                    match handle_request(&ctx, state).await {
+                    match handle_request(&mut ctx, state).await {
                         Ok(resp) => {
                             let _ = write_tcp_response(&mut stream, &resp.bytes()).await;
                         },

@@ -7,7 +7,11 @@ pub struct MetricsMiddleware;
 
 #[async_trait::async_trait]
 impl DnsMiddleware<Global, Local> for MetricsMiddleware {
-    async fn on_response(&self, ctx: &DnsRequestCtx<Global, Local>, response: &mut DnsResponse) -> anyhow::Result<()> {
+    async fn on_response(
+        &self,
+        ctx: &mut DnsRequestCtx<Global, Local>,
+        response: &mut DnsResponse,
+    ) -> anyhow::Result<()> {
         let message = ctx.message()?;
 
         let local = ctx.local();

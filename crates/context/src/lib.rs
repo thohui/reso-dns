@@ -3,7 +3,6 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use bytes::Bytes;
 use once_cell::sync::OnceCell;
-use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use reso_dns::DnsMessage;
 use tokio::time::Instant;
 
@@ -29,7 +28,7 @@ pub struct DnsRequestCtx<G, L> {
     message: OnceCell<DnsMessage>,
     budget: RequestBudget,
     global: Arc<G>,
-    local: Arc<RwLock<L>>,
+    local: L,
 }
 
 impl<G, L> DnsRequestCtx<G, L> {
@@ -48,7 +47,7 @@ impl<G, L> DnsRequestCtx<G, L> {
             raw,
             message: OnceCell::new(),
             global,
-            local: Arc::new(RwLock::new(local)),
+            local: local,
         }
     }
 
@@ -83,14 +82,11 @@ impl<G, L> DnsRequestCtx<G, L> {
         &self.global
     }
 
-    /// Local context
-    pub fn local(&self) -> RwLockReadGuard<'_, L> {
-        self.local.read()
+    pub fn local(&self) -> &L {
+        &self.local
     }
-
-    /// Mutable local context
-    pub fn local_mut(&self) -> RwLockWriteGuard<'_, L> {
-        self.local.write()
+    pub fn local_mut(&mut self) -> &mut L {
+        &mut self.local
     }
 }
 
@@ -115,7 +111,7 @@ impl DnsResponse {
     }
 
     pub fn bytes(&self) -> Bytes {
-        // this fine, as the bytes are cheap to clone.
+        // this is fine, as `Bytes` is reference counted and cloning it is cheap.
         self.bytes.clone()
     }
 
@@ -127,10 +123,10 @@ impl DnsResponse {
 /// Trait for DNS middlewares that can process DNS requests.
 #[async_trait]
 pub trait DnsMiddleware<G, L>: Send + Sync {
-    async fn on_query(&self, ctx: &DnsRequestCtx<G, L>) -> anyhow::Result<Option<DnsResponse>> {
+    async fn on_query(&self, ctx: &mut DnsRequestCtx<G, L>) -> anyhow::Result<Option<DnsResponse>> {
         return Ok(None);
     }
-    async fn on_response(&self, ctx: &DnsRequestCtx<G, L>, response: &mut DnsResponse) -> anyhow::Result<()> {
+    async fn on_response(&self, ctx: &mut DnsRequestCtx<G, L>, response: &mut DnsResponse) -> anyhow::Result<()> {
         Ok(())
     }
 }

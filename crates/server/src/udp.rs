@@ -3,21 +3,10 @@ use std::{net::SocketAddr, sync::Arc};
 use arc_swap::ArcSwap;
 use bytes::BytesMut;
 use reso_context::{DnsRequestCtx, RequestType};
-use reso_dns::{DnsMessage, DnsMessageBuilder, DnsResponseCode};
-use serde::{Deserialize, Serialize};
+use reso_dns::{DnsMessage, DnsMessageBuilder};
 use tokio::{net::UdpSocket, task::JoinSet};
 
 use crate::{ServerError, ServerState, handle_request};
-
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-pub struct DohConfig {
-    /// Port to listen on for DoH requests.
-    pub port: u16,
-    /// Path to the TLS certificate file in PEM format.
-    pub cert_path: String,
-    /// Path to the TLS private key file in PEM format.
-    pub key_path: String,
-}
 
 /// Run the DNS server over UDP.
 #[allow(clippy::too_many_arguments)]
@@ -60,9 +49,9 @@ where
                 let on_error = state.on_error.clone();
 
                 inflight.spawn(async move {
-                    let ctx = DnsRequestCtx::new(state.timeout, client, RequestType::UDP, raw, global, L::default());
+                    let mut ctx = DnsRequestCtx::new(state.timeout, client, RequestType::UDP, raw, global, L::default());
 
-                    match handle_request(&ctx, state).await {
+                    match handle_request(&mut ctx, state).await {
                         Ok(resp) => {
                             let _ = sock.send_to(&resp.bytes(), client).await;
 

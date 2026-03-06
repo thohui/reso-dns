@@ -24,7 +24,7 @@ pub struct CacheMiddleware;
 
 #[async_trait]
 impl DnsMiddleware<Global, Local> for CacheMiddleware {
-    async fn on_query(&self, ctx: &DnsRequestCtx<Global, Local>) -> anyhow::Result<Option<DnsResponse>> {
+    async fn on_query(&self, ctx: &mut DnsRequestCtx<Global, Local>) -> anyhow::Result<Option<DnsResponse>> {
         let message = ctx.message()?;
 
         // Skip cache if the query has EDNS Client Subnet, since that would
@@ -41,11 +41,11 @@ impl DnsMiddleware<Global, Local> for CacheMiddleware {
 
         let cache_key = CacheKey::try_from(message)?;
 
-        match ctx.global().cache.lookup(&cache_key).await {
-            CacheResult::Negative(result) => {
-                tracing::debug!("negative cache hit for {:?} {:?}", cache_key, result);
-                ctx.local_mut().cache_hit = true;
+        let mut cache_hit = false;
 
+        let resp = match ctx.global().cache.lookup(&cache_key).await {
+            CacheResult::Negative(result) => {
+                cache_hit = true;
                 let response_code = match result.kind {
                     NegKind::NxDomain => DnsResponseCode::NxDomain,
                     NegKind::NoData => DnsResponseCode::NoError,
@@ -66,8 +66,7 @@ impl DnsMiddleware<Global, Local> for CacheMiddleware {
             }
 
             CacheResult::Positive { records, ttl } => {
-                tracing::debug!("cache hit for {:?}", cache_key);
-                ctx.local_mut().cache_hit = true;
+                cache_hit = true;
 
                 let answers: Vec<_> = records
                     .iter()
@@ -89,10 +88,17 @@ impl DnsMiddleware<Global, Local> for CacheMiddleware {
             }
 
             CacheResult::Miss => Ok(None),
-        }
+        };
+
+        ctx.local_mut().cache_hit = cache_hit;
+        return resp;
     }
 
-    async fn on_response(&self, ctx: &DnsRequestCtx<Global, Local>, response: &mut DnsResponse) -> anyhow::Result<()> {
+    async fn on_response(
+        &self,
+        ctx: &mut DnsRequestCtx<Global, Local>,
+        response: &mut DnsResponse,
+    ) -> anyhow::Result<()> {
         let message = ctx.message()?;
 
         let has_ecs = message
