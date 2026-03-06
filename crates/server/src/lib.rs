@@ -119,7 +119,8 @@ where
             .map_err(ServerError::MiddlewareError)?
         {
             let mut response = response;
-            for response_middleware in middlewares.iter().rev() {
+            // Only run on_response for middlewares that had their on_query called.
+            for response_middleware in middlewares[..=i].iter().rev() {
                 response_middleware
                     .on_response(&mut ctx, &mut response)
                     .await
