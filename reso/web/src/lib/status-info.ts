@@ -43,8 +43,6 @@ export function getStatusInfo(activity: Activity): StatusInfo {
 		};
 	}
 
-
-
 	if (q.d.cache_hit) {
 		return {
 			label: 'cached',

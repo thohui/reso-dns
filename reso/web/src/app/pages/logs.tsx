@@ -15,7 +15,9 @@ export default function LogsPage() {
 
 	return (
 		<>
-			<Heading size='lg' mb={8}>Logs</Heading>
+			<Heading size='lg' mb={8}>
+				Logs
+			</Heading>
 			<LogsGrid
 				activities={data?.items ?? []}
 				page={page}
@@ -26,4 +28,3 @@ export default function LogsPage() {
 		</>
 	);
 }
-

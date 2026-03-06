@@ -1,18 +1,10 @@
-import {
-	Box,
-	Button,
-	HStack,
-	Icon,
-	Table,
-	Text,
-} from '@chakra-ui/react';
+import { Box, Button, HStack, Icon, Table, Text } from '@chakra-ui/react';
 import { ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import {
 	type Activity,
 	getRecordType,
 	getTransportLabel,
-	type QueryActivity,
 } from '../../lib/api/activity';
 import { getStatusInfo } from '../../lib/status-info';
 import { ActivityDetailDrawer } from './ActivityDetailDrawer';
@@ -165,10 +157,15 @@ function LogDetailRow({
 	);
 }
 
+type ActivityFilter =
+	| 'all'
+	| 'queries'
+	| 'blocked'
+	| 'errors'
+	| 'cached'
+	| 'rate_limited';
 
-type ActivityFilter = 'all' | 'queries' | 'blocked' | 'errors' | 'cached' | 'rate_limited';
-
-const FILTERS: { key: ActivityFilter; label: string; color?: string; }[] = [
+const FILTERS: { key: ActivityFilter; label: string; color?: string }[] = [
 	{ key: 'all', label: 'All' },
 	{ key: 'queries', label: 'Queries', color: 'status.success' },
 	{ key: 'blocked', label: 'Blocked', color: 'status.blocked' },
@@ -185,7 +182,13 @@ interface LogsGridProps {
 	onPageChange: (page: number) => void;
 }
 
-export function LogsGrid({ activities, page, totalPages, total, onPageChange }: LogsGridProps) {
+export function LogsGrid({
+	activities,
+	page,
+	totalPages,
+	total,
+	onPageChange,
+}: LogsGridProps) {
 	const [filter, setFilter] = useState<ActivityFilter>('all');
 	const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
 		null,
@@ -209,32 +212,52 @@ export function LogsGrid({ activities, page, totalPages, total, onPageChange }: 
 		[],
 	);
 
-	const filteredActivities = activities.filter((a) => {
+	const filteredActivities = activities.filter((activity) => {
 		if (filter === 'all') return true;
+
 		if (filter === 'queries')
-			return a.kind === 'query' && !(a as QueryActivity).d.blocked;
+			return activity.kind === 'query' && !activity.d.blocked;
 		if (filter === 'blocked')
-			return a.kind === 'query' && (a as QueryActivity).d.blocked;
-		if (filter === 'errors') return a.kind === 'error';
+			return activity.kind === 'query' && activity.d.blocked;
+		if (filter === 'errors') return activity.kind === 'error';
 		if (filter === 'cached')
-			return a.kind === 'query' && (a as QueryActivity).d.cache_hit;
+			return activity.kind === 'query' && activity.d.cache_hit;
 		if (filter === 'rate_limited')
-			return a.kind === 'query' && (a as QueryActivity).d.rate_limited;
+			return activity.kind === 'query' && activity.d.rate_limited;
 		return true;
 	});
 
 	const counts = useMemo(() => {
-		let queries = 0, blocked = 0, errors = 0, cached = 0, rate_limited = 0;
-		for (const a of activities) {
-			if (a.kind === 'error') { errors++; continue; }
-			if (a.kind === 'query') {
-				const d = (a as QueryActivity).d;
-				if (d.blocked) blocked++; else queries++;
-				if (d.cache_hit) cached++;
-				if (d.rate_limited) rate_limited++;
+		let queries = 0,
+			blocked = 0,
+			errors = 0,
+			cached = 0,
+			rate_limited = 0;
+		for (const activity of activities) {
+			if (activity.kind === 'error') {
+				errors++;
+				continue;
+			}
+
+			if (activity.kind === 'query') {
+				if (activity.d.blocked) {
+					blocked++;
+				} else {
+					queries++;
+				}
+
+				if (activity.d.cache_hit) cached++;
+				if (activity.d.rate_limited) rate_limited++;
 			}
 		}
-		return { all: activities.length, queries, blocked, errors, cached, rate_limited };
+		return {
+			all: activities.length,
+			queries,
+			blocked,
+			errors,
+			cached,
+			rate_limited,
+		};
 	}, [activities]);
 
 	return (
@@ -277,7 +300,11 @@ export function LogsGrid({ activities, page, totalPages, total, onPageChange }: 
 								<Text fontSize='xs' lineHeight='1'>
 									{label}
 								</Text>
-								<Text fontSize='xs' color={active ? 'fg.subtle' : 'fg.faint'} lineHeight='1'>
+								<Text
+									fontSize='xs'
+									color={active ? 'fg.subtle' : 'fg.faint'}
+									lineHeight='1'
+								>
 									{counts[key]}
 								</Text>
 							</HStack>

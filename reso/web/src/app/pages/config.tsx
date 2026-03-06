@@ -10,7 +10,15 @@ import {
 } from '@chakra-ui/react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus, RotateCcw, Save, Server, Shield, Timer, Trash2 } from 'lucide-react';
+import {
+	Plus,
+	RotateCcw,
+	Save,
+	Server,
+	Shield,
+	Timer,
+	Trash2,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import z from 'zod';
@@ -303,7 +311,10 @@ export default function ConfigPage() {
 					description='Maximum upstream response wait time per query (ms).'
 				>
 					<Field.Root invalid={!!form.formState.errors.timeout}>
-						<Input type='number' {...form.register('timeout', { valueAsNumber: true })} />
+						<Input
+							type='number'
+							{...form.register('timeout', { valueAsNumber: true })}
+						/>
 						{form.formState.errors.timeout?.message && (
 							<Field.ErrorText color='status.error'>
 								{form.formState.errors.timeout.message}
@@ -323,7 +334,8 @@ export default function ConfigPage() {
 					description='Length of each rate limit window (seconds).'
 				>
 					<Field.Root invalid={!!form.formState.errors.rate_limit_window}>
-						<Input type='number'
+						<Input
+							type='number'
 							min={1}
 							step={1}
 							{...form.register('rate_limit_window', { valueAsNumber: true })}
@@ -340,7 +352,8 @@ export default function ConfigPage() {
 					description='Maximum queries allowed per client per window.'
 				>
 					<Field.Root invalid={!!form.formState.errors.rate_limit_max}>
-						<Input type='number'
+						<Input
+							type='number'
 							min={1}
 							step={1}
 							{...form.register('rate_limit_max', { valueAsNumber: true })}

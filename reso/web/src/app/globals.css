@@ -1,19 +1,21 @@
 @font-face {
-	font-family: 'Inter';
+	font-family: "Inter";
 	font-style: normal;
 	font-weight: 300 700;
 	font-display: swap;
-	src: url('../assets/fonts/Inter-latin.woff2') format('woff2'),
-	     url('../assets/fonts/Inter-latin-ext.woff2') format('woff2');
+	src:
+		url("../assets/fonts/Inter-latin.woff2") format("woff2"),
+		url("../assets/fonts/Inter-latin-ext.woff2") format("woff2");
 }
 
 @font-face {
-	font-family: 'Mozilla Text';
+	font-family: "Mozilla Text";
 	font-style: normal;
 	font-weight: 400 700;
 	font-display: swap;
-	src: url('../assets/fonts/MozillaText-latin.woff2') format('woff2'),
-	     url('../assets/fonts/MozillaText-latin-ext.woff2') format('woff2');
+	src:
+		url("../assets/fonts/MozillaText-latin.woff2") format("woff2"),
+		url("../assets/fonts/MozillaText-latin-ext.woff2") format("woff2");
 }
 
 body {
