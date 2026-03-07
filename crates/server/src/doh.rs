@@ -2,23 +2,21 @@ use std::{fs, io};
 
 use std::{net::SocketAddr, sync::Arc};
 
-use anyhow::Context;
 use arc_swap::ArcSwap;
 use base64::{Engine, engine::GeneralPurpose};
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
 use hyper::server::conn::http2;
 use hyper::{Method, Request, Response, body::Incoming, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
 use reso_context::{DnsRequestCtx, RequestType};
 use reso_dns::{DnsMessage, DnsMessageBuilder};
-use reso_resolver::ResolveError;
 use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 
-use crate::{DohConfig, ServerState};
+use crate::{ServerError, ServerState, handle_request};
 
 type Req = Request<Incoming>;
 type Res = Response<Full<Bytes>>;
@@ -41,6 +39,16 @@ where
     fn execute(&self, fut: F) {
         tokio::task::spawn(fut);
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DohConfig {
+    /// Port to listen on for DoH requests.
+    pub port: u16,
+    /// Path to the TLS certificate file in PEM format.
+    pub cert_path: String,
+    /// Path to the TLS private key file in PEM format.
+    pub key_path: String,
 }
 
 /// Run the DNS server over DoH.
@@ -142,54 +150,34 @@ where
         }
     };
 
-    let middlewares = state.middlewares.clone();
-    let global = state.global.clone();
-    let on_success = state.on_success.clone();
-    let on_error = state.on_error.clone();
+    let mut ctx = DnsRequestCtx::new(
+        state.timeout,
+        addr,
+        RequestType::DOH,
+        bytes,
+        state.global.clone(),
+        L::default(),
+    );
 
-    let ctx = DnsRequestCtx::new(state.timeout, addr, RequestType::DOH, bytes, global, L::default());
+    let response = handle_request(&mut ctx, state.clone()).await;
 
-    if let Ok(Some(bytes)) = reso_context::run_middlewares(middlewares, &ctx).await {
-        let resp = Response::builder()
-            .status(200)
-            .header("Content-Type", "application/dns-message")
-            .body(Full::new(bytes.clone()))?;
-
-        tokio::spawn(async move {
-            if let Some(on_success) = on_success {
-                let _ = on_success(&ctx, &bytes).await;
-            }
-        });
-
-        return Ok(resp);
-    }
-
-    match state.resolver.resolve(&ctx).await {
-        Ok(b) => {
-            let resp = Response::builder()
+    match response {
+        Ok(resp) => {
+            return Ok(Response::builder()
                 .status(200)
                 .header("Content-Type", "application/dns-message")
-                .body(Full::new(b.clone()))?;
-
-            tokio::spawn(async move {
-                if let Some(on_success) = on_success {
-                    let _ = on_success(&ctx, &b).await;
-                }
-            });
-
-            Ok(resp)
+                .body(Full::new(resp.bytes()))?);
         }
         Err(e) => {
-            let message = ctx.message()?;
-            let resp_bytes = create_error_message(message, &e)?;
-            let resp = Response::builder().status(502).body(Full::new(resp_bytes))?;
+            let resp = match ctx.message() {
+                Ok(m) => Response::builder()
+                    .status(200)
+                    .header("Content-Type", "application/dns-message")
+                    .body(Full::new(create_error_message(&m, &e)?))?,
+                Err(_) => Response::builder().status(500).body(Full::new(Bytes::new()))?,
+            };
 
-            tokio::spawn(async move {
-                if let Some(on_error) = on_error {
-                    let _ = on_error(&ctx, &e).await;
-                }
-            });
-            Ok(resp)
+            return Ok(resp);
         }
     }
 }
@@ -215,7 +203,6 @@ async fn extract_bytes_from_get(req: Req) -> anyhow::Result<Bytes> {
 async fn extract_bytes_from_post(req: Req, max_size: usize) -> anyhow::Result<Bytes> {
     use hyper::header::{CONTENT_LENGTH, CONTENT_TYPE};
 
-    // Be tolerant: case-insensitive, ignore parameters.
     let content_type_ok = req
         .headers()
         .get(CONTENT_TYPE)
@@ -286,20 +273,12 @@ fn error(err: String) -> io::Error {
     io::Error::new(io::ErrorKind::Other, err)
 }
 
-// Create error message
-fn create_error_message(message: &DnsMessage, error: &ResolveError) -> anyhow::Result<Bytes> {
+fn create_error_message(message: &DnsMessage, error: &ServerError) -> anyhow::Result<Bytes> {
     let payload = DnsMessageBuilder::new()
         .with_id(message.id)
         .with_questions(message.questions().to_vec())
         .with_response(error.response_code())
         .build()
         .encode()?;
-
-    let len = u16::try_from(payload.len()).context("DNS payload exceeds 65535 bytes")?;
-    let mut resp = BytesMut::with_capacity(2 + payload.len());
-
-    resp.put_u16(len);
-    resp.extend_from_slice(&payload);
-
-    Ok(resp.freeze())
+    Ok(payload)
 }

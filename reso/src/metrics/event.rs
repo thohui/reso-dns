@@ -1,6 +1,5 @@
-use reso_context::RequestType;
+use reso_context::{ErrorType, RequestType};
 use reso_dns::{DnsResponseCode, domain_name::DomainName, message::RecordType};
-use reso_resolver::ResolveErrorType;
 
 use crate::database::models::{error_log::DnsErrorLog, query_log::DnsQueryLog};
 
@@ -58,7 +57,7 @@ pub struct ErrorLogEvent {
     /// Error message
     pub message: String,
     /// Error Type
-    pub r#type: ResolveErrorType,
+    pub r#type: ErrorType,
     /// Duration in milliseconds
     pub dur_ms: u64,
 
@@ -189,7 +188,7 @@ mod tests {
             transport: RequestType::TCP,
             client: "172.16.0.1".to_string(),
             message: "Connection timeout".to_string(),
-            r#type: ResolveErrorType::Timeout,
+            r#type: ErrorType::Timeout,
             dur_ms: 5000,
             qname: Some("example.com".to_string()),
             qtype: Some(1),
@@ -199,7 +198,7 @@ mod tests {
         assert_eq!(event.transport, RequestType::TCP);
         assert_eq!(event.client, "172.16.0.1");
         assert_eq!(event.message, "Connection timeout");
-        assert_eq!(event.r#type, ResolveErrorType::Timeout);
+        assert_eq!(event.r#type, ErrorType::Timeout);
         assert_eq!(event.dur_ms, 5000);
         assert_eq!(event.qname, Some("example.com".to_string()));
         assert_eq!(event.qtype, Some(1));
@@ -212,7 +211,7 @@ mod tests {
             transport: RequestType::UDP,
             client: "8.8.8.8".to_string(),
             message: "DNS server error".to_string(),
-            r#type: ResolveErrorType::InvalidRequest,
+            r#type: ErrorType::InvalidRequest,
             dur_ms: 200,
             qname: Some("fail.example.com".to_string()),
             qtype: Some(28),
@@ -224,7 +223,7 @@ mod tests {
         assert_eq!(db_model.transport, RequestType::UDP as i64);
         assert_eq!(db_model.client, "8.8.8.8");
         assert_eq!(db_model.message, "DNS server error");
-        assert_eq!(db_model.r#type, ResolveErrorType::InvalidRequest as i64);
+        assert_eq!(db_model.r#type, ErrorType::InvalidRequest as i64);
         assert_eq!(db_model.dur_ms, 200);
         assert_eq!(db_model.qname, Some("fail.example.com".to_string()));
         assert_eq!(db_model.qtype, Some(28));
@@ -237,7 +236,7 @@ mod tests {
             transport: RequestType::TCP,
             client: "1.1.1.1".to_string(),
             message: "Malformed request".to_string(),
-            r#type: ResolveErrorType::InvalidRequest,
+            r#type: ErrorType::InvalidRequest,
             dur_ms: 1,
             qname: None,
             qtype: None,
@@ -278,7 +277,7 @@ mod tests {
             transport: RequestType::TCP,
             client: "192.168.1.1".to_string(),
             message: "Error".to_string(),
-            r#type: ResolveErrorType::Timeout,
+            r#type: ErrorType::Timeout,
             dur_ms: 100,
             qname: Some("test.com".to_string()),
             qtype: Some(1),
@@ -316,7 +315,7 @@ mod tests {
             transport: RequestType::TCP,
             client: "127.0.0.1".to_string(),
             message: "Debug test".to_string(),
-            r#type: ResolveErrorType::Timeout,
+            r#type: ErrorType::Timeout,
             dur_ms: 50,
             qname: None,
             qtype: None,
@@ -392,7 +391,7 @@ mod tests {
             transport: RequestType::TCP,
             client: "127.0.0.1".to_string(),
             message: long_message.clone(),
-            r#type: ResolveErrorType::Timeout,
+            r#type: ErrorType::Timeout,
             dur_ms: 100,
             qname: None,
             qtype: None,

@@ -2,6 +2,7 @@ use reso_dns::{DnsMessage, DnsMessageBuilder, Edns};
 
 pub mod blocklist;
 pub mod cache;
+pub mod metrics;
 pub mod ratelimit;
 
 pub fn echo_edns(query: &DnsMessage, mut builder: DnsMessageBuilder) -> DnsMessageBuilder {

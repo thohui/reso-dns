@@ -3,9 +3,19 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use bytes::Bytes;
 use once_cell::sync::OnceCell;
-use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use reso_dns::DnsMessage;
 use tokio::time::Instant;
+
+/// Classifies the kind of error that occurred during request processing.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(i64)]
+pub enum ErrorType {
+    Timeout,
+    InvalidRequest,
+    InvalidResponse,
+    MalformedResponse,
+    Other,
+}
 
 /// The type of DNS request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,7 +31,7 @@ pub enum RequestType {
 
 /// Context for a DNS request.
 /// Every request gets its own context instance.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct DnsRequestCtx<G, L> {
     request_address: SocketAddr,
     request_type: RequestType,
@@ -29,7 +39,7 @@ pub struct DnsRequestCtx<G, L> {
     message: OnceCell<DnsMessage>,
     budget: RequestBudget,
     global: Arc<G>,
-    local: Arc<RwLock<L>>,
+    local: L,
 }
 
 impl<G, L> DnsRequestCtx<G, L> {
@@ -48,7 +58,7 @@ impl<G, L> DnsRequestCtx<G, L> {
             raw,
             message: OnceCell::new(),
             global,
-            local: Arc::new(RwLock::new(local)),
+            local,
         }
     }
 
@@ -83,34 +93,55 @@ impl<G, L> DnsRequestCtx<G, L> {
         &self.global
     }
 
-    /// Local context
-    pub fn local(&self) -> RwLockReadGuard<'_, L> {
-        self.local.read()
+    pub fn local(&self) -> &L {
+        &self.local
+    }
+    pub fn local_mut(&mut self) -> &mut L {
+        &mut self.local
+    }
+}
+
+pub struct DnsResponse {
+    bytes: Bytes,
+    message: OnceCell<DnsMessage>,
+}
+
+impl DnsResponse {
+    pub fn from_bytes(bytes: Bytes) -> Self {
+        Self {
+            bytes,
+            message: OnceCell::new(),
+        }
     }
 
-    /// Mutable local context
-    pub fn local_mut(&self) -> RwLockWriteGuard<'_, L> {
-        self.local.write()
+    pub fn from_parsed(raw: Bytes, message: DnsMessage) -> Self {
+        Self {
+            bytes: raw,
+            message: OnceCell::with_value(message),
+        }
+    }
+
+    pub fn bytes(&self) -> Bytes {
+        // this is fine, as `Bytes` is reference counted and cloning it is cheap.
+        self.bytes.clone()
+    }
+
+    pub fn message(&self) -> anyhow::Result<&DnsMessage> {
+        self.message.get_or_try_init(|| DnsMessage::decode(&self.bytes))
     }
 }
 
 /// Trait for DNS middlewares that can process DNS requests.
 #[async_trait]
 pub trait DnsMiddleware<G, L>: Send + Sync {
-    async fn on_query(&self, ctx: &DnsRequestCtx<G, L>) -> anyhow::Result<Option<Bytes>>;
-}
-
-/// Run the middlewares in order, returning the first response found.
-pub async fn run_middlewares<G, L>(
-    mws: std::sync::Arc<Vec<Arc<dyn DnsMiddleware<G, L>>>>,
-    ctx: &DnsRequestCtx<G, L>,
-) -> anyhow::Result<Option<Bytes>> {
-    for m in mws.iter() {
-        if let Some(resp) = m.on_query(ctx).await? {
-            return Ok(Some(resp));
-        }
+    async fn on_query(&self, _ctx: &mut DnsRequestCtx<G, L>) -> anyhow::Result<Option<DnsResponse>> {
+        Ok(None)
     }
-    Ok(None)
+    async fn on_response(&self, _ctx: &mut DnsRequestCtx<G, L>, _response: &mut DnsResponse) -> anyhow::Result<()> {
+        Ok(())
+    }
+    /// Called when an error occurs during request processing.
+    async fn on_error(&self, _ctx: &mut DnsRequestCtx<G, L>, _error: &ErrorType, _message: &str) {}
 }
 
 /// A budget for processing a DNS request, based on a deadline.

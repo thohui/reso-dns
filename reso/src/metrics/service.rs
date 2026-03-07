@@ -233,8 +233,3 @@ impl MetricsService {
     }
 }
 
-impl Drop for MetricsService {
-    fn drop(&mut self) {
-        futures::executor::block_on(self.flush_events())
-    }
-}

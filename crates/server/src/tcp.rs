@@ -5,14 +5,13 @@ use arc_swap::ArcSwap;
 use bytes::Bytes;
 use reso_context::{DnsRequestCtx, RequestType};
 use reso_dns::{DnsMessage, DnsMessageBuilder};
-use reso_resolver::ResolveError;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     task::JoinSet,
 };
 
-use crate::ServerState;
+use crate::{ServerError, ServerState, handle_request};
 
 /// Run the DNS server over TCP.
 #[allow(clippy::too_many_arguments)]
@@ -42,11 +41,7 @@ where
                 let (mut stream, client) = result?;
 
                 let state = state.load_full();
-                let resolver = state.resolver.clone();
-                let middlewares = state.middlewares.clone();
                 let global = state.global.clone();
-                let on_success = state.on_success.clone();
-                let on_error = state.on_error.clone();
 
                 inflight.spawn(async move {
                     let mut len_buf = [0u8; 2];
@@ -66,7 +61,7 @@ where
 
                     let bytes = Bytes::from(buf);
 
-                    let ctx = DnsRequestCtx::new(
+                    let mut ctx = DnsRequestCtx::new(
                         state.timeout,
                         client.into(),
                         RequestType::TCP,
@@ -75,23 +70,10 @@ where
                         L::default(),
                     );
 
-                    if let Ok(Some(resp)) = reso_context::run_middlewares(middlewares, &ctx).await {
-                        let _ = write_tcp_response(&mut stream, &resp).await;
-
-                        if let Some(cb) = &on_success {
-                            let _ = cb(&ctx, &resp).await;
-                        }
-                        return;
-                    }
-
-                    match resolver.resolve(&ctx).await {
+                    match handle_request(&mut ctx, state).await {
                         Ok(resp) => {
-                            let _ = write_tcp_response(&mut stream, &resp).await;
-
-                            if let Some(cb) = &on_success {
-                                let _ = cb(&ctx, &resp).await;
-                            }
-                        }
+                            let _ = write_tcp_response(&mut stream, &resp.bytes()).await;
+                        },
                         Err(e) => {
                             if let Ok(message) = ctx.message() {
                                 let res = write_tcp_server_error_response(message, &mut stream, &e).await;
@@ -99,11 +81,9 @@ where
                                     tracing::warn!("failed to write error response to client {}: {}", client, err);
                                 }
                             }
-                            if let Some(cb) = &on_error {
-                                let _ = cb(&ctx, &e).await;
-                            }
                         }
                     }
+
                 });
             }
             _ = shutdown.cancelled() => {
@@ -137,7 +117,7 @@ async fn write_tcp_response(stream: &mut tokio::net::TcpStream, response: &Bytes
 async fn write_tcp_server_error_response(
     message: &DnsMessage,
     stream: &mut TcpStream,
-    error: &ResolveError,
+    error: &ServerError,
 ) -> anyhow::Result<()> {
     let bytes = DnsMessageBuilder::new()
         .with_id(message.id)
