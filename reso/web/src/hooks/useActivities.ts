@@ -1,13 +1,15 @@
-import { useSuspenseQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useApiClient } from '../contexts/ApiClientContext';
+import type { ActivityListRequest } from '../lib/api/activity';
 
-export function useActivities(top: number, skip: number) {
+export function useActivities(req: ActivityListRequest) {
 	const apiClient = useApiClient();
 
-	return useSuspenseQuery({
-		queryKey: ['activities', top, skip],
+	return useQuery({
+		queryKey: ['activities', req],
 		queryFn: async () => {
-			return apiClient.activities.list({ top: top, skip: skip });
+			return apiClient.activities.list(req);
 		},
+		placeholderData: keepPreviousData,
 	});
 }

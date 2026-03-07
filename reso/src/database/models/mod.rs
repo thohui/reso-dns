@@ -5,3 +5,8 @@ pub mod error_log;
 pub mod query_log;
 pub mod user;
 pub mod user_session;
+
+pub struct Page<T> {
+    pub items: Vec<T>,
+    pub total: i64,
+}
