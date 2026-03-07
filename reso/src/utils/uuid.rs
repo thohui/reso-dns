@@ -12,8 +12,8 @@ pub struct EntityId<T> {
 impl<T> Clone for EntityId<T> {
     fn clone(&self) -> Self {
         Self {
-            inner: self.inner.clone(),
-            _phantom: self._phantom.clone(),
+            inner: self.inner,
+            _phantom: self._phantom,
         }
     }
 }

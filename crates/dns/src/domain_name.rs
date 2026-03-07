@@ -201,7 +201,7 @@ impl DomainName {
         // Remove trailing dot if present.
         let s = s.strip_suffix('.').unwrap_or(s);
 
-        let raw_labels: Vec<Vec<u8>> = s.split('.').map(|label| unescape_label(label)).collect();
+        let raw_labels: Vec<Vec<u8>> = s.split('.').map(unescape_label).collect();
 
         // Validate no empty labels
         for (i, label) in raw_labels.iter().enumerate() {

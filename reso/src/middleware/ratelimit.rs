@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use reso_context::{DnsMiddleware, DnsRequestCtx, DnsResponse};
-use reso_dns::{DnsFlags, DnsMessage, DnsMessageBuilder, DnsOpcode, DnsResponseCode};
+use reso_dns::{DnsFlags, DnsMessage, DnsMessageBuilder, DnsResponseCode};
 
 use crate::{
     global::Global,

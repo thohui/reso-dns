@@ -39,7 +39,7 @@ pub(crate) struct LoginPayload {
 }
 
 #[derive(Serialize)]
-struct CheckResponse {
+pub struct CheckResponse {
     authenticated: bool,
     setup_required: bool,
 }
@@ -169,12 +169,12 @@ pub async fn check(
         }));
     }
 
-    let authenticated = (|| async {
+    let authenticated = async {
         let value = jar.get(cookie::SESSION_COOKIE_KEY)?.value().to_string();
         let id = cookie::decrypt_session_cookie(&global.cipher, &value).ok()?;
         let session = UserSession::find_by_id(&global.database, id).await.ok()??;
         if session.is_expired() { None } else { Some(()) }
-    })()
+    }
     .await
     .is_some();
 

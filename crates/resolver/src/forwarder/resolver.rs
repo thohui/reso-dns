@@ -56,8 +56,7 @@ where
 {
     async fn resolve(&self, ctx: &DnsRequestCtx<G, L>) -> Result<DnsResponse, ResolveError> {
         let query_message = ctx
-            .message()
-            .or_else(|e| Err(ResolveError::InvalidRequest(e.to_string())))?;
+            .message().map_err(|e| ResolveError::InvalidRequest(e.to_string()))?;
 
         if query_message.questions().len() != 1 {
             return Err(ResolveError::InvalidRequest(format!(
@@ -72,7 +71,7 @@ where
 
         let query = ctx.raw();
         let request_type = ctx.request_type();
-        let budget = ctx.budget().clone();
+        let budget = *ctx.budget();
 
         let resp_arc = self
             .inflight_requests
@@ -101,7 +100,7 @@ where
         let response = resp_arc.as_ref().clone().into_custom_response(query_message.id);
 
         let response_message =
-            DnsMessage::decode(&response).or_else(|e| Err(ResolveError::InvalidResponse(e.to_string())))?;
+            DnsMessage::decode(&response).map_err(|e| ResolveError::InvalidResponse(e.to_string()))?;
 
         // ensure that the response has exactly one question
         if response_message.questions().len() != 1 {

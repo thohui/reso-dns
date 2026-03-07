@@ -43,7 +43,7 @@ enum NegativeCacheKey {
 }
 
 fn has_do_bit(message: &DnsMessage) -> bool {
-    message.edns().as_ref().map_or(false, |e| e.do_bit())
+    message.edns().as_ref().is_some_and(|e| e.do_bit())
 }
 
 impl TryFrom<&DnsMessage> for CacheKey {
@@ -233,11 +233,10 @@ impl DnsMessageCache {
                 _ => None,
             };
 
-            if let Some(kind) = neg_kind {
-                if let Some(inserted) = self.insert_negative(query_msg, resp_msg, kind).await {
+            if let Some(kind) = neg_kind
+                && let Some(inserted) = self.insert_negative(query_msg, resp_msg, kind).await {
                     return inserted;
                 }
-            }
         }
 
         // Group the records by their record types.
