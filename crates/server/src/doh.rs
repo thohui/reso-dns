@@ -56,7 +56,7 @@ pub struct DohConfig {
 pub async fn run_doh<G, L>(
     config: DohConfig,
     bind_addr: SocketAddr,
-    state: &ArcSwap<ServerState<G, L>>,
+    state: Arc<ArcSwap<ServerState<G, L>>>,
 ) -> anyhow::Result<()>
 where
     G: Send + Sync + 'static,

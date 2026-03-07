@@ -56,13 +56,13 @@ pub struct ServerState<G, L> {
 
 /// DNS Server
 pub struct DnsServer<G, L> {
-    state: ArcSwap<ServerState<G, L>>,
+    state: Arc<ArcSwap<ServerState<G, L>>>,
 }
 
 impl<L: Default + Send + Sync + 'static, G: Send + Sync + 'static> DnsServer<G, L> {
     pub fn new(state: ServerState<G, L>) -> Self {
         Self {
-            state: ArcSwap::new(state.into()),
+            state: Arc::new(ArcSwap::new(state.into())),
         }
     }
 
@@ -76,7 +76,7 @@ impl<L: Default + Send + Sync + 'static, G: Send + Sync + 'static> DnsServer<G, 
         bind_addr: SocketAddr,
         shutdown: tokio_util::sync::CancellationToken,
     ) -> anyhow::Result<()> {
-        run_tcp(bind_addr, &self.state, shutdown).await
+        run_tcp(bind_addr, self.state.clone(), shutdown).await
     }
 
     /// Serve the server over UDP.
@@ -85,12 +85,12 @@ impl<L: Default + Send + Sync + 'static, G: Send + Sync + 'static> DnsServer<G, 
         bind_addr: SocketAddr,
         shutdown: tokio_util::sync::CancellationToken,
     ) -> anyhow::Result<()> {
-        run_udp(bind_addr, &self.state, shutdown).await
+        run_udp(bind_addr, self.state.clone(), shutdown).await
     }
 
     /// Serve the server over DOH.
     pub async fn serve_doh(&self, bind_addr: SocketAddr, config: DohConfig) -> anyhow::Result<()> {
-        run_doh(config, bind_addr, &self.state).await
+        run_doh(config, bind_addr, self.state.clone()).await
     }
 }
 

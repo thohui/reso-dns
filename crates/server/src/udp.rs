@@ -11,7 +11,7 @@ use crate::{ServerError, ServerState, handle_request};
 /// Run the DNS server over UDP.
 pub async fn run_udp<G, L>(
     bind_addr: SocketAddr,
-    state: &ArcSwap<ServerState<G, L>>,
+    state: Arc<ArcSwap<ServerState<G, L>>>,
     shutdown: tokio_util::sync::CancellationToken,
 ) -> anyhow::Result<()>
 where
