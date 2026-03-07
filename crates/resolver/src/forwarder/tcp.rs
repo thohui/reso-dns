@@ -188,7 +188,10 @@ impl TcpConn {
             .map_err(UpstreamError::RecvError)?;
         let n = u16::from_be_bytes(resp_lenb) as usize;
 
-        self.recv_buf.reserve(n.saturating_sub(self.recv_buf.capacity()));
+        // pre allocate more memory if needed.
+        if n > self.recv_buf.capacity() {
+            self.recv_buf.reserve(n - self.recv_buf.len());
+        }
         self.recv_buf.resize(n, 0);
 
         timeout_at(deadline, self.stream.read_exact(&mut self.recv_buf[..]))
