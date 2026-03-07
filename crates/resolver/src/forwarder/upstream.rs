@@ -59,7 +59,7 @@ impl Upstreams {
             loop {
                 ticker.tick().await;
                 match weak.upgrade() {
-                    Some(this) => this.rebuild_healthy_cache_if_dirty(),
+                    Some(this) => this.rebuild_healthy_cache(),
                     None => return,
                 }
             }
@@ -78,14 +78,6 @@ impl Upstreams {
         }
         let i = self.rr.fetch_add(1, Ordering::Relaxed) % n;
         Some((upstreams, i))
-    }
-
-    fn rebuild_healthy_cache_if_dirty(&self) {
-        // clear every upstream's dirty flag.
-        let dirty = self.list.iter().fold(false, |acc, u| acc | u.take_dirty());
-        if dirty {
-            self.healthy_cache.store(Arc::new(Self::compute_healthy(&self.list)));
-        }
     }
 
     pub fn rebuild_healthy_cache(&self) {
@@ -166,8 +158,6 @@ pub struct Upstream {
     pub tcp: Arc<TcpPool>,
     /// Health status of the upstream, used to determine if it should be skipped for new requests.
     pub health: UpstreamHealth,
-    /// Set when health changes so the healthy cache gets rebuilt on the next tick.
-    dirty: AtomicBool,
     /// Flag to prevent concurrent UDP reconnect attempts.
     udp_reconnecting: AtomicBool,
 }
@@ -182,7 +172,6 @@ impl Upstream {
             tcp,
             udp: ArcSwap::from_pointee(UpstreamUdpMux::new(addr).await?),
             health: UpstreamHealth::new(),
-            dirty: AtomicBool::new(false),
             udp_reconnecting: AtomicBool::new(false),
         })
     }
@@ -198,20 +187,6 @@ impl Upstream {
                 .as_millis() as u64;
             current_time_ms >= skip_until
         }
-    }
-
-    pub fn record_success(&self) {
-        self.health.record_success(self.addr);
-        self.dirty.store(true, Ordering::Relaxed);
-    }
-
-    pub fn record_failure(&self) {
-        self.health.record_failure(self.addr);
-        self.dirty.store(true, Ordering::Relaxed);
-    }
-
-    fn take_dirty(&self) -> bool {
-        self.dirty.swap(false, Ordering::Relaxed)
     }
 
     pub fn trigger_udp_reconnect(self: Arc<Self>) {

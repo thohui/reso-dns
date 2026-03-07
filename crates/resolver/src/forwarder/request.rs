@@ -86,7 +86,7 @@ impl UpstreamResolveRequest {
 
             let resp = match attempt_res {
                 Ok(r) => {
-                    upstream.record_success();
+                    upstream.health.record_success(upstream.addr);
                     r
                 }
                 Err(ref e) => {
@@ -98,7 +98,7 @@ impl UpstreamResolveRequest {
                             | UpstreamError::RecvError(_)
                             | UpstreamError::RecvTaskStopped
                     ) {
-                        upstream.record_failure();
+                        upstream.health.record_failure(upstream.addr);
                     }
 
                     if let UpstreamError::RecvTaskStopped = *e {
