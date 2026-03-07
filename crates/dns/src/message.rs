@@ -990,7 +990,10 @@ impl DnsWritable for Edns {
         writer.write_u32(ttl)?;
 
         // RDLEN = sum over options of (code(2) + len(2) + data(len))
-        let rdlen: u16 = self.options.iter().map(|opt| 4u16 + opt.wire_len()).sum();
+        let rdlen: usize = self.options.iter().map(|opt| 4 + opt.wire_len() as usize).sum();
+        let rdlen: u16 = rdlen
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("EDNS OPT RDATA length overflow: {}", rdlen))?;
         writer.write_u16(rdlen)?;
 
         for opt in &self.options {

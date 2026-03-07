@@ -154,8 +154,14 @@ impl MetricsService {
                     // drain any buffered messages before flushing
                     while let Ok(msg) = self.rx.try_recv() {
                         match msg {
-                            MetricsMessage::Query(ev) => self.live_stats.write().await.apply_event(&ev),
-                            MetricsMessage::Error(ev) => self.live_stats.write().await.apply_error(&ev),
+                            MetricsMessage::Query(ev) => {
+                                self.live_stats.write().await.apply_event(&ev);
+                                self.query_batch.push(ev);
+                            },
+                            MetricsMessage::Error(ev) => {
+                                self.live_stats.write().await.apply_error(&ev);
+                                self.error_batch.push(ev);
+                            },
                             MetricsMessage::Shutdown => break,
                         }
                     }
