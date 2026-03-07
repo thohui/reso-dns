@@ -50,7 +50,6 @@ where
                         if let Err(e) = stream.read_exact(&mut len_buf).await {
                             if e.kind() != std::io::ErrorKind::UnexpectedEof {
                                 tracing::debug!("failed to read length from client {}: {}", client, e);
-                                continue;
                             }
                             return;
                         }
@@ -60,8 +59,7 @@ where
 
                         if let Err(e) = stream.read_exact(&mut buf).await {
                             if e.kind() != std::io::ErrorKind::UnexpectedEof {
-                                tracing::debug!("failed to read length from client {}: {}", client, e);
-                                continue;
+                                tracing::debug!("failed to read query from client {}: {}", client, e);
                             }
                             return;
                         }
@@ -82,16 +80,16 @@ where
                             Ok(resp) => {
                                 if let Err(e) = write_tcp_response(&mut stream, &resp.bytes()).await {
                                     tracing::debug!("failed to write tcp response to client: {:?}", e);
-                                    continue;
+                                    return;
                                 }
                             }
                             Err(e) => {
                                 if let Ok(message) = ctx.message() {
                                     if let Err(e) = write_tcp_server_error_response(message, &mut stream, &e).await {
                                         tracing::debug!("failed to write tcp server response to client: {:?}", e);
+                                        return;
                                     }
                                 }
-                                tracing::debug!("server error: {}", e);
                                 continue;
                             }
                         }
