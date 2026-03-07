@@ -49,7 +49,7 @@ pub async fn setup(
     jar: CookieJar,
     payload: Json<LoginPayload>,
 ) -> axum::response::Result<Response, ApiError> {
-    let count = User::count(&global.database).await.map_err(|e| {
+    let count = User::count(&global.core_database).await.map_err(|e| {
         tracing::error!("failed to count users: {:?}", e);
         ApiError::server_error()
     })?;
@@ -70,7 +70,7 @@ pub async fn setup(
     let user = User::new(payload.username.trim(), password_hash);
     let user_id = user.id.clone();
 
-    user.insert(&global.database).await.map_err(|e| {
+    user.insert(&global.core_database).await.map_err(|e| {
         tracing::error!("failed to insert user: {:?}", e);
         ApiError::server_error()
     })?;
@@ -78,7 +78,7 @@ pub async fn setup(
     let session = UserSession::new(user_id);
     let session_id = session.id.clone();
 
-    session.insert(&global.database).await.map_err(|e| {
+    session.insert(&global.core_database).await.map_err(|e| {
         tracing::error!("failed to insert user session: {:?}", e);
         ApiError::server_error()
     })?;
@@ -101,7 +101,7 @@ pub async fn login(
     jar: CookieJar,
     payload: Json<LoginPayload>,
 ) -> axum::response::Result<Response, ApiError> {
-    let user = match User::find_by_name(&global.database, payload.username.clone()).await {
+    let user = match User::find_by_name(&global.core_database, payload.username.clone()).await {
         Ok(Some(user)) => user,
         Ok(None) => {
             let _ = password::hash_password(&payload.password);
@@ -122,7 +122,7 @@ pub async fn login(
     let session = UserSession::new(user.id);
     let session_id = session.id.clone();
 
-    session.insert(&global.database).await.map_err(|e| {
+    session.insert(&global.core_database).await.map_err(|e| {
         tracing::error!("failed to insert user session: {:?}", e);
         ApiError::server_error()
     })?;
@@ -146,7 +146,7 @@ pub async fn logout(
     let jar = jar.remove(cookie::SESSION_COOKIE_KEY);
 
     session
-        .delete(&global.database)
+        .delete(&global.core_database)
         .await
         .map_err(|_| ApiError::server_error().cookie_jar(jar.clone()))?;
 
@@ -157,7 +157,7 @@ pub async fn check(
     global: State<SharedGlobal>,
     jar: CookieJar,
 ) -> axum::response::Result<Json<CheckResponse>, ApiError> {
-    let count = User::count(&global.database).await.map_err(|e| {
+    let count = User::count(&global.core_database).await.map_err(|e| {
         tracing::error!("failed to count users: {:?}", e);
         ApiError::server_error()
     })?;
@@ -172,7 +172,7 @@ pub async fn check(
     let authenticated = async {
         let value = jar.get(cookie::SESSION_COOKIE_KEY)?.value().to_string();
         let id = cookie::decrypt_session_cookie(&global.cipher, &value).ok()?;
-        let session = UserSession::find_by_id(&global.database, id).await.ok()??;
+        let session = UserSession::find_by_id(&global.core_database, id).await.ok()??;
         if session.is_expired() { None } else { Some(()) }
     }
     .await

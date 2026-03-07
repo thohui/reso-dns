@@ -1,7 +1,7 @@
 use anyhow::Context;
 use rusqlite::params;
 
-use crate::database::DatabaseConnection;
+use crate::database::MetricsDatabasePool;
 
 #[derive(Debug, Clone)]
 pub struct DnsErrorLog {
@@ -16,7 +16,7 @@ pub struct DnsErrorLog {
 }
 
 impl DnsErrorLog {
-    pub async fn insert(self, db: &DatabaseConnection) -> anyhow::Result<()> {
+    pub async fn insert(self, db: &MetricsDatabasePool) -> anyhow::Result<()> {
         db.interact(move |c| {
             c.execute(
                 r#"
@@ -44,36 +44,12 @@ impl DnsErrorLog {
         Ok(())
     }
 
-    pub async fn batch_insert(db: &DatabaseConnection, rows: &[Self]) -> anyhow::Result<()> {
+    pub async fn batch_insert(db: &MetricsDatabasePool, rows: &[Self]) -> anyhow::Result<()> {
         if rows.is_empty() {
             return Ok(());
         }
 
-        #[derive(Clone)]
-        struct RowOwned {
-            pub ts_ms: i64,
-            pub transport: i64,
-            pub client: String,
-            pub message: String,
-            pub r#type: i64,
-            pub dur_ms: i64,
-            pub qname: Option<String>,
-            pub qtype: Option<i64>,
-        }
-
-        let owned: Vec<RowOwned> = rows
-            .iter()
-            .map(|r| RowOwned {
-                ts_ms: r.ts_ms,
-                transport: r.transport,
-                client: r.client.clone(),
-                message: r.message.clone(),
-                r#type: r.r#type,
-                dur_ms: r.dur_ms,
-                qname: r.qname.clone(),
-                qtype: r.qtype,
-            })
-            .collect();
+        let owned = rows.to_vec();
 
         db.interact(move |c| {
             let tx = c.transaction()?;
@@ -111,7 +87,7 @@ impl DnsErrorLog {
         Ok(())
     }
 
-    pub async fn list(db: &DatabaseConnection, limit: i64, offset: i64) -> anyhow::Result<Vec<Self>> {
+    pub async fn list(db: &MetricsDatabasePool, limit: i64, offset: i64) -> anyhow::Result<Vec<Self>> {
         Ok(db
             .interact(move |c| {
                 let mut stmt = c.prepare(
@@ -143,7 +119,7 @@ impl DnsErrorLog {
             .context("failed to list DNS error logs")?)
     }
 
-    pub async fn delete_before(db: &DatabaseConnection, cutoff_ts_ms: i64) -> anyhow::Result<()> {
+    pub async fn delete_before(db: &MetricsDatabasePool, cutoff_ts_ms: i64) -> anyhow::Result<()> {
         db.interact(move |c| {
             c.execute("DELETE FROM dns_error_log WHERE ts_ms < ?1", params![cutoff_ts_ms])?;
             Ok(())
@@ -152,5 +128,90 @@ impl DnsErrorLog {
         .context("failed to delete old DNS error logs")?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::setup_metrics_test_db;
+
+    fn make_row(ts_ms: i64) -> DnsErrorLog {
+        DnsErrorLog {
+            ts_ms,
+            transport: 1,
+            client: "127.0.0.1".to_string(),
+            message: "timeout".to_string(),
+            r#type: 2,
+            dur_ms: 100,
+            qname: Some("example.com".to_string()),
+            qtype: Some(1),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_batch_insert_round_trips_fields() {
+        let db = setup_metrics_test_db().await.unwrap();
+        let row = make_row(1000);
+
+        DnsErrorLog::batch_insert(&db.conn, &[row.clone()]).await.unwrap();
+
+        let results = DnsErrorLog::list(&db.conn, 10, 0).await.unwrap();
+        assert_eq!(results.len(), 1);
+
+        let r = &results[0];
+        assert_eq!(r.ts_ms, row.ts_ms);
+        assert_eq!(r.transport, row.transport);
+        assert_eq!(r.client, row.client);
+        assert_eq!(r.message, row.message);
+        assert_eq!(r.r#type, row.r#type);
+        assert_eq!(r.dur_ms, row.dur_ms);
+        assert_eq!(r.qname, row.qname);
+        assert_eq!(r.qtype, row.qtype);
+    }
+
+    #[tokio::test]
+    async fn test_optional_fields_stored_as_null() {
+        let db = setup_metrics_test_db().await.unwrap();
+        let row = DnsErrorLog {
+            qname: None,
+            qtype: None,
+            ..make_row(1000)
+        };
+
+        DnsErrorLog::batch_insert(&db.conn, &[row]).await.unwrap();
+
+        let results = DnsErrorLog::list(&db.conn, 10, 0).await.unwrap();
+        assert_eq!(results[0].qname, None);
+        assert_eq!(results[0].qtype, None);
+    }
+
+    #[tokio::test]
+    async fn test_list_ordered_by_ts_desc() {
+        let db = setup_metrics_test_db().await.unwrap();
+
+        DnsErrorLog::batch_insert(&db.conn, &[make_row(1000), make_row(3000), make_row(2000)])
+            .await
+            .unwrap();
+
+        let results = DnsErrorLog::list(&db.conn, 10, 0).await.unwrap();
+        assert_eq!(results[0].ts_ms, 3000);
+        assert_eq!(results[1].ts_ms, 2000);
+        assert_eq!(results[2].ts_ms, 1000);
+    }
+
+    #[tokio::test]
+    async fn test_delete_before_removes_old_rows() {
+        let db = setup_metrics_test_db().await.unwrap();
+
+        DnsErrorLog::batch_insert(&db.conn, &[make_row(1000), make_row(2000), make_row(3000)])
+            .await
+            .unwrap();
+
+        DnsErrorLog::delete_before(&db.conn, 2000).await.unwrap();
+
+        let results = DnsErrorLog::list(&db.conn, 10, 0).await.unwrap();
+        assert_eq!(results.len(), 2);
+        assert!(results.iter().all(|r| r.ts_ms >= 2000));
     }
 }

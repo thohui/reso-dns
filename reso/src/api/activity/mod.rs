@@ -25,7 +25,7 @@ pub async fn activity(
     global: State<SharedGlobal>,
     pagination: Query<PagedQuery>,
 ) -> Result<Json<PagedResponse<Activity>>, ApiError> {
-    let conn = &global.database;
+    let conn = &global.metrics_database;
 
     let top = pagination.top();
     let skip = pagination.skip();

@@ -3,7 +3,7 @@ use chrono::Utc;
 use rusqlite::{OptionalExtension, params};
 use uuid::Uuid;
 
-use crate::{database::DatabaseConnection, utils::uuid::EntityId};
+use crate::{database::CoreDatabasePool, utils::uuid::EntityId};
 
 use super::user::User;
 
@@ -35,7 +35,7 @@ impl UserSession {
         }
     }
 
-    pub async fn insert(self, db: &DatabaseConnection) -> anyhow::Result<()> {
+    pub async fn insert(self, db: &CoreDatabasePool) -> anyhow::Result<()> {
         db.interact(move |c| {
             c.execute(
                 r#"
@@ -53,7 +53,7 @@ impl UserSession {
         Ok(())
     }
 
-    pub async fn find_by_id(db: &DatabaseConnection, id: EntityId<Self>) -> anyhow::Result<Option<Self>> {
+    pub async fn find_by_id(db: &CoreDatabasePool, id: EntityId<Self>) -> anyhow::Result<Option<Self>> {
         Ok(db
             .interact(move |c| {
                 c.query_row(
@@ -76,7 +76,7 @@ impl UserSession {
             .context("failed to find user session by id")?)
     }
 
-    pub async fn delete(self, db: &DatabaseConnection) -> anyhow::Result<()> {
+    pub async fn delete(self, db: &CoreDatabasePool) -> anyhow::Result<()> {
         db.interact(move |c| {
             c.execute("DELETE FROM user_sessions where id = ?", params![self.id.id()])?;
             Ok(())
@@ -85,7 +85,7 @@ impl UserSession {
         Ok(())
     }
 
-    pub async fn delete_by_user_id(db: &DatabaseConnection, user_id: EntityId<User>) -> anyhow::Result<()> {
+    pub async fn delete_by_user_id(db: &CoreDatabasePool, user_id: EntityId<User>) -> anyhow::Result<()> {
         db.interact(move |c| {
             c.execute("DELETE FROM user_sessions where user_id = ?", params![user_id.id()])?;
             Ok(())

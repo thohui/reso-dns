@@ -11,7 +11,7 @@ use tokio::{
 
 use super::event::{ErrorLogEvent, QueryLogEvent};
 use crate::database::{
-    DatabaseConnection,
+    MetricsDatabasePool,
     models::{error_log::DnsErrorLog, query_log::DnsQueryLog},
 };
 
@@ -24,7 +24,7 @@ pub enum MetricsMessage {
 
 /// Service for handling metrics.
 pub struct MetricsService {
-    connection: Arc<DatabaseConnection>,
+    connection: Arc<MetricsDatabasePool>,
     rx: Receiver<MetricsMessage>,
     query_batch: Vec<QueryLogEvent>,
     error_batch: Vec<ErrorLogEvent>,
@@ -108,7 +108,7 @@ impl Stats {
 }
 
 impl MetricsService {
-    pub fn new(connection: Arc<DatabaseConnection>, buffer: usize) -> (MetricsHandle, Stats, Self) {
+    pub fn new(connection: Arc<MetricsDatabasePool>, buffer: usize) -> (MetricsHandle, Stats, Self) {
         let ts_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()

@@ -39,7 +39,7 @@ pub async fn list(
         ApiError::bad_request()
     })?;
 
-    let blocked_domains = match BlockedDomain::list(&global.database, db_top, db_skip).await {
+    let blocked_domains = match BlockedDomain::list(&global.core_database, db_top, db_skip).await {
         Ok(domains) => domains,
         Err(e) => {
             tracing::error!("failed list blocked domains: {:?}", e);
@@ -47,7 +47,7 @@ pub async fn list(
         }
     };
 
-    let count: u64 = match BlockedDomain::row_count(&global.database).await {
+    let count: u64 = match BlockedDomain::row_count(&global.core_database).await {
         Ok(count) => count.try_into().map_err(|_| {
             tracing::error!("negative row count: {}", count);
             ApiError::server_error()

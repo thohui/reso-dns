@@ -57,3 +57,4 @@ tempfile = "3.15.0"
 [features]
 default = ["embed-frontend"]
 embed-frontend = ["dep:rust-embed"]
+tempfile = ["dep:tempfile"]

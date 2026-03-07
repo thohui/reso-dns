@@ -3,7 +3,7 @@ use tokio::runtime::Builder;
 
 use aes_gcm::{AesGcm, KeyInit, aead::generic_array::GenericArray};
 use api::serve_web;
-use database::{connect, run_migrations};
+use database::{connect_core_db, run_core_db_migrations};
 use env_config::EnvConfig;
 use global::{Global, SharedGlobal};
 use metrics::service::MetricsService;
@@ -14,6 +14,8 @@ use tokio::signal;
 use tracing::level_filters::LevelFilter;
 use tracing_appender::non_blocking;
 use tracing_subscriber::{Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+
+use crate::database::{connect_metrics_db, run_metrics_db_migrations};
 
 mod api;
 mod database;
@@ -50,18 +52,22 @@ async fn run() -> anyhow::Result<()> {
         )
         .init();
 
-    let connection = Arc::new(connect(&config.db_path).await?);
-    run_migrations(&connection).await?;
+    let core_db_connection = Arc::new(connect_core_db(&config.db_path).await?);
+    run_core_db_migrations(&core_db_connection).await?;
 
-    let (handle, stats, metrics_service) = MetricsService::new(connection.clone(), 1000);
+    let metrics_db_connection = Arc::new(connect_metrics_db(&config.metrics_db_path).await?);
+    run_metrics_db_migrations(&metrics_db_connection).await?;
+
+    let (handle, stats, metrics_service) = MetricsService::new(metrics_db_connection.clone(), 1000);
 
     let global: SharedGlobal = Arc::new(Global {
         cache: DnsMessageCache::new(50_000),
-        blocklist: BlocklistService::initialize(connection.clone()).await?,
-        config_service: ConfigService::initialize(connection.clone()).await?,
+        blocklist: BlocklistService::initialize(core_db_connection.clone()).await?,
+        config_service: ConfigService::initialize(core_db_connection.clone()).await?,
         metrics: handle,
         stats,
-        database: connection,
+        core_database: core_db_connection,
+        metrics_database: metrics_db_connection,
         cipher: AesGcm::new(&GenericArray::clone_from_slice(&config.cookie_secret)),
     });
 

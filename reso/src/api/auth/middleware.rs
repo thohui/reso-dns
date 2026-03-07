@@ -32,7 +32,7 @@ pub async fn auth_middleware(global: State<SharedGlobal>, mut req: Request, next
         return Err(ApiError::invalid_credentials());
     };
 
-    let session = match UserSession::find_by_id(&global.database, id).await {
+    let session = match UserSession::find_by_id(&global.core_database, id).await {
         Ok(Some(session)) => session,
         Ok(None) => {
             return Err(ApiError::invalid_credentials());
@@ -44,7 +44,7 @@ pub async fn auth_middleware(global: State<SharedGlobal>, mut req: Request, next
     };
 
     if session.is_expired() {
-        if let Err(e) = session.delete(&global.database).await {
+        if let Err(e) = session.delete(&global.core_database).await {
             tracing::error!("failed to delete user session {:?}", e);
         }
         return Err(ApiError::session_expired());

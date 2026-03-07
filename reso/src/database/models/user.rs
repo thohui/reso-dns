@@ -3,7 +3,7 @@ use chrono::Utc;
 use rusqlite::{OptionalExtension, params};
 use uuid::Uuid;
 
-use crate::{database::DatabaseConnection, utils::uuid::EntityId};
+use crate::{database::CoreDatabasePool, utils::uuid::EntityId};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct User {
@@ -25,7 +25,7 @@ impl User {
         }
     }
 
-    pub async fn insert(self, db: &DatabaseConnection) -> anyhow::Result<()> {
+    pub async fn insert(self, db: &CoreDatabasePool) -> anyhow::Result<()> {
         db.interact(move |c| {
             c.execute(
                 r#"
@@ -42,7 +42,7 @@ impl User {
         Ok(())
     }
 
-    pub async fn find_by_name(db: &DatabaseConnection, name: impl Into<String>) -> anyhow::Result<Option<Self>> {
+    pub async fn find_by_name(db: &CoreDatabasePool, name: impl Into<String>) -> anyhow::Result<Option<Self>> {
         let name = name.into();
 
         Ok(db
@@ -66,7 +66,7 @@ impl User {
             .context("failed to find user by name")?)
     }
 
-    pub async fn find_by_id(db: &DatabaseConnection, id: &EntityId<Self>) -> anyhow::Result<Option<Self>> {
+    pub async fn find_by_id(db: &CoreDatabasePool, id: &EntityId<Self>) -> anyhow::Result<Option<Self>> {
         let id = *id.id();
 
         Ok(db
@@ -89,13 +89,13 @@ impl User {
             .context("failed to find user by id")?)
     }
 
-    pub async fn count(db: &DatabaseConnection) -> anyhow::Result<i64> {
+    pub async fn count(db: &CoreDatabasePool) -> anyhow::Result<i64> {
         Ok(db
             .interact(|c| c.query_row("SELECT COUNT(*) FROM users", [], |r| r.get(0)))
             .await?)
     }
 
-    pub async fn list(db: &DatabaseConnection) -> anyhow::Result<Vec<Self>> {
+    pub async fn list(db: &CoreDatabasePool) -> anyhow::Result<Vec<Self>> {
         Ok(db
             .interact(|c| {
                 let mut stmt = c.prepare("SELECT id, name, password_hash, created_at FROM users")?;
@@ -117,7 +117,7 @@ impl User {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::setup_test_db;
+    use crate::database::setup_core_test_db;
 
     #[tokio::test]
     async fn test_user_new() {
@@ -130,13 +130,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_user_insert_and_find_by_name() {
-        let db = setup_test_db().await.unwrap();
+        let db = setup_core_test_db().await.unwrap();
 
         let user = User::new("alice", "password_hash_alice");
 
-        user.clone().insert(&db).await.unwrap();
+        user.clone().insert(&db.conn).await.unwrap();
 
-        let found = User::find_by_name(&db, "alice").await.unwrap();
+        let found = User::find_by_name(&db.conn, "alice").await.unwrap();
         assert!(found.is_some());
 
         let found_user = found.unwrap();
@@ -148,21 +148,21 @@ mod tests {
 
     #[tokio::test]
     async fn test_user_find_by_name_not_found() {
-        let db = setup_test_db().await.unwrap();
+        let db = setup_core_test_db().await.unwrap();
 
-        let result = User::find_by_name(&db, "nonexistent").await.unwrap();
+        let result = User::find_by_name(&db.conn, "nonexistent").await.unwrap();
         assert!(result.is_none());
     }
 
     #[tokio::test]
     async fn test_user_insert_and_find_by_id() {
-        let db = setup_test_db().await.unwrap();
+        let db = setup_core_test_db().await.unwrap();
         let user = User::new("bob", "password_hash_bob");
         let user_id = user.id.clone();
 
-        user.insert(&db).await.unwrap();
+        user.insert(&db.conn).await.unwrap();
 
-        let found = User::find_by_id(&db, &user_id).await.unwrap();
+        let found = User::find_by_id(&db.conn, &user_id).await.unwrap();
         assert!(found.is_some());
 
         let found_user = found.unwrap();
@@ -173,34 +173,34 @@ mod tests {
 
     #[tokio::test]
     async fn test_user_find_by_id_not_found() {
-        let db = setup_test_db().await.unwrap();
+        let db = setup_core_test_db().await.unwrap();
         let random_id = EntityId::<User>::new();
 
-        let result = User::find_by_id(&db, &random_id).await.unwrap();
+        let result = User::find_by_id(&db.conn, &random_id).await.unwrap();
         assert!(result.is_none());
     }
 
     #[tokio::test]
     async fn test_user_list_empty() {
-        let db = setup_test_db().await.unwrap();
+        let db = setup_core_test_db().await.unwrap();
 
-        let users = User::list(&db).await.unwrap();
+        let users = User::list(&db.conn).await.unwrap();
         assert_eq!(users.len(), 0);
     }
 
     #[tokio::test]
     async fn test_user_list_multiple() {
-        let db = setup_test_db().await.unwrap();
+        let db = setup_core_test_db().await.unwrap();
 
         let user1 = User::new("user1", "hash1");
         let user2 = User::new("user2", "hash2");
         let user3 = User::new("user3", "hash3");
 
-        user1.insert(&db).await.unwrap();
-        user2.insert(&db).await.unwrap();
-        user3.insert(&db).await.unwrap();
+        user1.insert(&db.conn).await.unwrap();
+        user2.insert(&db.conn).await.unwrap();
+        user3.insert(&db.conn).await.unwrap();
 
-        let users = User::list(&db).await.unwrap();
+        let users = User::list(&db.conn).await.unwrap();
         assert_eq!(users.len(), 3);
 
         let names: Vec<String> = users.iter().map(|u| u.name.clone()).collect();
@@ -229,35 +229,35 @@ mod tests {
 
     #[tokio::test]
     async fn test_user_password_hash_stored() {
-        let db = setup_test_db().await.unwrap();
+        let db = setup_core_test_db().await.unwrap();
         let password_hash = "very_secure_hash_123";
         let user = User::new("secure_user", password_hash);
 
-        user.insert(&db).await.unwrap();
+        user.insert(&db.conn).await.unwrap();
 
-        let found = User::find_by_name(&db, "secure_user").await.unwrap().unwrap();
+        let found = User::find_by_name(&db.conn, "secure_user").await.unwrap().unwrap();
         assert_eq!(found.password_hash, password_hash);
     }
 
     #[tokio::test]
     async fn test_user_with_empty_password_hash() {
-        let db = setup_test_db().await.unwrap();
+        let db = setup_core_test_db().await.unwrap();
         let user = User::new("user_empty_hash", "");
 
-        user.insert(&db).await.unwrap();
+        user.insert(&db.conn).await.unwrap();
 
-        let found = User::find_by_name(&db, "user_empty_hash").await.unwrap().unwrap();
+        let found = User::find_by_name(&db.conn, "user_empty_hash").await.unwrap().unwrap();
         assert_eq!(found.password_hash, "");
     }
 
     #[tokio::test]
     async fn test_user_with_special_characters_in_name() {
-        let db = setup_test_db().await.unwrap();
+        let db = setup_core_test_db().await.unwrap();
         let user = User::new("user@example.com", "hash");
 
-        user.insert(&db).await.unwrap();
+        user.insert(&db.conn).await.unwrap();
 
-        let found = User::find_by_name(&db, "user@example.com").await.unwrap().unwrap();
+        let found = User::find_by_name(&db.conn, "user@example.com").await.unwrap().unwrap();
         assert_eq!(found.name, "user@example.com");
     }
 

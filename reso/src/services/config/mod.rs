@@ -5,13 +5,13 @@ use model::Config;
 
 use database::models::config::ConfigSetting;
 
-use crate::database::{self, DatabaseConnection};
+use crate::database::{self, CoreDatabasePool};
 
 pub mod model;
 
 /// Service for managing the server configuration
 pub struct ConfigService {
-    db: Arc<DatabaseConnection>,
+    db: Arc<CoreDatabasePool>,
     config: ArcSwap<Config>,
     tx: tokio::sync::watch::Sender<Arc<Config>>,
     _rx_guard: tokio::sync::watch::Receiver<Arc<Config>>,
@@ -19,7 +19,7 @@ pub struct ConfigService {
 
 impl ConfigService {
     /// Initializes the `ConfigService`
-    pub async fn initialize(db: Arc<DatabaseConnection>) -> anyhow::Result<ConfigService> {
+    pub async fn initialize(db: Arc<CoreDatabasePool>) -> anyhow::Result<ConfigService> {
         let config = Self::initialize_config(&db).await?;
         let config = Arc::new(config);
         let (tx, rx) = tokio::sync::watch::channel(config.clone());
@@ -34,7 +34,7 @@ impl ConfigService {
     /// Initializes the configuration from the database.
     /// Missing keys are seeded with defaults so that new config fields
     /// are automatically populated for existing databases.
-    async fn initialize_config(db: &DatabaseConnection) -> anyhow::Result<Config> {
+    async fn initialize_config(db: &CoreDatabasePool) -> anyhow::Result<Config> {
         let map = ConfigSetting::all(db).await?;
 
         let default_config = Config::default();
