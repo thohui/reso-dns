@@ -1,7 +1,7 @@
 use anyhow::Context;
 use rusqlite::params;
 
-use crate::database::{DatabasePool, MetricsDatabasePool};
+use crate::database::MetricsDatabasePool;
 
 #[derive(Debug, Clone)]
 pub struct DnsQueryLog {

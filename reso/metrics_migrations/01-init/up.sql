@@ -24,6 +24,10 @@ CREATE INDEX IF NOT EXISTS idx_dns_query_log_client_ts ON dns_query_log (client,
 
 CREATE INDEX IF NOT EXISTS idx_dns_query_log_blocked_ts ON dns_query_log (blocked, ts_ms);
 
+CREATE INDEX IF NOT EXISTS idx_dns_query_log_blocked_ts ON dns_query_log (cache_hit, ts_ms);
+
+CREATE INDEX IF NOT EXISTS idx_dns_query_log_blocked_ts ON dns_query_log (rate_limited, ts_ms);
+
 CREATE TABLE
 	IF NOT EXISTS dns_error_log (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,6 +40,8 @@ CREATE TABLE
 		message TEXT NOT NULL,
 		type INTEGER NOT NULL
 	);
+
+CREATE INDEX IF NOT EXISTS idx_dns_error_log_client_ts ON dns_error_log (client, ts_ms);
 
 CREATE INDEX IF NOT EXISTS idx_dns_error_log_ts ON dns_error_log (ts_ms);
 

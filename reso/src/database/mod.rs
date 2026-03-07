@@ -138,31 +138,31 @@ use tempfile::NamedTempFile;
 #[cfg(test)]
 pub struct CoreDbFixture {
     pub conn: CoreDatabasePool,
-    temp_file: NamedTempFile,
+    _temp_file: NamedTempFile,
 }
 
 #[cfg(test)]
 pub(crate) async fn setup_core_test_db() -> anyhow::Result<CoreDbFixture> {
-    let temp_file = NamedTempFile::new()?;
-    let db_path = temp_file.path().to_str().unwrap();
+    let _temp_file = NamedTempFile::new()?;
+    let db_path = _temp_file.path().to_str().unwrap();
     let conn = connect_core_db(db_path).await?;
     run_core_db_migrations(&conn).await?;
-    Ok(CoreDbFixture { temp_file, conn })
+    Ok(CoreDbFixture { _temp_file, conn })
 }
 
 #[cfg(test)]
 pub struct MetricsDbFixture {
     pub conn: MetricsDatabasePool,
-    temp_file: NamedTempFile,
+    _temp_file: NamedTempFile,
 }
 
 #[cfg(test)]
 pub(crate) async fn setup_metrics_test_db() -> anyhow::Result<MetricsDbFixture> {
-    let temp_file = NamedTempFile::new()?;
-    let db_path = temp_file.path().to_str().unwrap();
+    let _temp_file = NamedTempFile::new()?;
+    let db_path = _temp_file.path().to_str().unwrap();
     let conn = connect_metrics_db(db_path).await?;
     run_metrics_db_migrations(&conn).await?;
-    Ok(MetricsDbFixture { conn, temp_file })
+    Ok(MetricsDbFixture { conn, _temp_file })
 }
 
 #[cfg(test)]
