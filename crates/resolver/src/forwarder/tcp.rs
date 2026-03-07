@@ -55,9 +55,7 @@ impl TcpPool {
                 let mut idle = this.idle.lock().unwrap_or_else(|e| e.into_inner());
                 let before = idle.len();
 
-                // connections are in insertion order so the oldest (most likely expired) are at the front.
-                while idle.front().is_some_and(|c| c.ttl <= now) {
-                    idle.pop_front();
+                idle.retain(|c| c.ttl > now);
                 }
                 let dropped = before - idle.len();
                 drop(idle);
