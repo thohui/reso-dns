@@ -151,7 +151,7 @@ where
 
     let mut ctx = DnsRequestCtx::new(
         state.timeout,
-        addr,
+        addr.ip(),
         RequestType::DOH,
         bytes,
         state.global.clone(),
@@ -161,12 +161,10 @@ where
     let response = handle_request(&mut ctx, state.clone()).await;
 
     match response {
-        Ok(resp) => {
-            Ok(Response::builder()
-                .status(200)
-                .header("Content-Type", "application/dns-message")
-                .body(Full::new(resp.bytes()))?)
-        }
+        Ok(resp) => Ok(Response::builder()
+            .status(200)
+            .header("Content-Type", "application/dns-message")
+            .body(Full::new(resp.bytes()))?),
         Err(e) => {
             let resp = match ctx.message() {
                 Ok(m) => Response::builder()

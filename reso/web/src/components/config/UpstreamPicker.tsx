@@ -44,7 +44,6 @@ export function UpstreamPicker({
 		if (!existingUpstreams.includes(upstream)) {
 			onAdd(upstream);
 		}
-		onClose();
 	};
 
 	const handleSelect = (provider: ProviderGroup | 'custom') => {

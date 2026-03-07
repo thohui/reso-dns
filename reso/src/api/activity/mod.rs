@@ -6,29 +6,85 @@ use axum::{
     response::Result,
     routing::get,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use crate::{database::models::activity_log::ActivityLog, global::SharedGlobal};
-
-use super::{
-    auth::middleware::auth_middleware,
-    error::ApiError,
-    pagination::{PagedQuery, PagedResponse},
+use crate::{
+    database::models::activity_log::{ActivityLog, ListFilter, SortColumn, SortDir},
+    global::SharedGlobal,
 };
+
+use super::{auth::middleware::auth_middleware, error::ApiError, pagination::PagedResponse};
 
 pub fn create_activity_router(global: SharedGlobal) -> Router<SharedGlobal> {
     Router::new()
         .route("/", get(activity))
         .layer(middleware::from_fn_with_state(global, auth_middleware))
 }
+
+#[derive(Deserialize)]
+pub struct ActivityListQuery {
+    skip: Option<u64>,
+    top: Option<u64>,
+    // filters
+    pub client: Option<String>,
+    pub qname: Option<String>,
+    pub qtype: Option<i64>,
+    pub blocked: Option<bool>,
+    pub cache_hit: Option<bool>,
+    pub rate_limited: Option<bool>,
+    pub error_only: Option<bool>,
+    // sort
+    pub sort: Option<String>,
+    pub dir: Option<String>,
+}
+
+impl ActivityListQuery {
+    fn skip(&self) -> u64 {
+        self.skip.unwrap_or(0)
+    }
+
+    fn top(&self) -> u64 {
+        const MAX_TOP: u64 = 1000;
+        self.top.unwrap_or(25).min(MAX_TOP)
+    }
+
+    fn into_filter(self) -> ListFilter {
+        ListFilter {
+            client: self.client,
+            qname: self.qname,
+            qtype: self.qtype,
+            blocked: self.blocked,
+            cache_hit: self.cache_hit,
+            rate_limited: self.rate_limited,
+            error_only: self.error_only.unwrap_or(false),
+        }
+    }
+
+    fn sort_column(&self) -> SortColumn {
+        match self.sort.as_deref() {
+            Some("client") => SortColumn::Client,
+            Some("qname") => SortColumn::Qname,
+            Some("duration") => SortColumn::Duration,
+            _ => SortColumn::Timestamp,
+        }
+    }
+
+    fn sort_dir(&self) -> SortDir {
+        match self.dir.as_deref() {
+            Some("asc") => SortDir::Asc,
+            _ => SortDir::Desc,
+        }
+    }
+}
+
 pub async fn activity(
     global: State<SharedGlobal>,
-    pagination: Query<PagedQuery>,
+    Query(query): Query<ActivityListQuery>,
 ) -> Result<Json<PagedResponse<Activity>>, ApiError> {
     let conn = &global.metrics_database;
 
-    let top = pagination.top();
-    let skip = pagination.skip();
+    let top = query.top();
+    let skip = query.skip();
 
     let db_top: i64 = top.try_into().map_err(|_| {
         tracing::error!("top out of range: {}", top);
@@ -39,26 +95,25 @@ pub async fn activity(
         ApiError::bad_request()
     })?;
 
-    let activity_logs = match ActivityLog::list(conn, db_top, db_skip).await {
-        Ok(activities) => activities,
+    let sort = query.sort_column();
+    let dir = query.sort_dir();
+    let filter = query.into_filter();
+
+    let page = match ActivityLog::list(conn, db_top, db_skip, filter, sort, dir).await {
+        Ok(page) => page,
         Err(e) => {
             tracing::error!("failed to get activity logs: {:?}", e);
             return Err(ApiError::server_error());
         }
     };
 
-    let row_count: u64 = match ActivityLog::row_count(conn).await {
-        Ok(count) => count.try_into().map_err(|_| {
-            tracing::error!("negative row count: {}", count);
-            ApiError::server_error()
-        })?,
-        Err(e) => {
-            tracing::error!("failed to get activity logs: {:?}", e);
-            return Err(ApiError::server_error());
-        }
-    };
+    let total: u64 = page.total.try_into().map_err(|_| {
+        tracing::error!("negative row count: {}", page.total);
+        ApiError::server_error()
+    })?;
 
-    let activities: Vec<Activity> = match activity_logs
+    let activities: Vec<Activity> = match page
+        .items
         .into_iter()
         .map(Activity::try_from)
         .collect::<std::result::Result<Vec<_>, _>>()
@@ -70,7 +125,7 @@ pub async fn activity(
         }
     };
 
-    Ok(Json(PagedResponse::new(activities, row_count, top, skip)))
+    Ok(Json(PagedResponse::new(activities, total, top, skip)))
 }
 
 #[derive(Debug, Clone, Serialize)]

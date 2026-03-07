@@ -1,5 +1,26 @@
 import type { KyInstance } from 'ky';
-import type { PagedRequest, PagedResponse } from './pagination';
+import type { PagedResponse } from './pagination';
+
+export interface ActivityListFilter {
+	client?: string;
+	qname?: string;
+	qtype?: number;
+	blocked?: boolean;
+	cache_hit?: boolean;
+	rate_limited?: boolean;
+	error_only?: boolean;
+}
+
+export type SortColumn = 'timestamp' | 'client' | 'qname' | 'duration';
+export type SortDir = 'asc' | 'desc';
+
+export interface ActivityListRequest {
+	top: number;
+	skip: number;
+	filter?: ActivityListFilter;
+	sort?: SortColumn;
+	dir?: SortDir;
+}
 
 export class Activities {
 	private httpClient: KyInstance;
@@ -8,12 +29,25 @@ export class Activities {
 		this.httpClient = httpClient;
 	}
 
-	public async list(req: PagedRequest) {
-		const response = await this.httpClient.get(
-			`api/activity?top=${req.top}&skip=${req.skip}`,
-		);
-		const activities = await response.json<PagedResponse<Activity>>();
-		return activities;
+	public async list(req: ActivityListRequest) {
+		const params = new URLSearchParams();
+		params.set('top', req.top.toString());
+		params.set('skip', req.skip.toString());
+
+		const f = req.filter ?? {};
+		if (f.client) params.set('client', f.client);
+		if (f.qname) params.set('qname', f.qname);
+		if (f.qtype != null) params.set('qtype', f.qtype.toString());
+		if (f.blocked) params.set('blocked', f.blocked.toString());
+		if (f.cache_hit) params.set('cache_hit', f.cache_hit.toString());
+		if (f.rate_limited) params.set('rate_limited', f.rate_limited.toString());
+
+		if (f.error_only) params.set('error_only', 'true');
+		if (req.sort) params.set('sort', req.sort);
+		if (req.dir) params.set('dir', req.dir);
+
+		const response = await this.httpClient.get(`api/activity?${params}`);
+		return response.json<PagedResponse<Activity>>();
 	}
 }
 

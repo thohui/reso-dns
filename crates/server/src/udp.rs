@@ -44,7 +44,7 @@ where
                 let global = state.global.clone();
 
                 inflight.spawn(async move {
-                    let mut ctx = DnsRequestCtx::new(state.timeout, client, RequestType::UDP, raw, global, L::default());
+                    let mut ctx = DnsRequestCtx::new(state.timeout, client.ip(), RequestType::UDP, raw, global, L::default());
 
                     match handle_request(&mut ctx, state).await {
                         Ok(resp) => {

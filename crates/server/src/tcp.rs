@@ -80,7 +80,7 @@ where
 
                         let mut ctx = DnsRequestCtx::new(
                             current_state.timeout,
-                            client,
+                            client.ip(),
                             RequestType::TCP,
                             bytes,
                             current_state.global.clone(),

@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{net::IpAddr, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -33,7 +33,7 @@ pub enum RequestType {
 /// Every request gets its own context instance.
 #[derive(Debug)]
 pub struct DnsRequestCtx<G, L> {
-    request_address: SocketAddr,
+    request_address: IpAddr,
     request_type: RequestType,
     raw: Bytes,
     message: OnceCell<DnsMessage>,
@@ -45,7 +45,7 @@ pub struct DnsRequestCtx<G, L> {
 impl<G, L> DnsRequestCtx<G, L> {
     pub fn new(
         deadline: Duration,
-        request_address: SocketAddr,
+        request_address: IpAddr,
         request_type: RequestType,
         raw: Bytes,
         global: Arc<G>,
@@ -68,7 +68,7 @@ impl<G, L> DnsRequestCtx<G, L> {
     }
 
     /// Request address
-    pub fn request_address(&self) -> &SocketAddr {
+    pub fn request_address(&self) -> &IpAddr {
         &self.request_address
     }
 
