@@ -39,15 +39,21 @@ where
             }
             result = listener.accept() => {
                 let (mut stream, client) = result?;
-
-
                 let state = state.clone();
+                let shutdown = shutdown.clone();
 
                 inflight.spawn(async move {
                     let mut len_buf = [0u8; 2];
                     let mut buf = Vec::new();
                     loop {
-                        if let Err(e) = stream.read_exact(&mut len_buf).await {
+
+                        let len_res = tokio::select! {
+                            _ = shutdown.cancelled() => return,
+                            res = stream.read_exact(&mut len_buf) => res,
+                        };
+
+
+                        if let Err(e) = len_res {
                             if e.kind() != std::io::ErrorKind::UnexpectedEof {
                                 tracing::debug!("failed to read length from client {}: {}", client, e);
                             }
@@ -57,9 +63,14 @@ where
                         let buffer_length = u16::from_be_bytes(len_buf) as usize;
                         buf.resize(buffer_length, 0);
 
-                        if let Err(e) = stream.read_exact(&mut buf).await {
+                        let body_res = tokio::select! {
+                            _ = shutdown.cancelled() => return,
+                           res = stream.read_exact(&mut buf) => res,
+                        };
+
+                        if let Err(e) = body_res {
                             if e.kind() != std::io::ErrorKind::UnexpectedEof {
-                                tracing::debug!("failed to read query from client {}: {}", client, e);
+                                tracing::debug!("failed to read body from client {}: {}", client, e);
                             }
                             return;
                         }
