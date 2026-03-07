@@ -19,7 +19,7 @@ use crate::{
     },
 };
 
-pub fn server_middlewares(global: &SharedGlobal, config: &Config) -> ServerMiddlewares<Global, Local> {
+pub fn server_middlewares(config: &Config) -> ServerMiddlewares<Global, Local> {
     let ratelimit_config = RateLimitConfig {
         window_duration: Duration::from_secs(config.dns.rate_limit.window_duration as u64),
         max_queries_per_window: config.dns.rate_limit.max_queries_per_window,
@@ -58,7 +58,7 @@ async fn create_server_state(
     Ok(ServerState {
         timeout: Duration::from_millis(config.dns.timeout),
         global: global.clone(),
-        middlewares: server_middlewares(global, config),
+        middlewares: server_middlewares(config),
         resolver: Arc::new(resolver),
     })
 }

@@ -8,6 +8,7 @@ use tokio::time::Instant;
 
 /// Classifies the kind of error that occurred during request processing.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(i64)]
 pub enum ErrorType {
     Timeout,
     InvalidRequest,
@@ -30,7 +31,7 @@ pub enum RequestType {
 
 /// Context for a DNS request.
 /// Every request gets its own context instance.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct DnsRequestCtx<G, L> {
     request_address: SocketAddr,
     request_type: RequestType,
@@ -140,8 +141,7 @@ pub trait DnsMiddleware<G, L>: Send + Sync {
         Ok(())
     }
     /// Called when an error occurs during request processing.
-    async fn on_error(&self, _ctx: &mut DnsRequestCtx<G, L>, _error: &ErrorType, _message: &str) {
-    }
+    async fn on_error(&self, _ctx: &mut DnsRequestCtx<G, L>, _error: &ErrorType, _message: &str) {}
 }
 
 /// A budget for processing a DNS request, based on a deadline.
