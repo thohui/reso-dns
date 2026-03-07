@@ -3,7 +3,7 @@ use chrono::Utc;
 use rusqlite::params;
 use serde::Serialize;
 
-use crate::database::{CoreDatabasePool, DatabasePool};
+use crate::database::CoreDatabasePool;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct BlockedDomain {
@@ -124,9 +124,9 @@ mod tests {
     async fn test_insert_and_list() {
         let db = setup_core_test_db().await.unwrap();
         let domain = BlockedDomain::new("google.com".into());
-        domain.clone().insert(&db).await.unwrap();
+        domain.clone().insert(&db.conn).await.unwrap();
 
-        let domains = BlockedDomain::list(&db, 10, 0).await.unwrap();
+        let domains = BlockedDomain::list(&db.conn, 10, 0).await.unwrap();
         assert_eq!(domains.len(), 1);
         assert_eq!(domains[0], domain);
     }
@@ -134,10 +134,10 @@ mod tests {
     #[tokio::test]
     async fn test_insert_and_list_all() {
         let db = setup_core_test_db().await.unwrap();
-        BlockedDomain::new("a.com".into()).insert(&db).await.unwrap();
-        BlockedDomain::new("b.com".into()).insert(&db).await.unwrap();
+        BlockedDomain::new("a.com".into()).insert(&db.conn).await.unwrap();
+        BlockedDomain::new("b.com".into()).insert(&db.conn).await.unwrap();
 
-        let all = BlockedDomain::list_all(&db).await.unwrap();
+        let all = BlockedDomain::list_all(&db.conn).await.unwrap();
         assert_eq!(all.len(), 2);
     }
 
@@ -145,16 +145,19 @@ mod tests {
     async fn test_list_pagination() {
         let db = setup_core_test_db().await.unwrap();
         for i in 0..5 {
-            BlockedDomain::new(format!("domain{i}.com")).insert(&db).await.unwrap();
+            BlockedDomain::new(format!("domain{i}.com"))
+                .insert(&db.conn)
+                .await
+                .unwrap();
         }
 
-        let page1 = BlockedDomain::list(&db, 2, 0).await.unwrap();
+        let page1 = BlockedDomain::list(&db.conn, 2, 0).await.unwrap();
         assert_eq!(page1.len(), 2);
 
-        let page2 = BlockedDomain::list(&db, 2, 2).await.unwrap();
+        let page2 = BlockedDomain::list(&db.conn, 2, 2).await.unwrap();
         assert_eq!(page2.len(), 2);
 
-        let page3 = BlockedDomain::list(&db, 2, 4).await.unwrap();
+        let page3 = BlockedDomain::list(&db.conn, 2, 4).await.unwrap();
         assert_eq!(page3.len(), 1);
     }
 
@@ -162,72 +165,72 @@ mod tests {
     async fn test_delete() {
         let db = setup_core_test_db().await.unwrap();
         let domain = BlockedDomain::new("delete-me.com".into());
-        domain.clone().insert(&db).await.unwrap();
+        domain.clone().insert(&db.conn).await.unwrap();
 
-        assert_eq!(BlockedDomain::row_count(&db).await.unwrap(), 1);
+        assert_eq!(BlockedDomain::row_count(&db.conn).await.unwrap(), 1);
 
-        domain.delete(&db).await.unwrap();
-        assert_eq!(BlockedDomain::row_count(&db).await.unwrap(), 0);
+        domain.delete(&db.conn).await.unwrap();
+        assert_eq!(BlockedDomain::row_count(&db.conn).await.unwrap(), 0);
     }
 
     #[tokio::test]
     async fn test_row_count() {
         let db = setup_core_test_db().await.unwrap();
-        assert_eq!(BlockedDomain::row_count(&db).await.unwrap(), 0);
+        assert_eq!(BlockedDomain::row_count(&db.conn).await.unwrap(), 0);
 
-        BlockedDomain::new("a.com".into()).insert(&db).await.unwrap();
-        assert_eq!(BlockedDomain::row_count(&db).await.unwrap(), 1);
+        BlockedDomain::new("a.com".into()).insert(&db.conn).await.unwrap();
+        assert_eq!(BlockedDomain::row_count(&db.conn).await.unwrap(), 1);
 
-        BlockedDomain::new("b.com".into()).insert(&db).await.unwrap();
-        assert_eq!(BlockedDomain::row_count(&db).await.unwrap(), 2);
+        BlockedDomain::new("b.com".into()).insert(&db.conn).await.unwrap();
+        assert_eq!(BlockedDomain::row_count(&db.conn).await.unwrap(), 2);
     }
 
     #[tokio::test]
     async fn test_toggle() {
         let db = setup_core_test_db().await.unwrap();
-        BlockedDomain::new("toggle.com".into()).insert(&db).await.unwrap();
+        BlockedDomain::new("toggle.com".into()).insert(&db.conn).await.unwrap();
 
-        let before = BlockedDomain::list(&db, 1, 0).await.unwrap();
+        let before = BlockedDomain::list(&db.conn, 1, 0).await.unwrap();
         assert!(before[0].enabled);
 
-        BlockedDomain::toggle("toggle.com", &db).await.unwrap();
+        BlockedDomain::toggle("toggle.com", &db.conn).await.unwrap();
 
-        let after = BlockedDomain::list(&db, 1, 0).await.unwrap();
+        let after = BlockedDomain::list(&db.conn, 1, 0).await.unwrap();
         assert!(!after[0].enabled);
 
-        BlockedDomain::toggle("toggle.com", &db).await.unwrap();
+        BlockedDomain::toggle("toggle.com", &db.conn).await.unwrap();
 
-        let restored = BlockedDomain::list(&db, 1, 0).await.unwrap();
+        let restored = BlockedDomain::list(&db.conn, 1, 0).await.unwrap();
         assert!(restored[0].enabled);
     }
 
     #[tokio::test]
     async fn test_enabled_persisted() {
         let db = setup_core_test_db().await.unwrap();
-        BlockedDomain::new("test.com".into()).insert(&db).await.unwrap();
+        BlockedDomain::new("test.com".into()).insert(&db.conn).await.unwrap();
 
-        let domains = BlockedDomain::list_all(&db).await.unwrap();
+        let domains = BlockedDomain::list_all(&db.conn).await.unwrap();
         assert!(domains[0].enabled);
 
-        BlockedDomain::toggle("test.com", &db).await.unwrap();
+        BlockedDomain::toggle("test.com", &db.conn).await.unwrap();
 
-        let domains = BlockedDomain::list_all(&db).await.unwrap();
+        let domains = BlockedDomain::list_all(&db.conn).await.unwrap();
         assert!(!domains[0].enabled);
     }
 
     #[tokio::test]
     async fn test_list_empty() {
         let db = setup_core_test_db().await.unwrap();
-        let domains = BlockedDomain::list(&db, 10, 0).await.unwrap();
+        let domains = BlockedDomain::list(&db.conn, 10, 0).await.unwrap();
         assert!(domains.is_empty());
     }
 
     #[tokio::test]
     async fn test_duplicate_insert_fails() {
         let db = setup_core_test_db().await.unwrap();
-        BlockedDomain::new("dup.com".into()).insert(&db).await.unwrap();
+        BlockedDomain::new("dup.com".into()).insert(&db.conn).await.unwrap();
 
-        let result = BlockedDomain::new("dup.com".into()).insert(&db).await;
+        let result = BlockedDomain::new("dup.com".into()).insert(&db.conn).await;
         assert!(result.is_err());
     }
 }

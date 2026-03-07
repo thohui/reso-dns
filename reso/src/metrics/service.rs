@@ -11,7 +11,7 @@ use tokio::{
 
 use super::event::{ErrorLogEvent, QueryLogEvent};
 use crate::database::{
-    CoreDatabasePool, MetricsDatabasePool,
+    MetricsDatabasePool,
     models::{error_log::DnsErrorLog, query_log::DnsQueryLog},
 };
 

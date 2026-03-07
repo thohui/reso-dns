@@ -4,7 +4,7 @@ use aes_gcm::Aes256Gcm;
 use reso_cache::DnsMessageCache;
 
 use crate::{
-    database::{CoreDatabasePool, DatabasePool, MetricsDatabasePool},
+    database::{CoreDatabasePool, MetricsDatabasePool},
     metrics::service::{MetricsHandle, Stats},
     services::{blocklist::BlocklistService, config::ConfigService},
 };

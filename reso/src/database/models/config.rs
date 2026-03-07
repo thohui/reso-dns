@@ -100,9 +100,9 @@ mod tests {
     async fn test_set_and_get() {
         let db = setup_core_test_db().await.unwrap();
 
-        ConfigSetting::set(&db, "dns.timeout", "5000").await.unwrap();
+        ConfigSetting::set(&db.conn, "dns.timeout", "5000").await.unwrap();
 
-        let value = ConfigSetting::get(&db, "dns.timeout").await.unwrap();
+        let value = ConfigSetting::get(&db.conn, "dns.timeout").await.unwrap();
         assert_eq!(value, Some("5000".to_string()));
     }
 
@@ -110,7 +110,7 @@ mod tests {
     async fn test_get_missing_key() {
         let db = setup_core_test_db().await.unwrap();
 
-        let value = ConfigSetting::get(&db, "nonexistent").await.unwrap();
+        let value = ConfigSetting::get(&db.conn, "nonexistent").await.unwrap();
         assert_eq!(value, None);
     }
 
@@ -118,10 +118,10 @@ mod tests {
     async fn test_set_overwrites_value() {
         let db = setup_core_test_db().await.unwrap();
 
-        ConfigSetting::set(&db, "dns.timeout", "3000").await.unwrap();
-        ConfigSetting::set(&db, "dns.timeout", "5000").await.unwrap();
+        ConfigSetting::set(&db.conn, "dns.timeout", "3000").await.unwrap();
+        ConfigSetting::set(&db.conn, "dns.timeout", "5000").await.unwrap();
 
-        let value = ConfigSetting::get(&db, "dns.timeout").await.unwrap();
+        let value = ConfigSetting::get(&db.conn, "dns.timeout").await.unwrap();
         assert_eq!(value, Some("5000".to_string()));
     }
 
@@ -129,7 +129,7 @@ mod tests {
     async fn test_all_empty() {
         let db = setup_core_test_db().await.unwrap();
 
-        let map = ConfigSetting::all(&db).await.unwrap();
+        let map = ConfigSetting::all(&db.conn).await.unwrap();
         assert!(map.is_empty());
     }
 
@@ -137,13 +137,13 @@ mod tests {
     async fn test_all_returns_all_settings() {
         let db = setup_core_test_db().await.unwrap();
 
-        ConfigSetting::set(&db, "dns.timeout", "3000").await.unwrap();
-        ConfigSetting::set(&db, "dns.active", "forwarder").await.unwrap();
-        ConfigSetting::set(&db, "dns.forwarder.upstreams", "[\"1.1.1.1\"]")
+        ConfigSetting::set(&db.conn, "dns.timeout", "3000").await.unwrap();
+        ConfigSetting::set(&db.conn, "dns.active", "forwarder").await.unwrap();
+        ConfigSetting::set(&db.conn, "dns.forwarder.upstreams", "[\"1.1.1.1\"]")
             .await
             .unwrap();
 
-        let map = ConfigSetting::all(&db).await.unwrap();
+        let map = ConfigSetting::all(&db.conn).await.unwrap();
         assert_eq!(map.len(), 3);
         assert_eq!(map["dns.timeout"], "3000");
         assert_eq!(map["dns.active"], "forwarder");
@@ -159,7 +159,7 @@ mod tests {
             .unwrap()
             .as_millis() as i64;
 
-        ConfigSetting::set(&db, "dns.timeout", "3000").await.unwrap();
+        ConfigSetting::set(&db.conn, "dns.timeout", "3000").await.unwrap();
 
         let after: i64 = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -167,6 +167,7 @@ mod tests {
             .as_millis() as i64;
 
         let updated_at: i64 = db
+            .conn
             .interact(|c| {
                 c.query_row(
                     "SELECT updated_at FROM config_settings WHERE key = ?1",
@@ -191,9 +192,9 @@ mod tests {
             ("dns.forwarder.upstreams".to_string(), "[]".to_string()),
         ];
 
-        ConfigSetting::batch_set(&db, entries).await.unwrap();
+        ConfigSetting::batch_set(&db.conn, entries).await.unwrap();
 
-        let map = ConfigSetting::all(&db).await.unwrap();
+        let map = ConfigSetting::all(&db.conn).await.unwrap();
         assert_eq!(map.len(), 3);
         assert_eq!(map["dns.timeout"], "3000");
         assert_eq!(map["dns.active"], "forwarder");
@@ -204,16 +205,16 @@ mod tests {
     async fn test_batch_set_overwrites() {
         let db = setup_core_test_db().await.unwrap();
 
-        ConfigSetting::set(&db, "dns.timeout", "3000").await.unwrap();
+        ConfigSetting::set(&db.conn, "dns.timeout", "3000").await.unwrap();
 
         let entries = vec![
             ("dns.timeout".to_string(), "5000".to_string()),
             ("dns.active".to_string(), "forwarder".to_string()),
         ];
 
-        ConfigSetting::batch_set(&db, entries).await.unwrap();
+        ConfigSetting::batch_set(&db.conn, entries).await.unwrap();
 
-        let value = ConfigSetting::get(&db, "dns.timeout").await.unwrap();
+        let value = ConfigSetting::get(&db.conn, "dns.timeout").await.unwrap();
         assert_eq!(value, Some("5000".to_string()));
     }
 }

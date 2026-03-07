@@ -24,6 +24,11 @@ impl EnvConfig {
         };
         let db_path = env::var("RESO_DATABASE_PATH").unwrap_or("reso.db".to_owned());
         let metrics_db_path = env::var("RESO_METRICS_DATABASE_PATH").unwrap_or("reso_metrics.db".to_owned());
+
+        if db_path == metrics_db_path {
+            anyhow::bail!("RESO_DATABASE_PATH cannot point to the same path as RESO_METRICS_DATABASE_PATH")
+        }
+
         let dns_server_address = env::var("RESO_DNS_SERVER_ADDRESS").unwrap_or("127.0.0.1:53".to_owned());
         let http_server_address = env::var("RESO_HTTP_SERVER_ADDRESS").unwrap_or("127.0.0.1:80".to_owned());
 

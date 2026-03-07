@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use deadpool_sqlite::{Config, Pool, Runtime};
+use deadpool_sqlite::{Config, Hook, HookError, Pool, Runtime};
 use include_dir::{Dir, include_dir};
 use rusqlite_migration::MigrationsBuilder;
 
@@ -57,22 +57,24 @@ pub async fn connect_core_db(db_path: &str) -> anyhow::Result<CoreDatabasePool> 
     let pool = Config::new(db_path)
         .builder(Runtime::Tokio1)?
         .max_size(DB_POOL_SIZE)
+        .post_create(Hook::async_fn(|conn, _| {
+            Box::pin(async move {
+                conn.interact(|c| {
+                    c.execute_batch(
+                        r#"
+                PRAGMA journal_mode = WAL;
+                PRAGMA synchronous = NORMAL;
+                PRAGMA foreign_keys = ON;
+                PRAGMA busy_timeout = 5000;
+                "#,
+                    )
+                })
+                .await
+                .map_err(|e| HookError::message(e.to_string()))?
+                .map_err(HookError::Backend)
+            })
+        }))
         .build()?;
-
-    pool.get()
-        .await?
-        .interact(|c| {
-            c.execute_batch(
-                r#"
-        PRAGMA journal_mode = WAL;
-        PRAGMA synchronous = NORMAL;
-        PRAGMA foreign_keys = ON;
-        PRAGMA busy_timeout = 5000;
-        "#,
-            )
-        })
-        .await
-        .map_err(|e| anyhow::anyhow!("interact error: {}", e))??;
 
     Ok(CoreDatabasePool {
         pool,
@@ -84,22 +86,24 @@ pub async fn connect_metrics_db(db_path: &str) -> anyhow::Result<MetricsDatabase
     let pool = Config::new(db_path)
         .builder(Runtime::Tokio1)?
         .max_size(DB_POOL_SIZE)
+        .post_create(Hook::async_fn(|conn, _| {
+            Box::pin(async move {
+                conn.interact(|c| {
+                    c.execute_batch(
+                        r#"
+                PRAGMA journal_mode = WAL;
+                PRAGMA synchronous = NORMAL;
+                PRAGMA foreign_keys = ON;
+                PRAGMA busy_timeout = 5000;
+                "#,
+                    )
+                })
+                .await
+                .map_err(|e| HookError::message(e.to_string()))?
+                .map_err(HookError::Backend)
+            })
+        }))
         .build()?;
-
-    pool.get()
-        .await?
-        .interact(|c| {
-            c.execute_batch(
-                r#"
-        PRAGMA journal_mode = WAL;
-        PRAGMA synchronous = NORMAL;
-        PRAGMA foreign_keys = ON;
-        PRAGMA busy_timeout = 5000;
-        "#,
-            )
-        })
-        .await
-        .map_err(|e| anyhow::anyhow!("interact error: {}", e))??;
 
     Ok(MetricsDatabasePool {
         pool,
@@ -132,21 +136,33 @@ pub async fn run_metrics_db_migrations(connection: &MetricsDatabasePool) -> anyh
 use tempfile::NamedTempFile;
 
 #[cfg(test)]
-pub(crate) async fn setup_core_test_db() -> anyhow::Result<CoreDatabasePool> {
+pub struct CoreDbFixture {
+    pub conn: CoreDatabasePool,
+    temp_file: NamedTempFile,
+}
+
+#[cfg(test)]
+pub(crate) async fn setup_core_test_db() -> anyhow::Result<CoreDbFixture> {
     let temp_file = NamedTempFile::new()?;
     let db_path = temp_file.path().to_str().unwrap();
     let conn = connect_core_db(db_path).await?;
     run_core_db_migrations(&conn).await?;
-    Ok(conn)
+    Ok(CoreDbFixture { temp_file, conn })
 }
 
 #[cfg(test)]
-pub(crate) async fn setup_metrics_test_db() -> anyhow::Result<MetricsDatabasePool> {
+pub struct MetricsDbFixture {
+    pub conn: MetricsDatabasePool,
+    temp_file: NamedTempFile,
+}
+
+#[cfg(test)]
+pub(crate) async fn setup_metrics_test_db() -> anyhow::Result<MetricsDbFixture> {
     let temp_file = NamedTempFile::new()?;
     let db_path = temp_file.path().to_str().unwrap();
     let conn = connect_metrics_db(db_path).await?;
     run_metrics_db_migrations(&conn).await?;
-    Ok(conn)
+    Ok(MetricsDbFixture { conn, temp_file })
 }
 
 #[cfg(test)]

@@ -137,17 +137,17 @@ impl DnsQueryLog {
             .await
             .context("failed to list DNS query logs")?)
     }
-}
 
-pub async fn delete_before(db: &MetricsDatabasePool, cutoff_ts_ms: i64) -> anyhow::Result<()> {
-    db.interact(move |c| {
-        c.execute("DELETE FROM dns_query_log WHERE ts_ms < ?1", params![cutoff_ts_ms])?;
+    pub async fn delete_before(db: &MetricsDatabasePool, cutoff_ts_ms: i64) -> anyhow::Result<()> {
+        db.interact(move |c| {
+            c.execute("DELETE FROM dns_query_log WHERE ts_ms < ?1", params![cutoff_ts_ms])?;
+            Ok(())
+        })
+        .await
+        .context("failed to delete old DNS query logs")?;
+
         Ok(())
-    })
-    .await
-    .context("failed to delete old DNS query logs")?;
-
-    Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -175,9 +175,9 @@ mod tests {
         let db = setup_metrics_test_db().await.unwrap();
         let row = make_row(1000);
 
-        DnsQueryLog::batch_insert(&db, &[row.clone()]).await.unwrap();
+        DnsQueryLog::batch_insert(&db.conn, &[row.clone()]).await.unwrap();
 
-        let results = DnsQueryLog::list(&db, 10, 0).await.unwrap();
+        let results = DnsQueryLog::list(&db.conn, 10, 0).await.unwrap();
         assert_eq!(results.len(), 1);
 
         let r = &results[0];
@@ -197,11 +197,11 @@ mod tests {
     async fn test_list_ordered_by_ts_desc() {
         let db = setup_metrics_test_db().await.unwrap();
 
-        DnsQueryLog::batch_insert(&db, &[make_row(1000), make_row(3000), make_row(2000)])
+        DnsQueryLog::batch_insert(&db.conn, &[make_row(1000), make_row(3000), make_row(2000)])
             .await
             .unwrap();
 
-        let results = DnsQueryLog::list(&db, 10, 0).await.unwrap();
+        let results = DnsQueryLog::list(&db.conn, 10, 0).await.unwrap();
         assert_eq!(results[0].ts_ms, 3000);
         assert_eq!(results[1].ts_ms, 2000);
         assert_eq!(results[2].ts_ms, 1000);
@@ -212,11 +212,11 @@ mod tests {
         let db = setup_metrics_test_db().await.unwrap();
 
         let rows: Vec<_> = (1..=5).map(|i| make_row(i * 1000)).collect();
-        DnsQueryLog::batch_insert(&db, &rows).await.unwrap();
+        DnsQueryLog::batch_insert(&db.conn, &rows).await.unwrap();
 
-        let page1 = DnsQueryLog::list(&db, 2, 0).await.unwrap();
-        let page2 = DnsQueryLog::list(&db, 2, 2).await.unwrap();
-        let page3 = DnsQueryLog::list(&db, 2, 4).await.unwrap();
+        let page1 = DnsQueryLog::list(&db.conn, 2, 0).await.unwrap();
+        let page2 = DnsQueryLog::list(&db.conn, 2, 2).await.unwrap();
+        let page3 = DnsQueryLog::list(&db.conn, 2, 4).await.unwrap();
 
         assert_eq!(page1.len(), 2);
         assert_eq!(page2.len(), 2);
@@ -229,13 +229,13 @@ mod tests {
     async fn test_delete_before_removes_old_rows() {
         let db = setup_metrics_test_db().await.unwrap();
 
-        DnsQueryLog::batch_insert(&db, &[make_row(1000), make_row(2000), make_row(3000)])
+        DnsQueryLog::batch_insert(&db.conn, &[make_row(1000), make_row(2000), make_row(3000)])
             .await
             .unwrap();
 
-        delete_before(&db, 2000).await.unwrap();
+        DnsQueryLog::delete_before(&db.conn, 2000).await.unwrap();
 
-        let results = DnsQueryLog::list(&db, 10, 0).await.unwrap();
+        let results = DnsQueryLog::list(&db.conn, 10, 0).await.unwrap();
         assert_eq!(results.len(), 2);
         assert!(results.iter().all(|r| r.ts_ms >= 2000));
     }

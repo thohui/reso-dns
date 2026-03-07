@@ -4,7 +4,7 @@ use arc_swap::ArcSwap;
 use reso_blocklist::BlocklistMatcher;
 use reso_dns::domain_name::DomainName;
 
-use crate::database::{CoreDatabasePool, DatabasePool, models::blocked_domain::BlockedDomain};
+use crate::database::{CoreDatabasePool, models::blocked_domain::BlockedDomain};
 
 pub struct BlocklistService {
     matcher: ArcSwap<BlocklistMatcher>,

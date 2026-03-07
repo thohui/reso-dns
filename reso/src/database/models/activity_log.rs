@@ -86,6 +86,12 @@ impl ActivityLog {
     }
 }
 
+pub enum ListFilter {
+    All,
+    CacheHit,
+    RateLimit,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -125,9 +131,9 @@ mod tests {
     #[tokio::test]
     async fn test_query_row_surfaces_as_query_kind() {
         let db = setup_metrics_test_db().await.unwrap();
-        DnsQueryLog::batch_insert(&db, &[make_query(1000)]).await.unwrap();
+        DnsQueryLog::batch_insert(&db.conn, &[make_query(1000)]).await.unwrap();
 
-        let results = ActivityLog::list(&db, 10, 0).await.unwrap();
+        let results = ActivityLog::list(&db.conn, 10, 0).await.unwrap();
         assert_eq!(results.len(), 1);
 
         let r = &results[0];
@@ -145,9 +151,9 @@ mod tests {
     #[tokio::test]
     async fn test_error_row_surfaces_as_error_kind() {
         let db = setup_metrics_test_db().await.unwrap();
-        DnsErrorLog::batch_insert(&db, &[make_error(1000)]).await.unwrap();
+        DnsErrorLog::batch_insert(&db.conn, &[make_error(1000)]).await.unwrap();
 
-        let results = ActivityLog::list(&db, 10, 0).await.unwrap();
+        let results = ActivityLog::list(&db.conn, 10, 0).await.unwrap();
         assert_eq!(results.len(), 1);
 
         let r = &results[0];
@@ -164,10 +170,10 @@ mod tests {
     #[tokio::test]
     async fn test_errors_ordered_before_queries_at_same_timestamp() {
         let db = setup_metrics_test_db().await.unwrap();
-        DnsQueryLog::batch_insert(&db, &[make_query(1000)]).await.unwrap();
-        DnsErrorLog::batch_insert(&db, &[make_error(1000)]).await.unwrap();
+        DnsQueryLog::batch_insert(&db.conn, &[make_query(1000)]).await.unwrap();
+        DnsErrorLog::batch_insert(&db.conn, &[make_error(1000)]).await.unwrap();
 
-        let results = ActivityLog::list(&db, 10, 0).await.unwrap();
+        let results = ActivityLog::list(&db.conn, 10, 0).await.unwrap();
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].kind, "error");
         assert_eq!(results[1].kind, "query");
@@ -176,10 +182,12 @@ mod tests {
     #[tokio::test]
     async fn test_row_count_includes_both_tables() {
         let db = setup_metrics_test_db().await.unwrap();
-        DnsQueryLog::batch_insert(&db, &[make_query(1000), make_query(2000)]).await.unwrap();
-        DnsErrorLog::batch_insert(&db, &[make_error(3000)]).await.unwrap();
+        DnsQueryLog::batch_insert(&db.conn, &[make_query(1000), make_query(2000)])
+            .await
+            .unwrap();
+        DnsErrorLog::batch_insert(&db.conn, &[make_error(3000)]).await.unwrap();
 
-        let count = ActivityLog::row_count(&db).await.unwrap();
+        let count = ActivityLog::row_count(&db.conn).await.unwrap();
         assert_eq!(count, 3);
     }
 
@@ -187,11 +195,11 @@ mod tests {
     async fn test_list_pagination() {
         let db = setup_metrics_test_db().await.unwrap();
         let queries: Vec<_> = (1..=4).map(|i| make_query(i * 1000)).collect();
-        DnsQueryLog::batch_insert(&db, &queries).await.unwrap();
-        DnsErrorLog::batch_insert(&db, &[make_error(5000)]).await.unwrap();
+        DnsQueryLog::batch_insert(&db.conn, &queries).await.unwrap();
+        DnsErrorLog::batch_insert(&db.conn, &[make_error(5000)]).await.unwrap();
 
-        let page1 = ActivityLog::list(&db, 3, 0).await.unwrap();
-        let page2 = ActivityLog::list(&db, 3, 3).await.unwrap();
+        let page1 = ActivityLog::list(&db.conn, 3, 0).await.unwrap();
+        let page2 = ActivityLog::list(&db.conn, 3, 3).await.unwrap();
 
         assert_eq!(page1.len(), 3);
         assert_eq!(page2.len(), 2);

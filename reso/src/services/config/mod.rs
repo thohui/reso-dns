@@ -5,7 +5,7 @@ use model::Config;
 
 use database::models::config::ConfigSetting;
 
-use crate::database::{self, CoreDatabasePool, DatabasePool};
+use crate::database::{self, CoreDatabasePool};
 
 pub mod model;
 

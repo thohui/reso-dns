@@ -154,9 +154,9 @@ mod tests {
         let db = setup_metrics_test_db().await.unwrap();
         let row = make_row(1000);
 
-        DnsErrorLog::batch_insert(&db, &[row.clone()]).await.unwrap();
+        DnsErrorLog::batch_insert(&db.conn, &[row.clone()]).await.unwrap();
 
-        let results = DnsErrorLog::list(&db, 10, 0).await.unwrap();
+        let results = DnsErrorLog::list(&db.conn, 10, 0).await.unwrap();
         assert_eq!(results.len(), 1);
 
         let r = &results[0];
@@ -179,9 +179,9 @@ mod tests {
             ..make_row(1000)
         };
 
-        DnsErrorLog::batch_insert(&db, &[row]).await.unwrap();
+        DnsErrorLog::batch_insert(&db.conn, &[row]).await.unwrap();
 
-        let results = DnsErrorLog::list(&db, 10, 0).await.unwrap();
+        let results = DnsErrorLog::list(&db.conn, 10, 0).await.unwrap();
         assert_eq!(results[0].qname, None);
         assert_eq!(results[0].qtype, None);
     }
@@ -190,11 +190,11 @@ mod tests {
     async fn test_list_ordered_by_ts_desc() {
         let db = setup_metrics_test_db().await.unwrap();
 
-        DnsErrorLog::batch_insert(&db, &[make_row(1000), make_row(3000), make_row(2000)])
+        DnsErrorLog::batch_insert(&db.conn, &[make_row(1000), make_row(3000), make_row(2000)])
             .await
             .unwrap();
 
-        let results = DnsErrorLog::list(&db, 10, 0).await.unwrap();
+        let results = DnsErrorLog::list(&db.conn, 10, 0).await.unwrap();
         assert_eq!(results[0].ts_ms, 3000);
         assert_eq!(results[1].ts_ms, 2000);
         assert_eq!(results[2].ts_ms, 1000);
@@ -204,13 +204,13 @@ mod tests {
     async fn test_delete_before_removes_old_rows() {
         let db = setup_metrics_test_db().await.unwrap();
 
-        DnsErrorLog::batch_insert(&db, &[make_row(1000), make_row(2000), make_row(3000)])
+        DnsErrorLog::batch_insert(&db.conn, &[make_row(1000), make_row(2000), make_row(3000)])
             .await
             .unwrap();
 
-        DnsErrorLog::delete_before(&db, 2000).await.unwrap();
+        DnsErrorLog::delete_before(&db.conn, 2000).await.unwrap();
 
-        let results = DnsErrorLog::list(&db, 10, 0).await.unwrap();
+        let results = DnsErrorLog::list(&db.conn, 10, 0).await.unwrap();
         assert_eq!(results.len(), 2);
         assert!(results.iter().all(|r| r.ts_ms >= 2000));
     }
