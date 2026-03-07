@@ -227,32 +227,32 @@ const FILTER_PRESETS: {
 	color?: string;
 	filter: ActivityListFilter;
 }[] = [
-		{ key: 'all', label: 'All', filter: {} },
-		{
-			key: 'blocked',
-			label: 'Blocked',
-			color: 'status.blocked',
-			filter: { blocked: true },
-		},
-		{
-			key: 'cached',
-			label: 'Cached',
-			color: 'status.cached',
-			filter: { cache_hit: true },
-		},
-		{
-			key: 'rate_limited',
-			label: 'Rate Limited',
-			color: 'status.rate_limited',
-			filter: { rate_limited: true },
-		},
-		{
-			key: 'errors',
-			label: 'Errors',
-			color: 'status.error',
-			filter: { error_only: true },
-		},
-	];
+	{ key: 'all', label: 'All', filter: {} },
+	{
+		key: 'blocked',
+		label: 'Blocked',
+		color: 'status.blocked',
+		filter: { blocked: true },
+	},
+	{
+		key: 'cached',
+		label: 'Cached',
+		color: 'status.cached',
+		filter: { cache_hit: true },
+	},
+	{
+		key: 'rate_limited',
+		label: 'Rate Limited',
+		color: 'status.rate_limited',
+		filter: { rate_limited: true },
+	},
+	{
+		key: 'errors',
+		label: 'Errors',
+		color: 'status.error',
+		filter: { error_only: true },
+	},
+];
 
 function getActivePreset(filter: ActivityListFilter): FilterPreset {
 	if (filter.blocked) return 'blocked';
@@ -262,7 +262,7 @@ function getActivePreset(filter: ActivityListFilter): FilterPreset {
 	return 'all';
 }
 
-type SearchField = 'qname' | 'client';
+export type SearchField = 'qname' | 'client';
 
 const SEARCH_FIELD_LABELS: Record<SearchField, string> = {
 	qname: 'domain',

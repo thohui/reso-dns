@@ -1,6 +1,6 @@
 import { Heading } from '@chakra-ui/react';
 import { useState } from 'react';
-import { LogsGrid } from '../../components/logs/LogsGrid';
+import { LogsGrid, type SearchField } from '../../components/logs/LogsGrid';
 import { useActivities } from '../../hooks/useActivities';
 import { useDebounce } from '../../hooks/useDebounce';
 import type {
@@ -10,8 +10,6 @@ import type {
 } from '../../lib/api/activity';
 
 const PAGE_SIZE = 100;
-
-type SearchField = 'qname' | 'client';
 
 export default function LogsPage() {
 	const [page, setPage] = useState(0);

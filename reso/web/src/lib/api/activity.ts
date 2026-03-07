@@ -38,9 +38,10 @@ export class Activities {
 		if (f.client) params.set('client', f.client);
 		if (f.qname) params.set('qname', f.qname);
 		if (f.qtype != null) params.set('qtype', f.qtype.toString());
-		if (f.blocked) params.set('blocked', f.blocked.toString());
-		if (f.cache_hit) params.set('cache_hit', f.cache_hit.toString());
-		if (f.rate_limited) params.set('rate_limited', f.rate_limited.toString());
+		if (f.blocked != null) params.set('blocked', f.blocked.toString());
+		if (f.cache_hit != null) params.set('cache_hit', f.cache_hit.toString());
+		if (f.rate_limited != null)
+			params.set('rate_limited', f.rate_limited.toString());
 
 		if (f.error_only) params.set('error_only', 'true');
 		if (req.sort) params.set('sort', req.sort);
