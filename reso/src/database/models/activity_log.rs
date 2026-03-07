@@ -281,8 +281,8 @@ mod tests {
 
         let page = list_all(&db.conn, 10, 0).await;
         assert_eq!(page.items.len(), 2);
-        assert_eq!(page.items[0].kind, "error");
-        assert_eq!(page.items[1].kind, "query");
+        assert_eq!(page.items[0].kind, "query");
+        assert_eq!(page.items[1].kind, "error");
     }
 
     #[tokio::test]
