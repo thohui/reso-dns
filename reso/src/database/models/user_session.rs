@@ -3,10 +3,7 @@ use chrono::Utc;
 use rusqlite::{OptionalExtension, params};
 use uuid::Uuid;
 
-use crate::{
-    database::{CoreDatabasePool, DatabasePool},
-    utils::uuid::EntityId,
-};
+use crate::{database::CoreDatabasePool, utils::uuid::EntityId};
 
 use super::user::User;
 
