@@ -40,11 +40,9 @@ impl Upstreams {
     pub async fn new(addrs: &[SocketAddr], limits: Limits) -> Result<Self, std::io::Error> {
         let mut list = Vec::with_capacity(addrs.len());
         for &addr in addrs {
-            let tcp = TcpPool::new(addr, limits);
-            tcp.clone().start_reaper(limits.tcp_ttl);
-
             list.push(Arc::new(Upstream::new(addr, limits).await?));
         }
+
         let list: Arc<[Arc<Upstream>]> = Arc::from(list);
         let initial_healthy = Self::compute_healthy(&list);
         let upstreams = Arc::new(Self {
@@ -222,6 +220,9 @@ impl Upstream {
         }
         tokio::spawn(async move {
             let mut backoff = Duration::from_secs(1);
+            const MAX_RETRIES: u32 = 10;
+            let mut retries = 0;
+
             loop {
                 tokio::time::sleep(backoff).await;
                 match UpstreamUdpMux::new(self.addr).await {
@@ -232,7 +233,13 @@ impl Upstream {
                         return;
                     }
                     Err(e) => {
-                        tracing::warn!(upstream = %self.addr, error = %e, "UDP reconnect failed, retrying");
+                        retries += 1;
+                        if retries >= MAX_RETRIES {
+                            tracing::error!(upstream = %self.addr, "UDP mux reconnect failed after {} retries, giving up", MAX_RETRIES);
+                            self.udp_reconnecting.store(false, Ordering::Release);
+                            return;
+                        }
+                        tracing::warn!(upstream = %self.addr, error = %e, "UDP mux reconnect failed, retrying");
                         backoff = (backoff * 2).min(Duration::from_secs(30));
                     }
                 }

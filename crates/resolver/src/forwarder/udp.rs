@@ -164,8 +164,8 @@ async fn recv_loop(
         }
     }
 
+    alive.store(false, Ordering::Relaxed);
+
     // Cancel all inflight callers so they fail immediately rather than waiting until their individual deadlines expire.
     pending.retain(|_, _| false);
-
-    alive.store(false, Ordering::Relaxed);
 }

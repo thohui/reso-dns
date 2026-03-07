@@ -111,6 +111,8 @@ impl TcpPool {
             let mut idle = self.idle.lock().unwrap_or_else(|e| e.into_inner());
             if idle.len() < self.limits.max_idle_tcp_connections {
                 idle.push_back(conn);
+            } else {
+                tracing::trace!(upstream = %self.addr, "idle pool full, dropping connection");
             }
         }
     }
@@ -190,10 +192,7 @@ impl TcpConn {
             .map_err(UpstreamError::RecvError)?;
         let n = u16::from_be_bytes(resp_lenb) as usize;
 
-        if self.recv_buf.capacity() < n {
-            self.recv_buf.reserve(n - self.recv_buf.capacity());
-        }
-
+        self.recv_buf.reserve(n.saturating_sub(self.recv_buf.capacity()));
         self.recv_buf.resize(n, 0);
 
         timeout_at(deadline, self.stream.read_exact(&mut self.recv_buf[..]))
