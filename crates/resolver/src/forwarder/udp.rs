@@ -64,7 +64,7 @@ impl UpstreamUdpMux {
 
     pub async fn send_and_receive(&self, query: &[u8], deadline: Instant) -> Result<Bytes, UpstreamError> {
         if !self.alive.load(Ordering::Relaxed) {
-            return Err(UpstreamError::Other("udp recv loop stopped".into()));
+            return Err(UpstreamError::RecvTaskStopped);
         }
 
         let query_id = helpers::extract_transaction_id(query)
@@ -163,6 +163,9 @@ async fn recv_loop(
             let _ = tx.send(Bytes::copy_from_slice(&buf[..n]));
         }
     }
+
+    // Cancel all inflight callers so they fail immediately rather than waiting until their individual deadlines expire.
+    pending.retain(|_, _| false);
 
     alive.store(false, Ordering::Relaxed);
 }
