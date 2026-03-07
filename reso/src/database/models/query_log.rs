@@ -1,7 +1,7 @@
 use anyhow::Context;
 use rusqlite::params;
 
-use crate::database::DatabaseConnection;
+use crate::database::{DatabasePool, MetricsDatabasePool};
 
 #[derive(Debug, Clone)]
 pub struct DnsQueryLog {
@@ -18,7 +18,7 @@ pub struct DnsQueryLog {
 }
 
 impl DnsQueryLog {
-    pub async fn insert(&self, db: &DatabaseConnection) -> anyhow::Result<()> {
+    pub async fn insert(&self, db: &MetricsDatabasePool) -> anyhow::Result<()> {
         let ts_ms = self.ts_ms;
         let transport = self.transport;
         let client = self.client.clone();
@@ -59,40 +59,12 @@ impl DnsQueryLog {
         Ok(())
     }
 
-    pub async fn batch_insert(db: &DatabaseConnection, rows: &[Self]) -> anyhow::Result<()> {
+    pub async fn batch_insert(db: &MetricsDatabasePool, rows: &[Self]) -> anyhow::Result<()> {
         if rows.is_empty() {
             return Ok(());
         }
 
-        #[derive(Clone)]
-        struct RowOwned {
-            ts_ms: i64,
-            transport: i64,
-            client: String,
-            qname: String,
-            qtype: i64,
-            rcode: i64,
-            blocked: bool,
-            cache_hit: bool,
-            dur_ms: i64,
-            rate_limited: bool,
-        }
-
-        let owned: Vec<RowOwned> = rows
-            .iter()
-            .map(|r| RowOwned {
-                ts_ms: r.ts_ms,
-                transport: r.transport,
-                client: r.client.clone(),
-                qname: r.qname.clone(),
-                qtype: r.qtype,
-                rcode: r.rcode,
-                blocked: r.blocked,
-                cache_hit: r.cache_hit,
-                dur_ms: r.dur_ms,
-                rate_limited: r.rate_limited,
-            })
-            .collect();
+        let owned = rows.to_vec();
 
         db.interact(move |c| {
             let tx = c.transaction()?;
@@ -132,7 +104,7 @@ impl DnsQueryLog {
         Ok(())
     }
 
-    pub async fn list(db: &DatabaseConnection, limit: i64, offset: i64) -> anyhow::Result<Vec<Self>> {
+    pub async fn list(db: &MetricsDatabasePool, limit: i64, offset: i64) -> anyhow::Result<Vec<Self>> {
         Ok(db
             .interact(move |c| {
                 let mut stmt = c.prepare(
@@ -167,7 +139,7 @@ impl DnsQueryLog {
     }
 }
 
-pub async fn delete_before(db: &DatabaseConnection, cutoff_ts_ms: i64) -> anyhow::Result<()> {
+pub async fn delete_before(db: &MetricsDatabasePool, cutoff_ts_ms: i64) -> anyhow::Result<()> {
     db.interact(move |c| {
         c.execute("DELETE FROM dns_query_log WHERE ts_ms < ?1", params![cutoff_ts_ms])?;
         Ok(())
@@ -176,4 +148,95 @@ pub async fn delete_before(db: &DatabaseConnection, cutoff_ts_ms: i64) -> anyhow
     .context("failed to delete old DNS query logs")?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::setup_metrics_test_db;
+
+    fn make_row(ts_ms: i64) -> DnsQueryLog {
+        DnsQueryLog {
+            ts_ms,
+            transport: 1,
+            client: "127.0.0.1".to_string(),
+            qname: "example.com".to_string(),
+            qtype: 1,
+            rcode: 0,
+            blocked: false,
+            cache_hit: true,
+            dur_ms: 42,
+            rate_limited: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_batch_insert_round_trips_fields() {
+        let db = setup_metrics_test_db().await.unwrap();
+        let row = make_row(1000);
+
+        DnsQueryLog::batch_insert(&db, &[row.clone()]).await.unwrap();
+
+        let results = DnsQueryLog::list(&db, 10, 0).await.unwrap();
+        assert_eq!(results.len(), 1);
+
+        let r = &results[0];
+        assert_eq!(r.ts_ms, row.ts_ms);
+        assert_eq!(r.transport, row.transport);
+        assert_eq!(r.client, row.client);
+        assert_eq!(r.qname, row.qname);
+        assert_eq!(r.qtype, row.qtype);
+        assert_eq!(r.rcode, row.rcode);
+        assert_eq!(r.blocked, row.blocked);
+        assert_eq!(r.cache_hit, row.cache_hit);
+        assert_eq!(r.dur_ms, row.dur_ms);
+        assert_eq!(r.rate_limited, row.rate_limited);
+    }
+
+    #[tokio::test]
+    async fn test_list_ordered_by_ts_desc() {
+        let db = setup_metrics_test_db().await.unwrap();
+
+        DnsQueryLog::batch_insert(&db, &[make_row(1000), make_row(3000), make_row(2000)])
+            .await
+            .unwrap();
+
+        let results = DnsQueryLog::list(&db, 10, 0).await.unwrap();
+        assert_eq!(results[0].ts_ms, 3000);
+        assert_eq!(results[1].ts_ms, 2000);
+        assert_eq!(results[2].ts_ms, 1000);
+    }
+
+    #[tokio::test]
+    async fn test_list_pagination() {
+        let db = setup_metrics_test_db().await.unwrap();
+
+        let rows: Vec<_> = (1..=5).map(|i| make_row(i * 1000)).collect();
+        DnsQueryLog::batch_insert(&db, &rows).await.unwrap();
+
+        let page1 = DnsQueryLog::list(&db, 2, 0).await.unwrap();
+        let page2 = DnsQueryLog::list(&db, 2, 2).await.unwrap();
+        let page3 = DnsQueryLog::list(&db, 2, 4).await.unwrap();
+
+        assert_eq!(page1.len(), 2);
+        assert_eq!(page2.len(), 2);
+        assert_eq!(page3.len(), 1);
+        // pages should not overlap
+        assert_ne!(page1[0].ts_ms, page2[0].ts_ms);
+    }
+
+    #[tokio::test]
+    async fn test_delete_before_removes_old_rows() {
+        let db = setup_metrics_test_db().await.unwrap();
+
+        DnsQueryLog::batch_insert(&db, &[make_row(1000), make_row(2000), make_row(3000)])
+            .await
+            .unwrap();
+
+        delete_before(&db, 2000).await.unwrap();
+
+        let results = DnsQueryLog::list(&db, 10, 0).await.unwrap();
+        assert_eq!(results.len(), 2);
+        assert!(results.iter().all(|r| r.ts_ms >= 2000));
+    }
 }

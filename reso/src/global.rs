@@ -4,7 +4,7 @@ use aes_gcm::Aes256Gcm;
 use reso_cache::DnsMessageCache;
 
 use crate::{
-    database::DatabaseConnection,
+    database::{CoreDatabasePool, DatabasePool, MetricsDatabasePool},
     metrics::service::{MetricsHandle, Stats},
     services::{blocklist::BlocklistService, config::ConfigService},
 };
@@ -18,6 +18,7 @@ pub struct Global {
     pub metrics: MetricsHandle,
     pub config_service: ConfigService,
     pub stats: Stats,
-    pub database: Arc<DatabaseConnection>,
+    pub core_database: Arc<CoreDatabasePool>,
+    pub metrics_database: Arc<MetricsDatabasePool>,
     pub cipher: Aes256Gcm,
 }

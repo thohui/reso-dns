@@ -1,10 +1,10 @@
+use std::marker::PhantomData;
+
 use deadpool_sqlite::{Config, Pool, Runtime};
 use include_dir::{Dir, include_dir};
 use rusqlite_migration::MigrationsBuilder;
 
 pub mod models;
-
-static MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 
 const DB_POOL_SIZE: usize = 5;
 
@@ -26,11 +26,14 @@ impl From<deadpool_sqlite::InteractError> for DatabaseError {
     }
 }
 
-pub struct DatabaseConnection(Pool);
+pub struct DatabasePool<T> {
+    pool: Pool,
+    _marker: PhantomData<T>,
+}
 
-impl DatabaseConnection {
+impl<T> DatabasePool<T> {
     pub async fn conn(&self) -> Result<deadpool_sqlite::Object, DatabaseError> {
-        Ok(self.0.get().await?)
+        Ok(self.pool.get().await?)
     }
 
     pub async fn interact<F, R>(&self, f: F) -> Result<R, DatabaseError>
@@ -44,7 +47,13 @@ impl DatabaseConnection {
     }
 }
 
-pub async fn connect(db_path: &str) -> anyhow::Result<DatabaseConnection> {
+pub struct CoreDb;
+pub struct MetricsDb;
+
+pub type CoreDatabasePool = DatabasePool<CoreDb>;
+pub type MetricsDatabasePool = DatabasePool<MetricsDb>;
+
+pub async fn connect_core_db(db_path: &str) -> anyhow::Result<CoreDatabasePool> {
     let pool = Config::new(db_path)
         .builder(Runtime::Tokio1)?
         .max_size(DB_POOL_SIZE)
@@ -65,11 +74,53 @@ pub async fn connect(db_path: &str) -> anyhow::Result<DatabaseConnection> {
         .await
         .map_err(|e| anyhow::anyhow!("interact error: {}", e))??;
 
-    Ok(DatabaseConnection(pool))
+    Ok(CoreDatabasePool {
+        pool,
+        _marker: PhantomData,
+    })
 }
 
-pub async fn run_migrations(connection: &DatabaseConnection) -> anyhow::Result<()> {
-    let migrations = MigrationsBuilder::from_directory(&MIGRATIONS_DIR)?.finalize();
+pub async fn connect_metrics_db(db_path: &str) -> anyhow::Result<MetricsDatabasePool> {
+    let pool = Config::new(db_path)
+        .builder(Runtime::Tokio1)?
+        .max_size(DB_POOL_SIZE)
+        .build()?;
+
+    pool.get()
+        .await?
+        .interact(|c| {
+            c.execute_batch(
+                r#"
+        PRAGMA journal_mode = WAL;
+        PRAGMA synchronous = NORMAL;
+        PRAGMA foreign_keys = ON;
+        PRAGMA busy_timeout = 5000;
+        "#,
+            )
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("interact error: {}", e))??;
+
+    Ok(MetricsDatabasePool {
+        pool,
+        _marker: PhantomData,
+    })
+}
+
+static CORE_MIGRATIONS: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations");
+static METRICS_MIGRATIONS: Dir = include_dir!("$CARGO_MANIFEST_DIR/metrics_migrations");
+
+pub async fn run_core_db_migrations(connection: &CoreDatabasePool) -> anyhow::Result<()> {
+    let migrations = MigrationsBuilder::from_directory(&CORE_MIGRATIONS)?.finalize();
+    let conn = connection.conn().await?;
+    conn.interact(move |c| migrations.to_latest(c))
+        .await
+        .map_err(|e| anyhow::anyhow!("interact error: {}", e))??;
+    Ok(())
+}
+
+pub async fn run_metrics_db_migrations(connection: &MetricsDatabasePool) -> anyhow::Result<()> {
+    let migrations = MigrationsBuilder::from_directory(&METRICS_MIGRATIONS)?.finalize();
     let conn = connection.conn().await?;
     conn.interact(move |c| migrations.to_latest(c))
         .await
@@ -78,13 +129,23 @@ pub async fn run_migrations(connection: &DatabaseConnection) -> anyhow::Result<(
 }
 
 #[cfg(test)]
-pub(crate) async fn setup_test_db() -> anyhow::Result<DatabaseConnection> {
-    use tempfile::NamedTempFile;
+use tempfile::NamedTempFile;
 
+#[cfg(test)]
+pub(crate) async fn setup_core_test_db() -> anyhow::Result<CoreDatabasePool> {
     let temp_file = NamedTempFile::new()?;
     let db_path = temp_file.path().to_str().unwrap();
-    let conn = connect(db_path).await?;
-    run_migrations(&conn).await?;
+    let conn = connect_core_db(db_path).await?;
+    run_core_db_migrations(&conn).await?;
+    Ok(conn)
+}
+
+#[cfg(test)]
+pub(crate) async fn setup_metrics_test_db() -> anyhow::Result<MetricsDatabasePool> {
+    let temp_file = NamedTempFile::new()?;
+    let db_path = temp_file.path().to_str().unwrap();
+    let conn = connect_metrics_db(db_path).await?;
+    run_metrics_db_migrations(&conn).await?;
     Ok(conn)
 }
 
@@ -94,6 +155,6 @@ mod tests {
 
     #[tokio::test]
     pub async fn test_database_setup() {
-        setup_test_db().await.unwrap();
+        setup_core_test_db().await.unwrap();
     }
 }
