@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use arc_swap::ArcSwap;
-use bytes::BytesMut;
+use bytes::Bytes;
 use reso_context::{DnsRequestCtx, RequestType};
 use reso_dns::{DnsMessage, DnsMessageBuilder};
 use tokio::{net::UdpSocket, task::JoinSet};
@@ -9,7 +9,6 @@ use tokio::{net::UdpSocket, task::JoinSet};
 use crate::{ServerError, ServerState, handle_request};
 
 /// Run the DNS server over UDP.
-#[allow(clippy::too_many_arguments)]
 pub async fn run_udp<G, L>(
     bind_addr: SocketAddr,
     state: &ArcSwap<ServerState<G, L>>,
@@ -22,7 +21,7 @@ where
     const RECV_SIZE: usize = 1232;
 
     let socket = Arc::new(UdpSocket::bind(bind_addr).await?);
-    let mut buffer = BytesMut::with_capacity(RECV_SIZE);
+    let mut buffer = vec![0; RECV_SIZE];
 
     tracing::info!("UDP listening on {}", bind_addr);
 
@@ -30,9 +29,6 @@ where
     let mut inflight = JoinSet::new();
 
     loop {
-        // TODO: we should not resize the buffer every time, but rather reuse it.
-        buffer.resize(RECV_SIZE, 0);
-
         tokio::select! {
             join_res = inflight.join_next(), if !inflight.is_empty() => {
                 if let Some(Err(err)) = join_res {
@@ -41,7 +37,7 @@ where
             }
             result = socket.recv_from(&mut buffer[..]) => {
                 let (len, client) = result?;
-                let raw = buffer.split_to(len).freeze();
+                let raw = Bytes::copy_from_slice(&buffer[..len]);
                 let sock = socket.clone();
 
                 let state = state.load_full();

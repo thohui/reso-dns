@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use argon2::password_hash::SaltString;
-use argon2::password_hash::rand_core::{OsRng, RngCore};
+use argon2::password_hash::rand_core::OsRng;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 
 /// Hashes a password using Argon2.

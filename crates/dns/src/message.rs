@@ -990,11 +990,7 @@ impl DnsWritable for Edns {
         writer.write_u32(ttl)?;
 
         // RDLEN = sum over options of (code(2) + len(2) + data(len))
-        let rdlen: u16 = self
-            .options
-            .iter()
-            .map(|opt| 4u16 + opt.wire_len())
-            .sum();
+        let rdlen: u16 = self.options.iter().map(|opt| 4u16 + opt.wire_len()).sum();
         writer.write_u16(rdlen)?;
 
         for opt in &self.options {
@@ -1127,7 +1123,7 @@ impl DnsWritable for EdnsOptionData {
                 writer.write_u16(*family)?;
                 writer.write_u8(*source_prefix)?;
                 writer.write_u8(*scope_prefix)?;
-                writer.write_bytes(&address)?;
+                writer.write_bytes(address)?;
                 Ok(())
             }
             EdnsOptionData::Timeout(timeout) => writer.write_u16(*timeout),
@@ -1147,7 +1143,7 @@ impl DnsWritable for EdnsOptionData {
             } => {
                 writer.write_u8(*label_count)?;
                 writer.write_u8(*r#type)?;
-                writer.write_bytes(&version)?;
+                writer.write_bytes(version)?;
                 Ok(())
             }
             EdnsOptionData::Raw(items) => writer.write_bytes(items),
@@ -1160,15 +1156,17 @@ impl EdnsOptionData {
     pub fn wire_len(&self) -> u16 {
         match self {
             Self::Lease { key_lease, .. } => {
-                if key_lease.is_some() { 8 } else { 4 }
+                if key_lease.is_some() {
+                    8
+                } else {
+                    4
+                }
             }
             Self::ClientSubnet { address, .. } => 4 + address.len() as u16,
             Self::Timeout(_) => 2,
             Self::Padding(len) => *len,
             Self::DomainName(name) => name.wire_len() as u16,
-            Self::ExtendedError { extra_text, .. } => {
-                2 + extra_text.as_ref().map_or(0, |t| t.len() as u16)
-            }
+            Self::ExtendedError { extra_text, .. } => 2 + extra_text.as_ref().map_or(0, |t| t.len() as u16),
             Self::ZoneVersion { version, .. } => 2 + version.len() as u16,
             Self::Raw(data) => data.len() as u16,
         }
@@ -1232,7 +1230,6 @@ impl EdnsOptionData {
                 Self::ExtendedError { info_code, extra_text }
             }
             EdnsOptionCode::ZONEVERSION => {
-                // Query
                 anyhow::ensure!(len >= 2, "ZONEVERSION option too short: len={} (need at least 2)", len);
 
                 let label_count = reader.read_u8()?;
@@ -2149,10 +2146,7 @@ mod tests {
                         EdnsOptionCode::Cookie,
                         EdnsOptionData::Raw(vec![1, 2, 3, 4, 5, 6, 7, 8]),
                     ),
-                    EdnsOption::new(
-                        EdnsOptionCode::Padding,
-                        EdnsOptionData::Padding(2),
-                    ),
+                    EdnsOption::new(EdnsOptionCode::Padding, EdnsOptionData::Padding(2)),
                 ],
                 ..Default::default()
             }),

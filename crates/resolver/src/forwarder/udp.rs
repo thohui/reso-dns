@@ -93,11 +93,11 @@ impl UpstreamUdpMux {
             Ok(Ok(resp)) => Ok(resp),
             Ok(Err(_closed)) => {
                 self.pending.remove(&query_id);
-                return Err(UpstreamError::RecvTaskStopped);
+                Err(UpstreamError::RecvTaskStopped)
             }
             Err(_elapsed) => {
                 self.pending.remove(&query_id);
-                return Err(UpstreamError::RecvTimeout);
+                Err(UpstreamError::RecvTimeout)
             }
         }
     }

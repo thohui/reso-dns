@@ -63,7 +63,7 @@ where
 
                     let mut ctx = DnsRequestCtx::new(
                         state.timeout,
-                        client.into(),
+                        client,
                         RequestType::TCP,
                         bytes,
                         global,

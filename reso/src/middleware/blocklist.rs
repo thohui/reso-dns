@@ -12,8 +12,8 @@ impl DnsMiddleware<Global, Local> for BlocklistMiddleware {
     async fn on_query(&self, ctx: &mut DnsRequestCtx<Global, Local>) -> anyhow::Result<Option<DnsResponse>> {
         let message = ctx.message()?;
 
-        if let Some(question) = message.questions().first() {
-            if ctx.global().blocklist.is_blocked(&question.qname) {
+        if let Some(question) = message.questions().first()
+            && ctx.global().blocklist.is_blocked(&question.qname) {
                 let resp_bytes = DnsMessageBuilder::new()
                     .with_id(message.id)
                     .with_questions(message.questions().to_vec())
@@ -25,7 +25,6 @@ impl DnsMiddleware<Global, Local> for BlocklistMiddleware {
 
                 return Ok(Some(DnsResponse::from_bytes(resp_bytes)));
             }
-        }
 
         Ok(None)
     }

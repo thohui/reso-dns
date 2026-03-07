@@ -1,8 +1,7 @@
 use async_trait::async_trait;
-use bytes::Bytes;
 use reso_cache::{CacheKey, CacheResult, NegKind};
 use reso_context::{DnsMiddleware, DnsRequestCtx, DnsResponse};
-use reso_dns::{DnsFlags, DnsMessage, DnsMessageBuilder, DnsOpcode, DnsResponseCode, Edns, message::EdnsOptionCode};
+use reso_dns::{DnsFlags, DnsMessage, DnsMessageBuilder, DnsOpcode, DnsResponseCode, message::EdnsOptionCode};
 
 use crate::{global::Global, local::Local, middleware::echo_edns};
 

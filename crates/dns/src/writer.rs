@@ -103,7 +103,7 @@ impl DnsMessageWriter {
         for i in 0..labels.len() {
             let suffix_key = wire_suffix_key(&labels[i..]);
 
-            let ptrs = self.label_pointers.get_or_init(|| HashMap::default());
+            let ptrs = self.label_pointers.get_or_init(HashMap::default);
             if let Some(&offset) = ptrs.get(&suffix_key) {
                 let ptr = 0xC000 | offset;
                 self.write_u16(ptr)?;

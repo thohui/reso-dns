@@ -116,12 +116,11 @@ fn split_host_port(s: &str) -> Result<(String, Option<u16>)> {
         bail!("empty upstream");
     }
 
-    if let Some((host, port)) = s.rsplit_once(':') {
-        if !host.contains(':') && !host.is_empty() {
+    if let Some((host, port)) = s.rsplit_once(':')
+        && !host.contains(':') && !host.is_empty() {
             let port: u16 = port.parse().with_context(|| format!("invalid port: {port:?}"))?;
             return Ok((host.to_string(), Some(port)));
         }
-    }
 
     Ok((s.to_string(), None))
 }
@@ -177,7 +176,7 @@ impl Config {
                 active,
                 forwarder: ForwarderConfig { upstreams },
                 rate_limit: RateLimitConfigModel {
-                    window_duration: window_duration,
+                    window_duration,
                     max_queries_per_window,
                 },
             },

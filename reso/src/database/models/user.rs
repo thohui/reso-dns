@@ -67,7 +67,9 @@ impl User {
     }
 
     pub async fn find_by_id(db: &DatabaseConnection, id: &EntityId<Self>) -> anyhow::Result<Option<Self>> {
-        let id = id.id().clone();
+        let conn = db.conn().await;
+
+        let id = *id.id();
 
         Ok(db
             .interact(move |c| {

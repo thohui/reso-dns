@@ -117,7 +117,6 @@ where
         });
     }
 }
-#[allow(clippy::too_many_arguments)]
 async fn handle_req<G, L>(req: Req, addr: SocketAddr, state: Arc<ServerState<G, L>>) -> anyhow::Result<Res>
 where
     G: Send + Sync + 'static,
@@ -163,21 +162,21 @@ where
 
     match response {
         Ok(resp) => {
-            return Ok(Response::builder()
+            Ok(Response::builder()
                 .status(200)
                 .header("Content-Type", "application/dns-message")
-                .body(Full::new(resp.bytes()))?);
+                .body(Full::new(resp.bytes()))?)
         }
         Err(e) => {
             let resp = match ctx.message() {
                 Ok(m) => Response::builder()
                     .status(200)
                     .header("Content-Type", "application/dns-message")
-                    .body(Full::new(create_error_message(&m, &e)?))?,
+                    .body(Full::new(create_error_message(m, &e)?))?,
                 Err(_) => Response::builder().status(500).body(Full::new(Bytes::new()))?,
             };
 
-            return Ok(resp);
+            Ok(resp)
         }
     }
 }
@@ -260,17 +259,20 @@ fn load_certs(filename: &str) -> io::Result<Vec<CertificateDer<'static>>> {
 }
 
 // Load private key from file.
-fn load_private_key(filename: &str) -> io::Result<PrivateKeyDer<'static>> {
+fn load_private_key(filename: &str) -> anyhow::Result<PrivateKeyDer<'static>> {
     // Open keyfile.
     let keyfile = fs::File::open(filename).map_err(|e| error(format!("failed to open {filename}: {e}")))?;
     let mut reader = io::BufReader::new(keyfile);
 
     // Load and return a single private key.
-    rustls_pemfile::private_key(&mut reader).map(|key| key.unwrap())
+    rustls_pemfile::private_key(&mut reader)?
+        .into_iter()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("no private key found in {filename}"))
 }
 
 fn error(err: String) -> io::Error {
-    io::Error::new(io::ErrorKind::Other, err)
+    io::Error::other(err)
 }
 
 fn create_error_message(message: &DnsMessage, error: &ServerError) -> anyhow::Result<Bytes> {

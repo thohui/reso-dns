@@ -154,8 +154,8 @@ impl MetricsService {
                     // drain any buffered messages before flushing
                     while let Ok(msg) = self.rx.try_recv() {
                         match msg {
-                            MetricsMessage::Query(ev) => self.on_event(ev).await,
-                            MetricsMessage::Error(ev) => self.on_error(ev).await,
+                            MetricsMessage::Query(ev) => self.live_stats.write().await.apply_event(&ev),
+                            MetricsMessage::Error(ev) => self.live_stats.write().await.apply_error(&ev),
                             MetricsMessage::Shutdown => break,
                         }
                     }
@@ -170,30 +170,20 @@ impl MetricsService {
                             self.flush_events().await;
                             break;
                         },
-                        Some(MetricsMessage::Query(ev)) => self.on_event(ev).await,
-                        Some(MetricsMessage::Error(ev)) => self.on_error(ev).await
+                        Some(MetricsMessage::Query(ev)) => {
+                            self.live_stats.write().await.apply_event(&ev);
+                            self.query_batch.push(ev);
+                        },
+                        Some(MetricsMessage::Error(ev)) => {
+                            self.live_stats.write().await.apply_error(&ev);
+                            self.error_batch.push(ev);
+                        }
                     }
                 }
             }
         }
 
         Ok(())
-    }
-
-    async fn on_event(&mut self, event: QueryLogEvent) {
-        {
-            let mut write = self.live_stats.write().await;
-            write.apply_event(&event);
-        }
-        self.query_batch.push(event);
-    }
-
-    async fn on_error(&mut self, error: ErrorLogEvent) {
-        {
-            let mut write = self.live_stats.write().await;
-            write.apply_error(&error);
-        }
-        self.error_batch.push(error);
     }
 
     async fn flush_events(&mut self) {
@@ -232,4 +222,3 @@ impl MetricsService {
         Ok(())
     }
 }
-
