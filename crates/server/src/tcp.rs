@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Context;
 use arc_swap::ArcSwap;
@@ -17,7 +17,7 @@ use crate::{ServerError, ServerState, handle_request};
 #[allow(clippy::too_many_arguments)]
 pub async fn run_tcp<G, L>(
     bind_addr: SocketAddr,
-    state: &ArcSwap<ServerState<G, L>>,
+    state: Arc<ArcSwap<ServerState<G, L>>>,
     shutdown: tokio_util::sync::CancellationToken,
 ) -> anyhow::Result<()>
 where
@@ -39,51 +39,72 @@ where
             }
             result = listener.accept() => {
                 let (mut stream, client) = result?;
-
-                let state = state.load_full();
-                let global = state.global.clone();
+                let state = state.clone();
+                let shutdown = shutdown.clone();
 
                 inflight.spawn(async move {
                     let mut len_buf = [0u8; 2];
-                    if let Err(e) = stream.read_exact(&mut len_buf).await {
-                        tracing::debug!("failed to read length from client: {} {}", client, e);
-                        return;
-                    }
+                    let mut buf = Vec::new();
+                    loop {
 
-                    let buffer_length = u16::from_be_bytes(len_buf) as usize;
+                        let len_res = tokio::select! {
+                            _ = shutdown.cancelled() => return,
+                            res = stream.read_exact(&mut len_buf) => res,
+                        };
 
-                    let mut buf = vec![0; buffer_length];
 
-                    if let Err(e) = stream.read_exact(&mut buf).await {
-                        tracing::debug!("failed to read data from client {}: {}", client, e);
-                        return;
-                    }
+                        if let Err(e) = len_res {
+                            if e.kind() != std::io::ErrorKind::UnexpectedEof {
+                                tracing::debug!("failed to read length from client {}: {}", client, e);
+                            }
+                            return;
+                        }
 
-                    let bytes = Bytes::from(buf);
+                        let buffer_length = u16::from_be_bytes(len_buf) as usize;
+                        buf.resize(buffer_length, 0);
 
-                    let mut ctx = DnsRequestCtx::new(
-                        state.timeout,
-                        client,
-                        RequestType::TCP,
-                        bytes,
-                        global,
-                        L::default(),
-                    );
+                        let body_res = tokio::select! {
+                            _ = shutdown.cancelled() => return,
+                           res = stream.read_exact(&mut buf) => res,
+                        };
 
-                    match handle_request(&mut ctx, state).await {
-                        Ok(resp) => {
-                            let _ = write_tcp_response(&mut stream, &resp.bytes()).await;
-                        },
-                        Err(e) => {
-                            if let Ok(message) = ctx.message() {
-                                let res = write_tcp_server_error_response(message, &mut stream, &e).await;
-                                if let Err(err) = res {
-                                    tracing::warn!("failed to write error response to client {}: {}", client, err);
+                        if let Err(e) = body_res {
+                            if e.kind() != std::io::ErrorKind::UnexpectedEof {
+                                tracing::debug!("failed to read body from client {}: {}", client, e);
+                            }
+                            return;
+                        }
+
+                        let bytes = Bytes::copy_from_slice(&buf);
+                        let current_state = state.load_full();
+
+                        let mut ctx = DnsRequestCtx::new(
+                            current_state.timeout,
+                            client,
+                            RequestType::TCP,
+                            bytes,
+                            current_state.global.clone(),
+                            L::default(),
+                        );
+
+                        match handle_request(&mut ctx, current_state).await {
+                            Ok(resp) => {
+                                if let Err(e) = write_tcp_response(&mut stream, &resp.bytes()).await {
+                                    tracing::debug!("failed to write tcp response to client: {:?}", e);
+                                    return;
                                 }
+                            }
+                            Err(e) => {
+                                if let Ok(message) = ctx.message() {
+                                    if let Err(e) = write_tcp_server_error_response(message, &mut stream, &e).await {
+                                        tracing::debug!("failed to write tcp server response to client: {:?}", e);
+                                        return;
+                                    }
+                                }
+                                continue;
                             }
                         }
                     }
-
                 });
             }
             _ = shutdown.cancelled() => {

@@ -2,7 +2,7 @@ use std::{
     net::SocketAddr,
     sync::{
         Arc,
-        atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering},
     },
     time::{Duration, UNIX_EPOCH},
 };
@@ -40,16 +40,9 @@ impl Upstreams {
     pub async fn new(addrs: &[SocketAddr], limits: Limits) -> Result<Self, std::io::Error> {
         let mut list = Vec::with_capacity(addrs.len());
         for &addr in addrs {
-            let tcp = TcpPool::new(addr, limits);
-            tcp.clone().start_reaper(limits.tcp_ttl);
-
-            list.push(Arc::new(Upstream {
-                addr,
-                tcp,
-                udp: UpstreamUdpMux::new(addr).await?,
-                health: UpstreamHealth::new(),
-            }));
+            list.push(Arc::new(Upstream::new(addr, limits).await?));
         }
+
         let list: Arc<[Arc<Upstream>]> = Arc::from(list);
         let initial_healthy = Self::compute_healthy(&list);
         let upstreams = Arc::new(Self {
@@ -58,8 +51,9 @@ impl Upstreams {
             healthy_cache: ArcSwap::from_pointee(initial_healthy),
         });
 
-        // Spawn periodic rebuild task using Weak to avoid leaking.
+        // spawn periodic rebuild task using Weak to avoid leaking.
         let weak = Arc::downgrade(&upstreams);
+
         tokio::spawn(async move {
             let mut ticker = tokio::time::interval(Duration::from_secs(1));
             loop {
@@ -86,9 +80,8 @@ impl Upstreams {
         Some((upstreams, i))
     }
 
-    fn rebuild_healthy_cache(&self) {
-        let healthy = Self::compute_healthy(&self.list);
-        self.healthy_cache.store(Arc::new(healthy));
+    pub fn rebuild_healthy_cache(&self) {
+        self.healthy_cache.store(Arc::new(Self::compute_healthy(&self.list)));
     }
 
     fn compute_healthy(list: &Arc<[Arc<Upstream>]>) -> Vec<Arc<Upstream>> {
@@ -107,9 +100,8 @@ pub struct UpstreamHealth {
 impl UpstreamHealth {
     /// Number of consecutive failures to consider an upstream unhealthy and start skipping it.
     const FAILURE_THRESHOLD: u32 = 5;
-    /// Base cooldown duration in milliseconds to skip an unhealthy upstream. The actual cooldown duration is `BASE_COOLDOWN_MS * 2^consecutive_failures`.
+    /// Base cooldown duration in milliseconds to skip an unhealthy upstream.
     const BASE_COOLDOWN_MS: u64 = 2000;
-
     /// Maximum cooldown duration in milliseconds when skipping an unhealthy upstream.
     const MAX_COOLDOWN_MS: u64 = 30000;
 
@@ -145,7 +137,7 @@ impl UpstreamHealth {
             let cooldown = Self::cooldown_ms(failures);
             let current_time_ms = std::time::SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_millis() as u64;
             let skip_until = current_time_ms.saturating_add(cooldown);
             self.skip_until.store(skip_until, Ordering::Relaxed);
@@ -161,11 +153,13 @@ pub struct Upstream {
     /// Address of the upstream server.
     pub addr: SocketAddr,
     /// UDP mux for this upstream.
-    pub udp: UpstreamUdpMux,
+    pub udp: ArcSwap<UpstreamUdpMux>,
     /// TCP connection pool for this upstream.
     pub tcp: Arc<TcpPool>,
     /// Health status of the upstream, used to determine if it should be skipped for new requests.
     pub health: UpstreamHealth,
+    /// Flag to prevent concurrent UDP reconnect attempts.
+    udp_reconnecting: AtomicBool,
 }
 
 impl Upstream {
@@ -176,8 +170,9 @@ impl Upstream {
         Ok(Self {
             addr,
             tcp,
-            udp: UpstreamUdpMux::new(addr).await?,
+            udp: ArcSwap::from_pointee(UpstreamUdpMux::new(addr).await?),
             health: UpstreamHealth::new(),
+            udp_reconnecting: AtomicBool::new(false),
         })
     }
 
@@ -188,10 +183,43 @@ impl Upstream {
         } else {
             let current_time_ms = std::time::SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_millis() as u64;
             current_time_ms >= skip_until
         }
+    }
+
+    pub fn trigger_udp_reconnect(self: Arc<Self>) {
+        if self.udp_reconnecting.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        tokio::spawn(async move {
+            let mut backoff = Duration::from_secs(1);
+            const MAX_RETRIES: u32 = 10;
+            let mut retries = 0;
+
+            loop {
+                tokio::time::sleep(backoff).await;
+                match UpstreamUdpMux::new(self.addr).await {
+                    Ok(mux) => {
+                        self.udp.store(Arc::new(mux));
+                        self.udp_reconnecting.store(false, Ordering::Release);
+                        tracing::info!(upstream = %self.addr, "UDP mux reconnected");
+                        return;
+                    }
+                    Err(e) => {
+                        retries += 1;
+                        if retries >= MAX_RETRIES {
+                            tracing::error!(upstream = %self.addr, "UDP mux reconnect failed after {} retries, giving up", MAX_RETRIES);
+                            self.udp_reconnecting.store(false, Ordering::Release);
+                            return;
+                        }
+                        tracing::warn!(upstream = %self.addr, error = %e, "UDP mux reconnect failed, retrying");
+                        backoff = (backoff * 2).min(Duration::from_secs(30));
+                    }
+                }
+            }
+        });
     }
 }
 

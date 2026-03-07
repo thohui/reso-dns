@@ -1,9 +1,7 @@
 use std::{
+    collections::VecDeque,
     net::SocketAddr,
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
+    sync::{Arc, Mutex},
 };
 
 use bytes::{Bytes, BytesMut};
@@ -14,22 +12,19 @@ use tokio::{
     time::{Duration, Instant, timeout_at},
 };
 
-use crossbeam_queue::SegQueue;
 use tokio::sync::Semaphore;
 
 use super::upstream::{Limits, UpstreamError};
 
 /// A pool of TCP connections to a specific upstream server.
-/// Existing connections are reused if possible, otherwise new connections are created
+/// Existing connections are reused if possible, otherwise new connections are created.
 pub(crate) struct TcpPool {
     /// Upstream address
     pub addr: SocketAddr,
     /// Upstream limits
     pub limits: Limits,
-    /// Idle connections
-    idle: SegQueue<TcpConn>,
-    /// Count of idle connections
-    idle_count: AtomicUsize,
+    /// Idle connections in insertion order.
+    idle: Mutex<VecDeque<TcpConn>>,
     /// Total connections (including in-use and connecting)
     connections: Arc<Semaphore>,
 }
@@ -39,8 +34,7 @@ impl TcpPool {
         Arc::new(Self {
             addr,
             limits,
-            idle: SegQueue::new(),
-            idle_count: AtomicUsize::new(0),
+            idle: Mutex::new(VecDeque::new()),
             connections: Arc::new(Semaphore::new(limits.max_tcp_connections)),
         })
     }
@@ -58,20 +52,11 @@ impl TcpPool {
                     None => return,
                 };
                 let now = Instant::now();
-                let mut dropped = 0;
-                for _ in 0..this.idle_count.load(Ordering::Relaxed) {
-                    if let Some(conn) = this.idle.pop() {
-                        if conn.ttl > now {
-                            this.idle.push(conn);
-                        } else {
-                            dropped += 1;
-                            this.idle_count.fetch_sub(1, Ordering::Relaxed);
-                            drop(conn);
-                        }
-                    } else {
-                        break;
-                    }
-                }
+                let mut idle = this.idle.lock().unwrap_or_else(|e| e.into_inner());
+                let before = idle.len();
+                idle.retain(|c| c.ttl > now);
+                let dropped = before - idle.len();
+                drop(idle);
                 if dropped > 0 {
                     tracing::debug!("reaper dropped {} expired tcp conns to {}", dropped, this.addr);
                 }
@@ -81,12 +66,8 @@ impl TcpPool {
 
     /// Try to get an idle conn.
     pub fn try_get(&self) -> Option<TcpConn> {
-        if let Some(conn) = self.idle.pop() {
-            self.idle_count.fetch_sub(1, Ordering::Relaxed);
-            Some(conn)
-        } else {
-            None
-        }
+        // pop from the back to reuse the most recently returned connection, which is likely still alive.
+        self.idle.lock().unwrap_or_else(|e| e.into_inner()).pop_back()
     }
 
     /// Get an idle conn or connect a new one if under cap.
@@ -122,9 +103,13 @@ impl TcpPool {
 
     /// Attempt to put back a connection to the pool.
     pub fn put_back(&self, conn: TcpConn, healthy: bool) {
-        if healthy && self.idle_count.load(Ordering::Relaxed) < self.limits.max_idle_tcp_connections {
-            self.idle.push(conn);
-            self.idle_count.fetch_add(1, Ordering::Relaxed);
+        if healthy {
+            let mut idle = self.idle.lock().unwrap_or_else(|e| e.into_inner());
+            if idle.len() < self.limits.max_idle_tcp_connections {
+                idle.push_back(conn);
+            } else {
+                tracing::trace!(upstream = %self.addr, "idle pool full, dropping connection");
+            }
         }
     }
 }
@@ -138,7 +123,9 @@ pub struct TcpConn {
     /// Time-to-live for this connection
     pub ttl: Instant,
     /// Reusable buffer for receiving data
-    buffer: BytesMut,
+    recv_buf: BytesMut,
+    /// Reusable buffer for sending data
+    send_buf: Vec<u8>,
 }
 
 impl TcpConn {
@@ -152,13 +139,14 @@ impl TcpConn {
         ttl: Instant,
     ) -> Result<Self, UpstreamError> {
         // TCP connect can take a long time if the server is unresponsive, so we apply the timeout to the connect operation itself rather than the whole get_or_connect
+
         let effective_deadline = (Instant::now() + connect_timeout).min(deadline);
         let s = timeout_at(effective_deadline, TcpStream::connect(addr))
             .await
             .map_err(|_| UpstreamError::SendTimeout)?
             .map_err(UpstreamError::SendError)?;
 
-        // this allows us to avoid delays in sending small packets, which we are doing in the send_and_receive method.
+        // this allows us to avoid delays in sending small packets.
         s.set_nodelay(true).map_err(UpstreamError::SendError)?;
 
         const MAX_RECEIVE_BUFFER_SIZE: usize = 65_536;
@@ -167,7 +155,8 @@ impl TcpConn {
             stream: s,
             _permit,
             ttl,
-            buffer: BytesMut::with_capacity(MAX_RECEIVE_BUFFER_SIZE),
+            recv_buf: BytesMut::with_capacity(MAX_RECEIVE_BUFFER_SIZE),
+            send_buf: Vec::with_capacity(MAX_RECEIVE_BUFFER_SIZE),
         })
     }
 
@@ -180,15 +169,13 @@ impl TcpConn {
             )));
         }
 
-        // write length + body
-        // should be fine to write these two separately as they are small and we set tcp_nodelay
-        let lenb = (query.len() as u16).to_be_bytes();
-        timeout_at(deadline, self.stream.write_all(&lenb))
-            .await
-            .map_err(|_| UpstreamError::SendTimeout)?
-            .map_err(UpstreamError::SendError)?;
+        self.send_buf.clear();
 
-        timeout_at(deadline, self.stream.write_all(query))
+        // write length + query.
+        self.send_buf.extend_from_slice(&(query.len() as u16).to_be_bytes());
+        self.send_buf.extend_from_slice(query);
+
+        timeout_at(deadline, self.stream.write_all(&self.send_buf))
             .await
             .map_err(|_| UpstreamError::SendTimeout)?
             .map_err(UpstreamError::SendError)?;
@@ -201,18 +188,14 @@ impl TcpConn {
             .map_err(UpstreamError::RecvError)?;
         let n = u16::from_be_bytes(resp_lenb) as usize;
 
-        if self.buffer.capacity() < n {
-            self.buffer.reserve(n - self.buffer.capacity());
-        }
+        self.recv_buf.resize(n, 0);
 
-        self.buffer.resize(n, 0);
-
-        timeout_at(deadline, self.stream.read_exact(&mut self.buffer[..]))
+        timeout_at(deadline, self.stream.read_exact(&mut self.recv_buf[..]))
             .await
             .map_err(|_| UpstreamError::RecvTimeout)?
             .map_err(UpstreamError::RecvError)?;
 
-        let resp = self.buffer.split().freeze();
+        let resp = self.recv_buf.split().freeze();
         Ok(resp)
     }
 }

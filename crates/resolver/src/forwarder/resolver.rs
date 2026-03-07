@@ -33,11 +33,11 @@ impl ForwardResolver {
             upstreams: Arc::new(
                 Upstreams::new(
                     upstreams,
-                    // TODO: make this configurable
+                    // TODO: make this configurable by the client.
                     Limits {
-                        connect_timeout: Duration::from_secs(5),
-                        max_tcp_connections: 100,
-                        max_idle_tcp_connections: 100,
+                        connect_timeout: Duration::from_secs(2),
+                        max_tcp_connections: 10,
+                        max_idle_tcp_connections: 5,
                         tcp_ttl: Duration::from_secs(30),
                     },
                 )
@@ -55,8 +55,7 @@ where
     L: Send + Sync,
 {
     async fn resolve(&self, ctx: &DnsRequestCtx<G, L>) -> Result<DnsResponse, ResolveError> {
-        let query_message = ctx
-            .message().map_err(|e| ResolveError::InvalidRequest(e.to_string()))?;
+        let query_message = ctx.message().map_err(|e| ResolveError::InvalidRequest(e.to_string()))?;
 
         if query_message.questions().len() != 1 {
             return Err(ResolveError::InvalidRequest(format!(

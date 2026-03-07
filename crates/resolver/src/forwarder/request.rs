@@ -100,12 +100,17 @@ impl UpstreamResolveRequest {
                     ) {
                         upstream.health.record_failure(upstream.addr);
                     }
+
+                    if let UpstreamError::RecvTaskStopped = *e {
+                        upstream.clone().trigger_udp_reconnect();
+                    }
+
                     tracing::warn!(
                         upstream = %upstream.addr,
                         req_type = ?req_type,
                         attempt = off + 1,
                         total = n,
-                        error = %e,
+                        error = ?e,
                         "forward attempt failed"
                     );
 
@@ -169,6 +174,7 @@ impl UpstreamResolveRequest {
     /// Resolve the upstream request over udp.
     async fn resolve_udp(&self, upstream: &Upstream, query: &[u8]) -> Result<Bytes, UpstreamError> {
         let deadline = self.request_budget.deadline();
-        upstream.udp.send_and_receive(query, deadline).await
+        let udp = upstream.udp.load();
+        udp.send_and_receive(query, deadline).await
     }
 }
