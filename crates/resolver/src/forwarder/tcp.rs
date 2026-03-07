@@ -54,9 +54,7 @@ impl TcpPool {
                 let now = Instant::now();
                 let mut idle = this.idle.lock().unwrap_or_else(|e| e.into_inner());
                 let before = idle.len();
-
                 idle.retain(|c| c.ttl > now);
-                }
                 let dropped = before - idle.len();
                 drop(idle);
                 if dropped > 0 {
