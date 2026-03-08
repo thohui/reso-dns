@@ -1064,6 +1064,15 @@ pub enum EdnsOptionCode {
 }
 }
 
+/// Client subnet EDNS option.
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
+pub struct ClientSubnet {
+    pub family: u16,
+    pub source_prefix: u8,
+    pub scope_prefix: u8,
+    pub address: Vec<u8>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum EdnsOptionData {
     /// Lease
@@ -1074,12 +1083,7 @@ pub enum EdnsOptionData {
         key_lease: Option<u32>,
     },
     /// Client Subnet
-    ClientSubnet {
-        family: u16,
-        source_prefix: u8,
-        scope_prefix: u8,
-        address: Vec<u8>,
-    },
+    ClientSubnet(ClientSubnet),
 
     // Timeout in units of 100ms.
     Timeout(u16),
@@ -1117,12 +1121,12 @@ impl DnsWritable for EdnsOptionData {
                 }
                 Ok(())
             }
-            EdnsOptionData::ClientSubnet {
+            EdnsOptionData::ClientSubnet(ClientSubnet {
                 family,
                 source_prefix,
                 scope_prefix,
                 address,
-            } => {
+            }) => {
                 writer.write_u16(*family)?;
                 writer.write_u8(*source_prefix)?;
                 writer.write_u8(*scope_prefix)?;
@@ -1165,7 +1169,7 @@ impl EdnsOptionData {
                     4
                 }
             }
-            Self::ClientSubnet { address, .. } => 4 + address.len() as u16,
+            Self::ClientSubnet(ClientSubnet { address, .. }) => 4 + address.len() as u16,
             Self::Timeout(_) => 2,
             Self::Padding(len) => *len,
             Self::DomainName(name) => name.wire_len() as u16,
@@ -1184,12 +1188,12 @@ impl EdnsOptionData {
                 let scope_prefix_length = reader.read_u8()?;
                 let address_size = (source_prefix_length as usize).div_ceil(8);
                 let address = reader.read_bytes(address_size)?;
-                Self::ClientSubnet {
+                Self::ClientSubnet(ClientSubnet {
                     family: u16::from_be_bytes([family_bytes[0], family_bytes[1]]),
                     source_prefix: source_prefix_length,
                     scope_prefix: scope_prefix_length,
                     address: address.to_vec(),
-                }
+                })
             }
             EdnsOptionCode::Cookie => Self::Raw(reader.read_bytes(len as usize)?.to_vec()),
             EdnsOptionCode::UpdateLease => {
@@ -1969,12 +1973,12 @@ mod tests {
             edns: Some(Edns {
                 options: vec![EdnsOption::new(
                     EdnsOptionCode::ClientSubnet,
-                    EdnsOptionData::ClientSubnet {
+                    EdnsOptionData::ClientSubnet(ClientSubnet {
                         family: 1, // IPv4
                         source_prefix: 24,
                         scope_prefix: 0,
                         address: vec![192, 168, 1],
-                    },
+                    }),
                 )],
                 ..Default::default()
             }),
@@ -1989,12 +1993,12 @@ mod tests {
 
         let edns = decoded.edns().as_ref().unwrap();
         match &edns.options[0].data {
-            Some(EdnsOptionData::ClientSubnet {
+            Some(EdnsOptionData::ClientSubnet(ClientSubnet {
                 family,
                 source_prefix,
                 scope_prefix,
                 address,
-            }) => {
+            })) => {
                 assert_eq!(*family, 1);
                 assert_eq!(*source_prefix, 24);
                 assert_eq!(*scope_prefix, 0);

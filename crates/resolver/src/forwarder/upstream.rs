@@ -32,7 +32,7 @@ pub struct Upstreams {
     list: Arc<[Arc<Upstream>]>,
     /// Round-robin index
     rr: AtomicUsize,
-    /// Cached healthy upstream list, rebuilt periodically.
+    /// Cached healthy upstream list.
     healthy_cache: ArcSwap<Vec<Arc<Upstream>>>,
 }
 
