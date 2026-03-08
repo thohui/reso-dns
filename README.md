@@ -2,7 +2,7 @@
 
 > **Work in progress:** expect breaking changes and missing features.
 
-A fast, self hosted DNS resolver with a web UI. Supports forwarding over UDP and TCP, with query caching and domain blocking.
+A fast, self-hosted DNS resolver with a web UI. Supports forwarding over UDP and TCP, with query caching and domain blocking.
 
 ---
 
