@@ -10,8 +10,6 @@ async-trait.workspace = true
 bytes.workspace = true
 once_cell.workspace = true
 tokio.workspace = true
-parking_lot.workspace = true
-
 
 [lib]
 name = "reso_context"
