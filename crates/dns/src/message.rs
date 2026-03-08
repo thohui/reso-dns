@@ -373,7 +373,7 @@ u16_enum_with_unknown! {
     }
 }
 
-#[derive(Debug, Copy, Clone, Default, PartialEq)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum DnsOpcode {
     /// Standard query

@@ -188,6 +188,13 @@ impl TcpConn {
             .map_err(UpstreamError::RecvError)?;
         let n = u16::from_be_bytes(resp_lenb) as usize;
 
+        if n < 12 {
+            return Err(UpstreamError::RecvError(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("upstream response length {n} is below minimum DNS message size"),
+            )));
+        }
+
         self.recv_buf.resize(n, 0);
 
         timeout_at(deadline, self.stream.read_exact(&mut self.recv_buf[..]))

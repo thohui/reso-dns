@@ -5,7 +5,7 @@ use bytes::{Bytes, BytesMut};
 use rand::Rng;
 use reso_context::DnsRequestCtx;
 use reso_dns::{
-    ClassType, DnsMessage, RecordType,
+    ClassType, DnsMessage, DnsOpcode, RecordType,
     domain_name::DomainName,
     message::{ClientSubnet, EdnsOptionData},
 };
@@ -25,6 +25,7 @@ struct InflightCacheKey {
     pub class_type: ClassType,
     pub do_bit: bool,
     pub client_subnet: Option<ClientSubnet>,
+    pub opcode: DnsOpcode,
 }
 
 impl TryFrom<&DnsMessage> for InflightCacheKey {
@@ -44,8 +45,9 @@ impl TryFrom<&DnsMessage> for InflightCacheKey {
                 name: q.qname.clone(),
                 class_type: q.qclass,
                 record_type: q.qtype,
-                client_subnet: client_subnet,
+                opcode: message.flags.opcode,
                 do_bit: message.edns().as_ref().map(|e| e.do_bit()).unwrap_or(false),
+                client_subnet: client_subnet,
             })
             .ok_or_else(|| anyhow::anyhow!("no question in message"))
     }
