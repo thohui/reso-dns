@@ -72,10 +72,16 @@ impl UpstreamUdpMux {
 
         let (tx, rx) = oneshot::channel();
 
-        // If a pending entry already exists for this transaction ID, the old
-        // sender is dropped which causes the old caller to receive a channel
-        // closed error rather than silently hanging until timeout.
-        self.pending.insert(query_id, Pending(tx));
+        match self.pending.entry(query_id) {
+            dashmap::Entry::Vacant(slot) => {
+                slot.insert(Pending(tx));
+            }
+            dashmap::Entry::Occupied(_) => {
+                return Err(UpstreamError::Other(format!(
+                    "transaction ID {query_id} collision with inflight request"
+                )));
+            }
+        }
 
         match tokio::time::timeout_at(deadline, self.socket.send(query)).await {
             Err(_elapsed) => {

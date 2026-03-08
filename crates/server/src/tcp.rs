@@ -13,7 +13,12 @@ use tokio::{
 
 use crate::{ServerError, ServerState, handle_request};
 
-/// Run the DNS server over TCP.
+/// Max DNS message size.
+const MAX_MESSAGE_SIZE: usize = 65535;
+
+/// Max queries per opened TCP connection.
+const MAX_QUERIES_PER_CONNECTION: usize = 100;
+
 #[allow(clippy::too_many_arguments)]
 pub async fn run_tcp<G, L>(
     bind_addr: SocketAddr,
@@ -45,13 +50,20 @@ where
                 inflight.spawn(async move {
                     let mut len_buf = [0u8; 2];
                     let mut buf = Vec::new();
+                    let mut query_count = 0;
                     loop {
+
+                        query_count += 1;
+
+                        if query_count > MAX_QUERIES_PER_CONNECTION {
+                                tracing::debug!("TCP query limit reached, closing connection");
+                                return;
+                        }
 
                         let len_res = tokio::select! {
                             _ = shutdown.cancelled() => return,
                             res = stream.read_exact(&mut len_buf) => res,
                         };
-
 
                         if let Err(e) = len_res {
                             if e.kind() != std::io::ErrorKind::UnexpectedEof {
@@ -61,6 +73,12 @@ where
                         }
 
                         let buffer_length = u16::from_be_bytes(len_buf) as usize;
+
+                        if buffer_length == 0 || buffer_length > MAX_MESSAGE_SIZE {
+                             tracing::warn!(len = buffer_length, "invalid TCP DNS message length, closing connection");
+                             return;
+                        }
+
                         buf.resize(buffer_length, 0);
 
                         let body_res = tokio::select! {
