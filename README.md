@@ -10,7 +10,7 @@ A fast, self hosted DNS resolver with a web UI. Supports forwarding over UDP and
 
 ## Features
 
-- **Web UI** built in dashboard for monitoring and configuration
+- **Web UI** built-in dashboard for monitoring and configuration
 - **Query Cache** in-memory caching to reduce upstream lookups
 - **Blocklist** domain blocking
 
