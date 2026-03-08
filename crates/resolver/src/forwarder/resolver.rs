@@ -193,7 +193,5 @@ pub fn validate_upstream_response(request: &DnsMessage, response: &DnsMessage) -
         return Err(ResolveError::MalformedResponse("questions mismatch".into()));
     }
 
-    tracing::info!("pass!");
-
     Ok(())
 }
