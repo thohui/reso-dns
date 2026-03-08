@@ -1,4 +1,4 @@
-name: Rust
+name: CI - Rust
 
 on:
   push:
@@ -19,6 +19,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.88
       - name: Cache
         uses: actions/cache@v4
         with:
@@ -27,6 +29,8 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
           
       - name: Build
         run: cargo build --verbose --no-default-features
