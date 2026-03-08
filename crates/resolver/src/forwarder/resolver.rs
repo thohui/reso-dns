@@ -178,7 +178,7 @@ fn generate_tid(query: &[u8]) -> (Bytes, u16) {
 
 pub fn validate_upstream_response(request: &DnsMessage, response: &DnsMessage) -> Result<(), ResolveError> {
     if request.id != response.id {
-        return Err(ResolveError::MalformedResponse("transaction id match".into()));
+        return Err(ResolveError::MalformedResponse("transaction id mismatch".into()));
     }
 
     if !response.flags.response {
