@@ -1064,12 +1064,22 @@ pub enum EdnsOptionCode {
 }
 }
 
-/// Client subnet EDNS option.
+/// Client subnet EDNS option (RFC 7871).
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub struct ClientSubnet {
+    /// Address family: 1 = IPv4, 2 = IPv6.
     pub family: u16,
+    /// Number of significant bits in `address` that the client wants to reveal.
+    /// Limits how much of the client IP is shared with the authoritative nameserver for geo-aware resolution.
+    /// e.g. client 192.168.1.50, source_prefix=24 => shares only 192.168.1.
     pub source_prefix: u8,
+    /// Number of bits the authoritative nameserver used to select its response. Always 0 in queries;
+    /// only set by the authoritative nameserver in responses.
+    /// e.g. authoritative only needed a /20 to pick an answer => scope_prefix=20.
     pub scope_prefix: u8,
+    /// Client address truncated to `ceil(source_prefix / 8)` bytes, with bits
+    /// beyond `source_prefix` zeroed in the last byte.
+    /// e.g. source_prefix=25, address 192.168.1.200 => [192, 168, 1, 128] (low 7 bits of last byte zeroed).
     pub address: Vec<u8>,
 }
 
@@ -1184,15 +1194,46 @@ impl EdnsOptionData {
             EdnsOptionCode::ClientSubnet => {
                 anyhow::ensure!(len >= 4, "ECS option too short (must be at least 4 bytes)");
                 let family_bytes = reader.read_bytes(2)?;
+                let family = u16::from_be_bytes([family_bytes[0], family_bytes[1]]);
                 let source_prefix_length = reader.read_u8()?;
                 let scope_prefix_length = reader.read_u8()?;
+
+                let max_prefix: u8 = match family {
+                    1 => 32,
+                    2 => 128,
+                    _ => anyhow::bail!("ECS unknown address family {}", family),
+                };
+                anyhow::ensure!(
+                    source_prefix_length <= max_prefix,
+                    "ECS source prefix {} exceeds max {} for family {}",
+                    source_prefix_length,
+                    max_prefix,
+                    family
+                );
+
                 let address_size = (source_prefix_length as usize).div_ceil(8);
-                let address = reader.read_bytes(address_size)?;
+                anyhow::ensure!(
+                    len == 4 + address_size as u16,
+                    "ECS option length {} does not match expected {}",
+                    len,
+                    4 + address_size
+                );
+
+                let mut address = reader.read_bytes(address_size)?.to_vec();
+
+                // RFC 7871 Section 6: bits beyond source_prefix in the last byte must
+                // be zero so equivalent subnets always compare and hash the same.
+                // https://www.rfc-editor.org/rfc/rfc7871#section-6
+                let bits_used_in_last_byte = source_prefix_length % 8;
+                if let (Some(last), true) = (address.last_mut(), bits_used_in_last_byte != 0) {
+                    *last &= 0xFF << (8 - bits_used_in_last_byte);
+                }
+
                 Self::ClientSubnet(ClientSubnet {
-                    family: u16::from_be_bytes([family_bytes[0], family_bytes[1]]),
+                    family,
                     source_prefix: source_prefix_length,
                     scope_prefix: scope_prefix_length,
-                    address: address.to_vec(),
+                    address,
                 })
             }
             EdnsOptionCode::Cookie => Self::Raw(reader.read_bytes(len as usize)?.to_vec()),
@@ -2006,6 +2047,86 @@ mod tests {
             }
             _ => panic!("expected ClientSubnet option data"),
         }
+    }
+
+    // Encode a ClientSubnet with dirty low bits in the last byte, then decode it.
+    // The decoded address must have those bits zeroed (RFC 7871 Section 6).
+    #[test]
+    fn test_edns_client_subnet_last_byte_masked_on_decode() {
+        let message = DnsMessage {
+            id: 1,
+            flags: DnsFlags::default(),
+            edns: Some(Edns {
+                options: vec![EdnsOption::new(
+                    EdnsOptionCode::ClientSubnet,
+                    EdnsOptionData::ClientSubnet(ClientSubnet {
+                        family: 1,
+                        source_prefix: 25, // 25 bits => 4 bytes, low 7 bits of last byte should be 0
+                        scope_prefix: 0,
+                        address: vec![192, 168, 1, 200], // 200 = 0b11001000, low 7 bits are dirty
+                    }),
+                )],
+                ..Default::default()
+            }),
+            questions: vec![],
+            answers: vec![],
+            authority_records: vec![],
+            additional_records: vec![],
+        };
+
+        let encoded = message.encode().unwrap();
+        let decoded = DnsMessage::decode(&encoded).unwrap();
+
+        match &decoded.edns().as_ref().unwrap().options[0].data {
+            Some(EdnsOptionData::ClientSubnet(cs)) => {
+                // 200 (0b11001000) masked to high 1 bit => 128 (0b10000000)
+                assert_eq!(cs.address, vec![192, 168, 1, 128]);
+                assert_eq!(cs.source_prefix, 25);
+            }
+            _ => panic!("expected ClientSubnet"),
+        }
+    }
+
+    // Craft raw EDNS option bytes and parse them directly to test rejection paths.
+    fn parse_ecs_option(
+        family: u16,
+        source_prefix: u8,
+        scope_prefix: u8,
+        address: &[u8],
+    ) -> anyhow::Result<EdnsOptionData> {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&family.to_be_bytes());
+        bytes.push(source_prefix);
+        bytes.push(scope_prefix);
+        bytes.extend_from_slice(address);
+        let len = bytes.len() as u16;
+        let mut reader = crate::reader::DnsMessageReader::new(&bytes);
+        EdnsOptionData::read(&mut reader, &EdnsOptionCode::ClientSubnet, len)
+    }
+
+    #[test]
+    fn test_edns_client_subnet_rejects_unknown_family() {
+        assert!(parse_ecs_option(3, 24, 0, &[192, 168, 1]).is_err());
+    }
+
+    #[test]
+    fn test_edns_client_subnet_rejects_prefix_exceeding_family_max() {
+        // IPv4 (family=1) max is 32; source_prefix=33 must be rejected
+        assert!(parse_ecs_option(1, 33, 0, &[192, 168, 1, 0, 0]).is_err());
+        // IPv6 (family=2) max is 128; source_prefix=129 must be rejected
+        assert!(parse_ecs_option(2, 129, 0, &[0u8; 17]).is_err());
+    }
+
+    #[test]
+    fn test_edns_client_subnet_rejects_mismatched_len() {
+        // source_prefix=24 => address_size=3, expected len=7; supply 4 bytes (len=8) instead
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&1u16.to_be_bytes()); // family IPv4
+        bytes.push(24); // source_prefix
+        bytes.push(0); // scope_prefix
+        bytes.extend_from_slice(&[192, 168, 1, 0]); // 4 bytes but only 3 expected
+        let mut reader = crate::reader::DnsMessageReader::new(&bytes);
+        assert!(EdnsOptionData::read(&mut reader, &EdnsOptionCode::ClientSubnet, bytes.len() as u16).is_err());
     }
 
     #[test]
