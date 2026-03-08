@@ -6,3 +6,4 @@ config.toml
 *.pem
 stress.txt
 .env
+release.sh
