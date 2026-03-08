@@ -66,8 +66,14 @@ impl TcpPool {
 
     /// Try to get an idle conn.
     pub fn try_get(&self) -> Option<TcpConn> {
-        // pop from the back to reuse the most recently returned connection, which is likely still alive.
-        self.idle.lock().unwrap_or_else(|e| e.into_inner()).pop_back()
+        let mut idle = self.idle.lock().unwrap_or_else(|e| e.into_inner());
+        while let Some(conn) = idle.pop_back() {
+            if conn.is_alive() {
+                return Some(conn);
+            }
+            tracing::debug!(upstream = %self.addr, "discarding closed idle tcp connection");
+        }
+        None
     }
 
     /// Get an idle conn or connect a new one if under cap.
@@ -158,6 +164,17 @@ impl TcpConn {
             recv_buf: BytesMut::with_capacity(MAX_RECEIVE_BUFFER_SIZE),
             send_buf: Vec::with_capacity(MAX_RECEIVE_BUFFER_SIZE),
         })
+    }
+
+    /// Check if the connection is still open without blocking.
+    /// In some cases the server has already closed the connection when a tcp conn is reused from the pool.
+    fn is_alive(&self) -> bool {
+        let mut buf = [0u8; 1];
+        match self.stream.try_read(&mut buf) {
+            Ok(0) => false, // eof: upstream closed the connection
+            Ok(_) => false, // unexpected data on an idle connection
+            Err(e) => e.kind() == std::io::ErrorKind::WouldBlock,
+        }
     }
 
     /// Send a DNS query and receive the response over this TCP connection.
