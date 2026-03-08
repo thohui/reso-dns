@@ -1729,7 +1729,6 @@ dependencies = [
  "mime_guess",
  "moka",
  "once_cell",
- "parking_lot",
  "rand",
  "reso-blocklist",
  "reso-cache",
@@ -1784,7 +1783,6 @@ dependencies = [
  "async-trait",
  "bytes",
  "once_cell",
- "parking_lot",
  "reso-dns",
  "tokio",
 ]

@@ -16,7 +16,6 @@ dashmap.workspace = true
 idna.workspace = true
 moka = { workspace = true }
 once_cell.workspace = true
-parking_lot.workspace = true
 rand.workspace = true
 reso-blocklist.workspace = true
 reso-cache.workspace = true
