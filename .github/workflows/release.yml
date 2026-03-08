@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Image tag (defaults to git tag if empty)'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -61,7 +67,9 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ github.event_name == 'push' && inputs.version == '' }}
+            type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
+
 
       - name: Build and push
         uses: docker/build-push-action@v6
