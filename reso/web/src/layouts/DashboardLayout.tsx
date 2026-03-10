@@ -10,6 +10,7 @@ import {
 import {
 	Ban,
 	FileText,
+	Globe,
 	Home,
 	LogOut,
 	type LucideIcon,
@@ -30,6 +31,7 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
 	{ path: '/home', label: 'Home', icon: Home },
 	{ path: '/blocklist', label: 'Blocklist', icon: Ban },
+	{ path: '/local-records', label: 'Local Records', icon: Globe },
 	{ path: '/logs', label: 'Logs', icon: FileText },
 	{ path: '/config', label: 'Config', icon: Settings },
 ];

@@ -4,6 +4,7 @@ import { DashboardLayout } from '../layouts/DashboardLayout';
 import BlocklistPage from './pages/blocklist';
 import ConfigPage from './pages/config';
 import HomePage from './pages/home';
+import LocalRecordsPage from './pages/local-records';
 import LoginPage from './pages/login';
 import LogsPage from './pages/logs';
 import NotFoundPage from './pages/not-found';
@@ -21,6 +22,7 @@ export function AppRouter() {
 					<Route element={<DashboardLayout />}>
 						<Route path='/home' element={<HomePage />} />
 						<Route path='/blocklist' element={<BlocklistPage />} />
+						<Route path='/local-records' element={<LocalRecordsPage />} />
 						<Route path='/logs' element={<LogsPage />} />
 						<Route path='/config' element={<ConfigPage />} />
 					</Route>

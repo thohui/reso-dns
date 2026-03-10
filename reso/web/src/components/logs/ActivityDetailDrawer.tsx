@@ -12,11 +12,11 @@ import {
 	type Activity,
 	type ErrorActivity,
 	getErrorTypeLabel,
-	getRecordType,
 	getResponseCodeLabel,
 	getTransportLabel,
 	type QueryActivity,
 } from '../../lib/api/activity';
+import { recordTypeName } from '../../lib/dns';
 import { getStatusInfo } from '../../lib/status-info';
 
 function DetailRow({ label, value }: { label: string; value: string }) {
@@ -167,7 +167,7 @@ export function ActivityDetailDrawer({
 											label='Type'
 											value={
 												activity.qtype !== null
-													? getRecordType(activity.qtype)
+													? recordTypeName(activity.qtype)
 													: '-'
 											}
 										/>
