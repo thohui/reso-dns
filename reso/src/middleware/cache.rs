@@ -106,10 +106,18 @@ impl DnsMiddleware<Global, Local> for CacheMiddleware {
             .map(|e| e.options.iter().any(|o| o.code == EdnsOptionCode::ClientSubnet))
             .unwrap_or(false);
 
-        let should_cache =
-            !ctx.local().cache_hit && !has_ecs && !ctx.local().blocked && !ctx.local().rate_limited;
+        let should_cache = !ctx.local().cache_hit && !has_ecs && !ctx.local().blocked && !ctx.local().rate_limited;
 
         if should_cache {
+            let question = message.questions().first();
+            let ttl = response.message()?.answers().iter().map(|a| a.ttl()).min().unwrap_or(0);
+
+            tracing::debug!(
+                "caching entry to question {:?} for {} seconds",
+                question.map(|r| r.qname.as_str()),
+                ttl
+            );
+
             ctx.global().cache.insert(message, response.message()?).await;
         }
 

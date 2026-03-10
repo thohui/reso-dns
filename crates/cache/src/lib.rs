@@ -106,6 +106,11 @@ pub struct CacheEntry {
     pub expires_at: Instant,
 }
 
+/// Minimum TTL (seconds) applied to all cached entries.
+const MIN_TTL_SECS: u32 = 30;
+/// Maximum TTL (seconds) applied to all cached entries.
+const MAX_TTL_SECS: u32 = 86_400;
+
 /// A RFC 2308 compliant DNS message cache.
 pub struct DnsMessageCache {
     cache: Cache<CacheKey, CacheEntry>,
@@ -217,71 +222,89 @@ impl DnsMessageCache {
             return false;
         }
 
-        // Negative caching (RFC 2308): only for authoritative responses.
-        if resp_msg.flags.authorative_answer {
-            let neg_kind = match resp_msg.response_code() {
-                Ok(DnsResponseCode::NxDomain) => Some(NegKind::NxDomain),
-                Ok(DnsResponseCode::NoError)
-                    if resp_msg.answers().is_empty()
-                        && resp_msg
-                            .authority_records()
-                            .iter()
-                            .any(|r| r.record_type == RecordType::SOA) =>
-                {
-                    Some(NegKind::NoData)
-                }
-                _ => None,
-            };
+        // Negative caching: trust the upstream recursive resolver regardless of AA bit.
+        let neg_kind = match resp_msg.response_code() {
+            Ok(DnsResponseCode::NxDomain) => Some(NegKind::NxDomain),
+            Ok(DnsResponseCode::NoError)
+                if resp_msg.answers().is_empty()
+                    && resp_msg
+                        .authority_records()
+                        .iter()
+                        .any(|r| r.record_type == RecordType::SOA) =>
+            {
+                Some(NegKind::NoData)
+            }
+            _ => None,
+        };
 
-            if let Some(kind) = neg_kind
-                && let Some(inserted) = self.insert_negative(query_msg, resp_msg, kind).await {
-                    return inserted;
-                }
+        if let Some(kind) = neg_kind
+            && let Some(inserted) = self.insert_negative(query_msg, resp_msg, kind).await
+        {
+            return inserted;
         }
 
-        // Group the records by their record types.
-        let grouped_records: Vec<_> = resp_msg
+        let mut inserted = false;
+        for ((name, class, record_type), records) in resp_msg
             .answers()
             .iter()
-            .chunk_by(|r| (r.name.clone(), r.class, r.record_type))
-            .into_iter()
-            .map(|(key, group)| {
-                let records: Vec<_> = group.cloned().collect();
-                (key, records)
-            })
-            .collect();
-
-        let mut inserted = false;
-        for (key, records) in grouped_records {
-            // Skip OPT records since they are not cacheable.
-            if matches!(key.2, RecordType::OPT) {
+            .into_group_map_by(|r| (r.name.clone(), r.class, r.record_type))
+        {
+            if matches!(record_type, RecordType::OPT) {
                 continue;
             }
 
             let ttl = records.iter().map(|r| r.ttl()).min().unwrap_or(0);
-
-            // Skip if ttl is negative
             if ttl == 0 {
                 continue;
             }
+            let ttl = ttl.clamp(MIN_TTL_SECS, MAX_TTL_SECS);
 
             let cache_key = CacheKey {
-                name: key.0.clone(),
-                class_type: key.1,
-                record_type: key.2,
+                name: name.clone(),
+                class_type: class,
+                record_type,
                 do_bit: has_do_bit(query_msg),
             };
 
             let expires_at = Instant::now() + Duration::from_secs(ttl.into());
             let entry = CacheEntry {
-                name: key.0,
+                name,
                 record_type: cache_key.record_type,
-                records: records.into(),
+                records: records.into_iter().cloned().collect::<Vec<_>>().into(),
                 expires_at,
             };
 
             self.cache.insert(cache_key, entry).await;
             inserted = true;
+        }
+
+        // Cache the full answer under the query key so CNAME chains get cache hits.
+        if let Ok(query_key) = CacheKey::try_from(query_msg) {
+            let answers = resp_msg.answers();
+            let is_cname_chain = query_key.record_type != RecordType::ANY
+                && answers.first().is_some_and(|r| r.record_type == RecordType::CNAME);
+            let is_positive = matches!(resp_msg.response_code(), Ok(DnsResponseCode::NoError));
+
+            if is_cname_chain && is_positive {
+                let cacheable: Vec<_> = answers
+                    .iter()
+                    .filter(|r| !matches!(r.record_type, RecordType::OPT))
+                    .cloned()
+                    .collect();
+                let ttl = cacheable.iter().map(|r| r.ttl()).min().unwrap_or(0);
+                if ttl > 0 {
+                    let ttl = ttl.clamp(MIN_TTL_SECS, MAX_TTL_SECS);
+                    let expires_at = Instant::now() + Duration::from_secs(ttl.into());
+                    let entry = CacheEntry {
+                        name: query_key.name.clone(),
+                        record_type: query_key.record_type,
+                        records: cacheable.into(),
+                        expires_at,
+                    };
+                    self.cache.insert(query_key, entry).await;
+                    inserted = true;
+                }
+            }
         }
 
         inserted
@@ -304,7 +327,7 @@ impl DnsMessageCache {
 
         let do_bit = has_do_bit(query_msg);
         let soa_rr_expires_at = Instant::now() + Duration::from_secs(soa_record.ttl as u64);
-        let ttl = minimum.min(soa_record.ttl) as u64;
+        let ttl = minimum.min(soa_record.ttl).clamp(MIN_TTL_SECS, MAX_TTL_SECS) as u64;
 
         let soa_cache_key = CacheKey {
             class_type: soa_record.class,
