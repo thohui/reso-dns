@@ -6,6 +6,7 @@ import {
 	HStack,
 	Icon,
 	Input,
+	Switch,
 	Text,
 } from '@chakra-ui/react';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -39,6 +40,7 @@ import { hexToRgba } from '../../lib/theme';
 const schema = z.object({
 	upstreams: z.array(UpstreamSpecSchema),
 	timeout: z.coerce.number().min(1),
+	rate_limit_enabled: z.boolean(),
 	rate_limit_window: z.coerce.number().int().min(1),
 	rate_limit_max: z.coerce.number().int().min(1),
 });
@@ -53,6 +55,7 @@ export default function ConfigPage() {
 		defaultValues: {
 			upstreams: config.data.dns.forwarder.upstreams,
 			timeout: config.data.dns.timeout,
+			rate_limit_enabled: config.data.dns.rate_limit.enabled,
 			rate_limit_window: config.data.dns.rate_limit.window_duration,
 			rate_limit_max: config.data.dns.rate_limit.max_queries_per_window,
 		},
@@ -73,6 +76,7 @@ export default function ConfigPage() {
 					upstreams: data.upstreams,
 				},
 				rate_limit: {
+					enabled: data.rate_limit_enabled,
 					window_duration: data.rate_limit_window,
 					max_queries_per_window: data.rate_limit_max,
 				},
@@ -85,6 +89,7 @@ export default function ConfigPage() {
 				form.reset({
 					upstreams: data.dns.forwarder.upstreams,
 					timeout: data.dns.timeout,
+					rate_limit_enabled: data.dns.rate_limit.enabled,
 					rate_limit_window: data.dns.rate_limit.window_duration,
 					rate_limit_max: data.dns.rate_limit.max_queries_per_window,
 				});
@@ -118,6 +123,7 @@ export default function ConfigPage() {
 	};
 
 	const upstreams = form.watch('upstreams');
+	const rateLimitEnabled = form.watch('rate_limit_enabled');
 
 	const hasChanges = form.formState.isDirty;
 
@@ -329,6 +335,23 @@ export default function ConfigPage() {
 				description='Limit the number of queries per client within a time window.'
 				icon={Shield}
 			>
+				<ConfigField label='Enabled' description='Enable rate limiting for DNS queries.' align='center'>
+					<Switch.Root
+						checked={rateLimitEnabled}
+						onCheckedChange={({ checked }) => form.setValue('rate_limit_enabled', checked, { shouldDirty: true, shouldTouch: true, shouldValidate: true })}
+					>
+						<Switch.HiddenInput />
+						<Switch.Control
+							bg={rateLimitEnabled ? 'accent' : 'bg.elevated'}
+							borderWidth='1px'
+							borderColor={rateLimitEnabled ? 'accent' : 'border.input'}
+							_hover={{ borderColor: 'accent' }}
+							transition='all 0.2s ease'
+						>
+							<Switch.Thumb bg='fg' />
+						</Switch.Control>
+					</Switch.Root>
+				</ConfigField>
 				<ConfigField
 					label='Window Duration'
 					description='Length of each rate limit window (seconds).'

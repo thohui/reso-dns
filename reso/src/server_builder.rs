@@ -10,7 +10,7 @@ use crate::{
     local::Local,
     middleware::{
         blocklist::BlocklistMiddleware, cache::CacheMiddleware, metrics::MetricsMiddleware,
-        ratelimit::RateLimitMiddleware, reso_local::ResoLocalMiddleware,
+        ratelimit::RateLimitMiddleware, reso::ResoLocalMiddleware,
     },
     ratelimit::RateLimitConfig,
     services::{
@@ -20,19 +20,21 @@ use crate::{
 };
 
 pub fn server_middlewares(config: &Config) -> ServerMiddlewares<Global, Local> {
-    let ratelimit_config = RateLimitConfig {
-        window_duration: Duration::from_secs(config.dns.rate_limit.window_duration as u64),
-        max_queries_per_window: config.dns.rate_limit.max_queries_per_window,
-    };
+    let mut middlewares: Vec<Arc<dyn reso_context::DnsMiddleware<Global, Local> + 'static>> =
+        vec![Arc::new(MetricsMiddleware), Arc::new(ResoLocalMiddleware::new())];
 
-    let middlewares: ServerMiddlewares<Global, Local> = Arc::new(vec![
-        Arc::new(MetricsMiddleware),
-        Arc::new(ResoLocalMiddleware::new()),
-        Arc::new(RateLimitMiddleware::new(ratelimit_config)),
-        Arc::new(BlocklistMiddleware),
-        Arc::new(CacheMiddleware),
-    ]);
-    middlewares
+    if config.dns.rate_limit.enabled {
+        let ratelimit_config = RateLimitConfig {
+            window_duration: Duration::from_secs(config.dns.rate_limit.window_duration as u64),
+            max_queries_per_window: config.dns.rate_limit.max_queries_per_window,
+        };
+        middlewares.push(Arc::new(RateLimitMiddleware::new(ratelimit_config)));
+    }
+
+    middlewares.push(Arc::new(BlocklistMiddleware));
+    middlewares.push(Arc::new(CacheMiddleware));
+
+    Arc::new(middlewares)
 }
 
 /// Creates the new server state from a `services::config::model::Config`.

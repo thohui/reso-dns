@@ -1,4 +1,7 @@
-use std::net::{Ipv4Addr, Ipv6Addr, UdpSocket};
+use std::{
+    net::{Ipv4Addr, Ipv6Addr, UdpSocket},
+    sync::LazyLock,
+};
 
 use async_trait::async_trait;
 use reso_context::{DnsMiddleware, DnsRequestCtx, DnsResponse};
@@ -9,7 +12,7 @@ use reso_dns::{
 
 use crate::{global::Global, local::Local, middleware::echo_edns};
 
-const RESO_LOCAL: &str = "reso.local";
+static RESO_LOCAL: LazyLock<DomainName> = LazyLock::new(|| DomainName::from_ascii("reso.dns").unwrap());
 const TTL: u32 = 60;
 
 pub struct ResoLocalMiddleware {
@@ -19,10 +22,24 @@ pub struct ResoLocalMiddleware {
 
 impl ResoLocalMiddleware {
     pub fn new() -> Self {
-        let name = DomainName::from_ascii(RESO_LOCAL).expect("reso.local is a valid domain name");
-
-        let a = local_ipv4().map(|ip| DnsRecord::new(name.clone(), RecordType::A, ClassType::IN, TTL, DnsRecordData::Ipv4(ip)));
-        let aaaa = local_ipv6().map(|ip| DnsRecord::new(name, RecordType::AAAA, ClassType::IN, TTL, DnsRecordData::Ipv6(ip)));
+        let a = local_ipv4().map(|ip| {
+            DnsRecord::new(
+                RESO_LOCAL.clone(),
+                RecordType::A,
+                ClassType::IN,
+                TTL,
+                DnsRecordData::Ipv4(ip),
+            )
+        });
+        let aaaa = local_ipv6().map(|ip| {
+            DnsRecord::new(
+                RESO_LOCAL.clone(),
+                RecordType::AAAA,
+                ClassType::IN,
+                TTL,
+                DnsRecordData::Ipv6(ip),
+            )
+        });
 
         Self { a, aaaa }
     }
@@ -37,7 +54,7 @@ impl DnsMiddleware<Global, Local> for ResoLocalMiddleware {
             None => return Ok(None),
         };
 
-        if question.qname.as_str() != RESO_LOCAL {
+        if question.qname != *RESO_LOCAL {
             return Ok(None);
         }
 
