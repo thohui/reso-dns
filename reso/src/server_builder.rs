@@ -10,7 +10,7 @@ use crate::{
     local::Local,
     middleware::{
         blocklist::BlocklistMiddleware, cache::CacheMiddleware, metrics::MetricsMiddleware,
-        ratelimit::RateLimitMiddleware,
+        ratelimit::RateLimitMiddleware, reso_local::ResoLocalMiddleware,
     },
     ratelimit::RateLimitConfig,
     services::{
@@ -27,6 +27,7 @@ pub fn server_middlewares(config: &Config) -> ServerMiddlewares<Global, Local> {
 
     let middlewares: ServerMiddlewares<Global, Local> = Arc::new(vec![
         Arc::new(MetricsMiddleware),
+        Arc::new(ResoLocalMiddleware::new()),
         Arc::new(RateLimitMiddleware::new(ratelimit_config)),
         Arc::new(BlocklistMiddleware),
         Arc::new(CacheMiddleware),

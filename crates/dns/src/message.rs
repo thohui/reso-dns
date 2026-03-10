@@ -826,6 +826,15 @@ pub struct DnsRecord {
 }
 
 impl DnsRecord {
+    pub fn new(name: DomainName, record_type: RecordType, class: ClassType, ttl: u32, data: DnsRecordData) -> Self {
+        Self {
+            name,
+            record_type,
+            class,
+            ttl,
+            data,
+        }
+    }
     /// Get the name of the DNS record.
     pub fn name(&self) -> &str {
         &self.name

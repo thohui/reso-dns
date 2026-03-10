@@ -87,12 +87,30 @@ async fn run() -> anyhow::Result<()> {
 
     let dns_udp_handle = tokio::spawn(async move {
         if let Err(e) = udp_clone.serve_udp(config.dns_server_address, dns_udp_shutdown).await {
-            tracing::error!("UDP server failed: {}", e);
+            let is_addr_in_use = e.downcast_ref::<std::io::Error>().and_then(|e| e.raw_os_error()) == Some(98);
+            if is_addr_in_use {
+                tracing::error!(
+                    "UDP server failed: port {} is already in use. \
+                    Another DNS service may be running — on Linux: sudo systemctl disable --now systemd-resolved",
+                    config.dns_server_address.port()
+                );
+            } else {
+                tracing::error!("UDP server failed: {}", e);
+            }
         }
     });
     let dns_tcp_handle = tokio::spawn(async move {
         if let Err(e) = tcp_clone.serve_tcp(config.dns_server_address, dns_tcp_shutdown).await {
-            tracing::error!("TCP server failed: {}", e);
+            let is_addr_in_use = e.downcast_ref::<std::io::Error>().and_then(|e| e.raw_os_error()) == Some(98);
+            if is_addr_in_use {
+                tracing::error!(
+                    "TCP server failed: port {} is already in use. \
+                    Another DNS service may be running — on Linux: sudo systemctl disable --now systemd-resolved",
+                    config.dns_server_address.port()
+                );
+            } else {
+                tracing::error!("TCP server failed: {}", e);
+            }
         }
     });
 
