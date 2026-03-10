@@ -8,6 +8,8 @@ use base64::{
     Engine, alphabet,
     engine::{self, general_purpose},
 };
+
+use time::Duration;
 use uuid::Uuid;
 
 use crate::{database::models::user_session::UserSession, utils::uuid::EntityId};
@@ -23,8 +25,10 @@ const SAME_SITE: SameSite = SameSite::Strict;
 pub fn build_session_cookie<'a>(session: String) -> Cookie<'a> {
     Cookie::build((SESSION_COOKIE_KEY, session))
         .http_only(true)
+        .secure(false)
         .path("/")
         .same_site(SAME_SITE)
+        .max_age(Duration::days(30))
         .build()
 }
 const BASE64_ENGINE: engine::GeneralPurpose = engine::GeneralPurpose::new(&alphabet::URL_SAFE, general_purpose::NO_PAD);
