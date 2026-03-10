@@ -21,7 +21,7 @@ pub struct DnsConfig {
     pub active: ActiveResolver,
     /// Forwarder config.
     pub forwarder: ForwarderConfig,
-
+    /// Rate limit config.
     pub rate_limit: RateLimitConfigModel,
 }
 
@@ -33,6 +33,8 @@ pub enum ActiveResolver {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RateLimitConfigModel {
+    /// Enabled
+    pub enabled: bool,
     /// Duration of each rate limit window in seconds.
     pub window_duration: usize,
     /// Maximum number of queries allowed per window.
@@ -42,6 +44,7 @@ pub struct RateLimitConfigModel {
 impl From<ratelimit::RateLimitConfig> for RateLimitConfigModel {
     fn from(config: ratelimit::RateLimitConfig) -> Self {
         Self {
+            enabled: false,
             window_duration: config.window_duration.as_secs() as usize,
             max_queries_per_window: config.max_queries_per_window,
         }
@@ -117,10 +120,12 @@ fn split_host_port(s: &str) -> Result<(String, Option<u16>)> {
     }
 
     if let Some((host, port)) = s.rsplit_once(':')
-        && !host.contains(':') && !host.is_empty() {
-            let port: u16 = port.parse().with_context(|| format!("invalid port: {port:?}"))?;
-            return Ok((host.to_string(), Some(port)));
-        }
+        && !host.contains(':')
+        && !host.is_empty()
+    {
+        let port: u16 = port.parse().with_context(|| format!("invalid port: {port:?}"))?;
+        return Ok((host.to_string(), Some(port)));
+    }
 
     Ok((s.to_string(), None))
 }
@@ -160,6 +165,11 @@ impl Config {
             .map(|specs| specs.into_iter().map(UpstreamSpec).collect())
             .unwrap_or(defaults.dns.forwarder.upstreams);
 
+        let rate_limit_enabled = map
+            .get("dns.rate_limit.enabled")
+            .and_then(|v| v.parse::<bool>().ok())
+            .unwrap_or(defaults.dns.rate_limit.enabled);
+
         let window_duration = map
             .get("dns.rate_limit.window_duration")
             .and_then(|v| v.parse::<usize>().ok())
@@ -176,6 +186,7 @@ impl Config {
                 active,
                 forwarder: ForwarderConfig { upstreams },
                 rate_limit: RateLimitConfigModel {
+                    enabled: rate_limit_enabled,
                     window_duration,
                     max_queries_per_window,
                 },
@@ -197,6 +208,10 @@ impl Config {
             ("dns.active".to_string(), active_str.to_string()),
             ("dns.forwarder.upstreams".to_string(), upstreams_json),
             (
+                "dns.rate_limit.enabled".to_string(),
+                self.dns.rate_limit.enabled.to_string(),
+            ),
+            (
                 "dns.rate_limit.window_duration".to_string(),
                 self.dns.rate_limit.window_duration.to_string(),
             ),
@@ -216,7 +231,8 @@ impl Default for Config {
                 active: ActiveResolver::Forwarder,
                 forwarder: ForwarderConfig { upstreams: vec![] },
                 rate_limit: RateLimitConfigModel {
-                    window_duration: Duration::from_secs(30).as_secs() as usize,
+                    enabled: false,
+                    window_duration: Duration::from_secs(10).as_secs() as usize,
                     max_queries_per_window: 100,
                 },
             },

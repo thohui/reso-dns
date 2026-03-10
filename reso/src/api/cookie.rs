@@ -20,16 +20,10 @@ const SAME_SITE: SameSite = SameSite::Lax;
 #[cfg(not(debug_assertions))]
 const SAME_SITE: SameSite = SameSite::Strict;
 
-#[cfg(debug_assertions)]
-const SECURE: bool = false;
-#[cfg(not(debug_assertions))]
-const SECURE: bool = true;
-
 pub fn build_session_cookie<'a>(session: String) -> Cookie<'a> {
     Cookie::build((SESSION_COOKIE_KEY, session))
         .http_only(true)
         .path("/")
-        .secure(SECURE)
         .same_site(SAME_SITE)
         .build()
 }

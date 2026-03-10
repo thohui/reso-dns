@@ -27,6 +27,7 @@ export interface ConfigModel {
 export type ActiveResolver = 'forwarder';
 
 export interface RateLimitConfig {
+	enabled: boolean;
 	window_duration: number;
 	max_queries_per_window: number;
 }

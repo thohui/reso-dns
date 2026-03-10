@@ -1,20 +1,10 @@
 services:
   reso:
+    network_mode: host
     build: .
-    # drop all caps, only allow binding to privileged ports (53, 80)
     cap_drop:
       - ALL
-    cap_add:
-      - NET_BIND_SERVICE
-    # no privilege escalation
-    security_opt:
-      - no-new-privileges:true
-    # filesystem is read-only, only /data is writable
     read_only: true
-    ports:
-      - "53:53/tcp"
-      - "53:53/udp"
-      - "8080:80"
     volumes:
       - reso-data:/data
     environment:

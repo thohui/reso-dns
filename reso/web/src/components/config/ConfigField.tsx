@@ -4,13 +4,15 @@ export function ConfigField({
 	label,
 	description,
 	children,
+	align = 'flex-start',
 }: {
 	label: string;
 	description?: string;
 	children: React.ReactNode;
+	align?: 'flex-start' | 'center';
 }) {
 	return (
-		<HStack justify='space-between' align='flex-start' py='3'>
+		<HStack justify='space-between' align={align} py='3'>
 			<Box flex='1' mr='8'>
 				<Text fontSize='sm' fontWeight='medium'>
 					{label}

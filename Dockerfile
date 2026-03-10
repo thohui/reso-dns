@@ -17,8 +17,8 @@ RUN cargo build --release
 # Runtime stage 
 FROM debian:bookworm-slim AS runtime
 
-# install ca-certificates for HTTPS support
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+# install ca-certificates for HTTPS support, libcap2-bin for setcap
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libcap2-bin \
     && rm -rf /var/lib/apt/lists/*
 
 # create a non-root user to run the server
@@ -26,6 +26,7 @@ RUN useradd -r -s /usr/sbin/nologin reso \
     && mkdir -p /data && chown reso:reso /data
 
 COPY --from=builder /build/target/release/reso /usr/local/bin/reso
+RUN setcap 'cap_net_bind_service=+ep' /usr/local/bin/reso
 
 # bind to all interfaces so docker port mapping works
 ENV RESO_DNS_SERVER_ADDRESS=0.0.0.0:53

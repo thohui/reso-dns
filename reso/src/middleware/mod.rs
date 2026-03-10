@@ -4,6 +4,7 @@ pub mod blocklist;
 pub mod cache;
 pub mod metrics;
 pub mod ratelimit;
+pub mod reso;
 
 pub fn echo_edns(query: &DnsMessage, mut builder: DnsMessageBuilder) -> DnsMessageBuilder {
     if let Some(edns) = query.edns() {
