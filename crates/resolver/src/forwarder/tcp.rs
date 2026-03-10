@@ -67,8 +67,9 @@ impl TcpPool {
     /// Try to get an idle conn.
     pub fn try_get(&self) -> Option<TcpConn> {
         let mut idle = self.idle.lock().unwrap_or_else(|e| e.into_inner());
+        let now = Instant::now();
         while let Some(conn) = idle.pop_back() {
-            if conn.is_alive() {
+            if conn.ttl > now && conn.is_alive() {
                 return Some(conn);
             }
             tracing::debug!(upstream = %self.addr, "discarding closed idle tcp connection");
