@@ -244,6 +244,8 @@ impl DnsMessageCache {
         }
 
         let mut inserted = false;
+        let mut min_ttl: Option<u32> = None;
+
         for ((name, class, record_type), records) in resp_msg
             .answers()
             .iter()
@@ -258,6 +260,7 @@ impl DnsMessageCache {
                 continue;
             }
             let ttl = ttl.clamp(MIN_TTL_SECS, MAX_TTL_SECS);
+            min_ttl = Some(min_ttl.map_or(ttl, |m| m.min(ttl)));
 
             let cache_key = CacheKey {
                 name: name.clone(),
@@ -294,6 +297,7 @@ impl DnsMessageCache {
                 let ttl = cacheable.iter().map(|r| r.ttl()).min().unwrap_or(0);
                 if ttl > 0 {
                     let ttl = ttl.clamp(MIN_TTL_SECS, MAX_TTL_SECS);
+                    min_ttl = Some(min_ttl.map_or(ttl, |m| m.min(ttl)));
                     let expires_at = Instant::now() + Duration::from_secs(ttl.into());
                     let entry = CacheEntry {
                         name: query_key.name.clone(),
@@ -305,6 +309,11 @@ impl DnsMessageCache {
                     inserted = true;
                 }
             }
+        }
+
+        if let Some(ttl) = min_ttl {
+            let qname = query_msg.questions().first().map(|q| q.qname.as_str()).unwrap_or("?");
+            tracing::debug!(qname, ttl, "cached response");
         }
 
         inserted

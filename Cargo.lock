@@ -1773,6 +1773,7 @@ dependencies = [
  "moka",
  "reso-dns",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
