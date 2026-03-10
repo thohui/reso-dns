@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use itertools::Itertools;
+use itertools::Itertools as _;
 use moka::{
     Expiry,
     future::{Cache, CacheBuilder},
@@ -285,7 +285,8 @@ impl DnsMessageCache {
         if let Ok(query_key) = CacheKey::try_from(query_msg) {
             let answers = resp_msg.answers();
             let is_cname_chain = query_key.record_type != RecordType::ANY
-                && answers.first().is_some_and(|r| r.record_type == RecordType::CNAME);
+                && answers.first().is_some_and(|r| r.record_type == RecordType::CNAME)
+                && answers.iter().any(|r| r.record_type == query_key.record_type);
             let is_positive = matches!(resp_msg.response_code(), Ok(DnsResponseCode::NoError));
 
             if is_cname_chain && is_positive {
