@@ -114,3 +114,92 @@ impl LocalRecord {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::setup_core_test_db;
+
+    #[tokio::test]
+    async fn test_insert_and_list() {
+        let db = setup_core_test_db().await.unwrap();
+        let record = LocalRecord::new("myapp.home".to_string(), 1, "192.168.1.10".to_string(), 300);
+        record.insert(&db.conn).await.unwrap();
+
+        let records = LocalRecord::list(&db.conn, 10, 0).await.unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].name, "myapp.home");
+        assert_eq!(records[0].record_type, 1);
+        assert_eq!(records[0].value, "192.168.1.10");
+        assert_eq!(records[0].ttl, 300);
+        assert!(records[0].enabled);
+    }
+
+    #[tokio::test]
+    async fn test_delete() {
+        let db = setup_core_test_db().await.unwrap();
+        LocalRecord::new("myapp.home".to_string(), 1, "192.168.1.10".to_string(), 300)
+            .insert(&db.conn)
+            .await
+            .unwrap();
+
+        let records = LocalRecord::list(&db.conn, 10, 0).await.unwrap();
+        let id = records[0].id;
+
+        LocalRecord::delete(&db.conn, id).await.unwrap();
+        let records = LocalRecord::list(&db.conn, 10, 0).await.unwrap();
+        assert!(records.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_toggle() {
+        let db = setup_core_test_db().await.unwrap();
+        LocalRecord::new("myapp.home".to_string(), 1, "192.168.1.10".to_string(), 300)
+            .insert(&db.conn)
+            .await
+            .unwrap();
+
+        let records = LocalRecord::list(&db.conn, 10, 0).await.unwrap();
+        let id = records[0].id;
+        assert!(records[0].enabled);
+
+        LocalRecord::toggle(&db.conn, id).await.unwrap();
+        let records = LocalRecord::list(&db.conn, 10, 0).await.unwrap();
+        assert!(!records[0].enabled);
+
+        LocalRecord::toggle(&db.conn, id).await.unwrap();
+        let records = LocalRecord::list(&db.conn, 10, 0).await.unwrap();
+        assert!(records[0].enabled);
+    }
+
+    #[tokio::test]
+    async fn test_row_count() {
+        let db = setup_core_test_db().await.unwrap();
+        assert_eq!(LocalRecord::row_count(&db.conn).await.unwrap(), 0);
+
+        LocalRecord::new("a.home".to_string(), 1, "1.1.1.1".to_string(), 60)
+            .insert(&db.conn)
+            .await
+            .unwrap();
+        LocalRecord::new("b.home".to_string(), 1, "2.2.2.2".to_string(), 60)
+            .insert(&db.conn)
+            .await
+            .unwrap();
+
+        assert_eq!(LocalRecord::row_count(&db.conn).await.unwrap(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_unique_constraint() {
+        let db = setup_core_test_db().await.unwrap();
+        LocalRecord::new("myapp.home".to_string(), 1, "192.168.1.10".to_string(), 300)
+            .insert(&db.conn)
+            .await
+            .unwrap();
+
+        let result = LocalRecord::new("myapp.home".to_string(), 1, "192.168.1.10".to_string(), 300)
+            .insert(&db.conn)
+            .await;
+        assert!(result.is_err());
+    }
+}
