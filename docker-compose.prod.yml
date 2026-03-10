@@ -1,0 +1,26 @@
+services:
+  reso:
+    image: ghcr.io/thohui/reso-dns:latest
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "8080:80"
+    volumes:
+      - reso-data:/data
+    environment:
+      RESO_DATABASE_PATH: /data/reso.db
+      RESO_METRICS_DATABASE_PATH: /data/reso-metrics.db
+      RESO_DNS_SERVER_ADDRESS: 0.0.0.0:53
+      RESO_HTTP_SERVER_ADDRESS: 0.0.0.0:80
+      # generate with: openssl rand -base64 32
+      RESO_COOKIE_SECRET: ${RESO_COOKIE_SECRET:?RESO_COOKIE_SECRET is required}
+
+volumes:
+  reso-data:
