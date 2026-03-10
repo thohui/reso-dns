@@ -2,6 +2,7 @@ import ky, { type KyInstance } from 'ky';
 import { Activities } from './activity';
 import { Blocklist } from './blocklist';
 import { Config } from './config';
+import { LocalRecords } from './local-records';
 import { Stats } from './stats';
 
 export class ApiClient {
@@ -13,6 +14,7 @@ export class ApiClient {
 	public activities: Activities;
 	public stats: Stats;
 	public blocklist: Blocklist;
+	public localRecords: LocalRecords;
 	public config: Config;
 
 	constructor() {
@@ -36,6 +38,7 @@ export class ApiClient {
 		this.activities = new Activities(this.httpClient);
 		this.stats = new Stats(this.httpClient);
 		this.blocklist = new Blocklist(this.httpClient);
+		this.localRecords = new LocalRecords(this.httpClient);
 		this.config = new Config(this.httpClient);
 	}
 

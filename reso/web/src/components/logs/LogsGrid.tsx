@@ -28,11 +28,11 @@ import { useCallback, useMemo, useState } from 'react';
 import {
 	type Activity,
 	type ActivityListFilter,
-	getRecordType,
 	getTransportLabel,
 	type SortColumn,
 	type SortDir,
 } from '../../lib/api/activity';
+import { recordTypeName } from '../../lib/dns';
 import { getStatusInfo } from '../../lib/status-info';
 import { ActivityDetailDrawer } from './ActivityDetailDrawer';
 
@@ -124,7 +124,7 @@ function buildColumns() {
 									bg='accent.muted'
 									color='accent.fg'
 								>
-									{getRecordType(activity.qtype)}
+									{recordTypeName(activity.qtype)}
 								</Box>
 							)}
 						</HStack>

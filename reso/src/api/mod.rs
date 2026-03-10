@@ -13,6 +13,7 @@ use axum::{
 };
 use blocklist::create_blocklist_router;
 use config::create_config_router;
+use local_records::create_local_records_router;
 use stats::create_stats_router;
 use tower_http::cors::{AllowMethods, CorsLayer};
 
@@ -22,6 +23,7 @@ mod blocklist;
 mod config;
 mod cookie;
 mod error;
+mod local_records;
 mod pagination;
 mod stats;
 
@@ -37,6 +39,7 @@ pub async fn serve_web(
         .nest("/stats", create_stats_router(global.clone()))
         .nest("/activity", create_activity_router(global.clone()))
         .nest("/blocklist", create_blocklist_router(global.clone()))
+        .nest("/local-records", create_local_records_router(global.clone()))
         .nest("/config", create_config_router(global.clone()));
 
     let mut app = Router::new().nest("/api", api).with_state(global);

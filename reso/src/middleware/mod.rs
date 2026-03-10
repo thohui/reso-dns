@@ -2,6 +2,7 @@ use reso_dns::{DnsMessage, DnsMessageBuilder, Edns};
 
 pub mod blocklist;
 pub mod cache;
+pub mod local_records;
 pub mod metrics;
 pub mod ratelimit;
 pub mod reso;

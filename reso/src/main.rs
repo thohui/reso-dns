@@ -15,7 +15,10 @@ use tracing::level_filters::LevelFilter;
 use tracing_appender::non_blocking;
 use tracing_subscriber::{Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::database::{connect_metrics_db, run_metrics_db_migrations};
+use crate::{
+    database::{connect_metrics_db, run_metrics_db_migrations},
+    services::local_records::LocalRecordService,
+};
 
 mod api;
 mod database;
@@ -63,6 +66,7 @@ async fn run() -> anyhow::Result<()> {
     let global: SharedGlobal = Arc::new(Global {
         cache: DnsMessageCache::new(50_000),
         blocklist: BlocklistService::initialize(core_db_connection.clone()).await?,
+        local_records_service: LocalRecordService::initialize(core_db_connection.clone()).await?,
         config_service: ConfigService::initialize(core_db_connection.clone()).await?,
         metrics: handle,
         stats,
