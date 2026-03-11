@@ -10,10 +10,7 @@ use tokio::{
 };
 
 use super::event::{ErrorLogEvent, QueryLogEvent};
-use crate::database::{
-    MetricsDatabasePool,
-    models::activity_log::ActivityLog,
-};
+use crate::database::{MetricsDatabasePool, models::activity_log::ActivityLog};
 
 pub enum MetricsMessage {
     #[allow(clippy::code)]
@@ -34,17 +31,6 @@ pub struct MetricsService {
 pub struct MetricsHandle(Sender<MetricsMessage>);
 
 impl MetricsHandle {
-    /// Signals the metrics service to shut down by sending a shutdown message.
-    ///
-    /// If sending the message fails (for example because the receiver was dropped), an error is logged.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # use crate::metrics::MetricsHandle;
-    /// let handle: MetricsHandle = /* obtain handle */ unimplemented!();
-    /// handle.shutdown();
-    /// ```
     #[allow(dead_code)]
     pub fn shutdown(&self) {
         if let Err(e) = self.0.try_send(MetricsMessage::Shutdown) {
@@ -199,8 +185,7 @@ impl MetricsService {
             tracing::error!("failed to flush events to db: {}", e);
         } else {
             tracing::debug!("flushed {} events to the database", self.batch.len());
+            self.batch.clear();
         }
-
-        self.batch.clear();
     }
 }
