@@ -1,5 +1,5 @@
 import { Heading } from '@chakra-ui/react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { LogsGrid, type SearchField } from '../../components/logs/LogsGrid';
 import { useActivities } from '../../hooks/useActivities';
 import { useDebounce } from '../../hooks/useDebounce';
@@ -18,6 +18,7 @@ export default function LogsPage() {
 	const [dir, setDir] = useState<SortDir>('desc');
 	const [searchField, setSearchField] = useState<SearchField>('qname');
 	const [searchValue, setSearchValue] = useState('');
+	const cachedTotal = useRef<number | null>(null);
 
 	const debouncedSearch = useDebounce(searchValue, 300);
 
@@ -26,16 +27,23 @@ export default function LogsPage() {
 		...(debouncedSearch !== '' ? { [searchField]: debouncedSearch } : {}),
 	};
 
+	// Only request count on the first page; reuse cached total for subsequent pages
+	const needsCount = page === 0;
+
 	const { data, isLoading } = useActivities({
 		top: PAGE_SIZE,
 		skip: page * PAGE_SIZE,
 		filter,
 		sort,
 		dir,
-		count: true,
+		count: needsCount,
 	});
 
-	const total = data?.total ?? null;
+	if (data?.total != null) {
+		cachedTotal.current = data.total;
+	}
+
+	const total = data?.total ?? cachedTotal.current;
 	const totalPages = total != null ? Math.max(1, Math.ceil(total / PAGE_SIZE)) : null;
 
 	function handlePresetChange(next: ActivityListFilter) {

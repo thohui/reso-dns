@@ -160,7 +160,7 @@ impl TryFrom<ActivityLog> for Activity {
                 let rate_limited = r.rate_limited.unwrap_or(false);
 
                 ActivityKind::Query(ActivityQuery {
-                    source_id: r.source_id,
+                    source_id: r.id,
                     rcode,
                     blocked,
                     cache_hit,
@@ -172,7 +172,7 @@ impl TryFrom<ActivityLog> for Activity {
                 let message = r.error_message.context("error row missing error_message")?;
 
                 ActivityKind::Error(ActivityError {
-                    source_id: r.source_id,
+                    source_id: r.id,
                     error_type,
                     message,
                 })
