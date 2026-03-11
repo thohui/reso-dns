@@ -19,6 +19,7 @@ impl PagedQuery {
 #[derive(Serialize, Debug)]
 pub struct PagedResponse<T: Serialize> {
     pub items: Vec<T>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub total: Option<u64>,
     pub top: u64,
     pub skip: u64,

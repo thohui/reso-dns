@@ -1,5 +1,5 @@
 use anyhow::Context;
-use rusqlite::types::Value;
+use rusqlite::{params, types::Value};
 
 use crate::database::MetricsDatabasePool;
 use crate::database::models::Page;
@@ -8,7 +8,8 @@ use crate::database::models::Page;
 pub struct ActivityLog {
     pub ts_ms: i64,
     pub kind: String,
-    pub source_id: i64,
+    // autoincremented by db.
+    pub id: i64,
     pub transport: i64,
     pub client: String,
 
@@ -36,8 +37,6 @@ pub struct ListFilter {
 }
 
 impl ListFilter {
-    // param_offset: positional params already bound before filter params
-    // (2 for list where ?1=limit ?2=offset, 0 for row_count)
     fn build_where(&self, param_offset: usize) -> (String, Vec<Value>) {
         let mut clauses: Vec<String> = Vec::new();
         let mut params: Vec<Value> = Vec::new();
@@ -109,7 +108,7 @@ fn map_row(row: &rusqlite::Row<'_>) -> Result<ActivityLog, rusqlite::Error> {
     Ok(ActivityLog {
         ts_ms: row.get(0)?,
         kind: row.get(1)?,
-        source_id: row.get(2)?,
+        id: row.get(2)?,
         transport: row.get(3)?,
         client: row.get(4)?,
         qname: row.get(5)?,
@@ -125,6 +124,55 @@ fn map_row(row: &rusqlite::Row<'_>) -> Result<ActivityLog, rusqlite::Error> {
 }
 
 impl ActivityLog {
+    pub async fn batch_insert(db: &MetricsDatabasePool, rows: &[Self]) -> anyhow::Result<()> {
+        if rows.is_empty() {
+            return Ok(());
+        }
+
+        let owned = rows.to_vec();
+
+        db.interact(move |c| {
+            let tx = c.transaction()?;
+
+            {
+                let mut stmt = tx.prepare(
+                    r#"
+                    INSERT INTO activity_log
+                      (ts_ms, kind, transport, client, qname, qtype, dur_ms,
+                       rcode, blocked, cache_hit, rate_limited, error_type, error_message)
+                    VALUES
+                      (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+                    "#,
+                )?;
+
+                for r in owned {
+                    stmt.execute(params![
+                        r.ts_ms,
+                        r.kind,
+                        r.transport,
+                        r.client,
+                        r.qname,
+                        r.qtype,
+                        r.dur_ms,
+                        r.rcode,
+                        r.blocked,
+                        r.cache_hit,
+                        r.rate_limited,
+                        r.error_type,
+                        r.error_message,
+                    ])?;
+                }
+            }
+
+            tx.commit()?;
+            Ok(())
+        })
+        .await
+        .context("failed to batch insert activity logs")?;
+
+        Ok(())
+    }
+
     pub async fn list(
         db: &MetricsDatabasePool,
         limit: i64,
@@ -143,7 +191,7 @@ impl ActivityLog {
                     SELECT
                       ts_ms,
                       kind,
-                      source_id,
+                      id,
                       transport,
                       client,
                       qname,
@@ -157,7 +205,7 @@ impl ActivityLog {
                       rate_limited
                     FROM activity_log
                     WHERE 1=1 {where_clause}
-                    ORDER BY {sort_col} {sort_dir}, kind ASC, source_id DESC
+                    ORDER BY {sort_col} {sort_dir}, kind ASC, id DESC
                     LIMIT ?1 OFFSET ?2
                     "#,
                     sort_col = sort.as_sql(),
@@ -167,8 +215,6 @@ impl ActivityLog {
                 let mut list_params: Vec<Value> = vec![Value::Integer(limit), Value::Integer(offset)];
                 list_params.extend(filter_params);
 
-                // wrap both queries in a transaction so the item list and total always reflect the same snapshot without this
-                // a write between the two selects could make the count inconsistent with the page.
                 let tx = c.transaction()?;
 
                 let items = {
@@ -192,45 +238,69 @@ impl ActivityLog {
             .await
             .context("failed to list activity logs")?)
     }
+
+    pub async fn delete_before(db: &MetricsDatabasePool, cutoff_ts_ms: i64) -> anyhow::Result<()> {
+        db.interact(move |c| {
+            c.execute("DELETE FROM activity_log WHERE ts_ms < ?1", params![cutoff_ts_ms])?;
+            Ok(())
+        })
+        .await
+        .context("failed to delete old activity logs")?;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::{
-        models::{error_log::DnsErrorLog, query_log::DnsQueryLog},
-        setup_metrics_test_db,
-    };
+    use crate::database::setup_metrics_test_db;
 
-    fn make_query(ts_ms: i64) -> DnsQueryLog {
-        DnsQueryLog {
+    fn make_query(ts_ms: i64) -> ActivityLog {
+        ActivityLog {
             ts_ms,
+            kind: "query".to_string(),
+            id: 0,
             transport: 1,
             client: "127.0.0.1".to_string(),
-            qname: "example.com".to_string(),
-            qtype: 1,
-            rcode: 0,
-            blocked: false,
-            cache_hit: false,
+            qname: Some("example.com".to_string()),
+            qtype: Some(1),
             dur_ms: 10,
-            rate_limited: false,
+            rcode: Some(0),
+            blocked: Some(false),
+            cache_hit: Some(false),
+            rate_limited: Some(false),
+            error_type: None,
+            error_message: None,
         }
     }
 
-    fn make_error(ts_ms: i64) -> DnsErrorLog {
-        DnsErrorLog {
+    fn make_error(ts_ms: i64) -> ActivityLog {
+        ActivityLog {
             ts_ms,
+            kind: "error".to_string(),
+            id: 0,
             transport: 1,
             client: "127.0.0.1".to_string(),
-            message: "timeout".to_string(),
-            r#type: 1,
-            dur_ms: 50,
             qname: Some("fail.com".to_string()),
             qtype: Some(1),
+            dur_ms: 50,
+            rcode: None,
+            blocked: None,
+            cache_hit: None,
+            rate_limited: None,
+            error_type: Some(1),
+            error_message: Some("timeout".to_string()),
         }
     }
 
-    async fn list_all(db: &MetricsDatabasePool, limit: i64, offset: i64) -> Page<ActivityLog> {
+    async fn insert_and_list(
+        db: &MetricsDatabasePool,
+        rows: &[ActivityLog],
+        limit: i64,
+        offset: i64,
+    ) -> Page<ActivityLog> {
+        ActivityLog::batch_insert(db, rows).await.unwrap();
         ActivityLog::list(
             db,
             limit,
@@ -247,9 +317,8 @@ mod tests {
     #[tokio::test]
     async fn test_query_row_surfaces_as_query_kind() {
         let db = setup_metrics_test_db().await.unwrap();
-        DnsQueryLog::batch_insert(&db.conn, &[make_query(1000)]).await.unwrap();
 
-        let page = list_all(&db.conn, 10, 0).await;
+        let page = insert_and_list(&db.conn, &[make_query(1000)], 10, 0).await;
         assert_eq!(page.items.len(), 1);
         assert_eq!(page.total, Some(1));
 
@@ -268,9 +337,8 @@ mod tests {
     #[tokio::test]
     async fn test_error_row_surfaces_as_error_kind() {
         let db = setup_metrics_test_db().await.unwrap();
-        DnsErrorLog::batch_insert(&db.conn, &[make_error(1000)]).await.unwrap();
 
-        let page = list_all(&db.conn, 10, 0).await;
+        let page = insert_and_list(&db.conn, &[make_error(1000)], 10, 0).await;
         assert_eq!(page.items.len(), 1);
         assert_eq!(page.total, Some(1));
 
@@ -288,36 +356,53 @@ mod tests {
     #[tokio::test]
     async fn test_errors_ordered_before_queries_at_same_timestamp() {
         let db = setup_metrics_test_db().await.unwrap();
-        DnsQueryLog::batch_insert(&db.conn, &[make_query(1000)]).await.unwrap();
-        DnsErrorLog::batch_insert(&db.conn, &[make_error(1000)]).await.unwrap();
 
-        let page = list_all(&db.conn, 10, 0).await;
+        let page = insert_and_list(&db.conn, &[make_query(1000), make_error(1000)], 10, 0).await;
         assert_eq!(page.items.len(), 2);
         assert_eq!(page.items[0].kind, "error");
         assert_eq!(page.items[1].kind, "query");
     }
 
     #[tokio::test]
-    async fn test_page_total_includes_both_tables() {
+    async fn test_page_total_includes_both_kinds() {
         let db = setup_metrics_test_db().await.unwrap();
-        DnsQueryLog::batch_insert(&db.conn, &[make_query(1000), make_query(2000)])
-            .await
-            .unwrap();
-        DnsErrorLog::batch_insert(&db.conn, &[make_error(3000)]).await.unwrap();
 
-        let page = list_all(&db.conn, 10, 0).await;
+        let page = insert_and_list(&db.conn, &[make_query(1000), make_query(2000), make_error(3000)], 10, 0).await;
         assert_eq!(page.total, Some(3));
     }
 
     #[tokio::test]
     async fn test_list_pagination() {
         let db = setup_metrics_test_db().await.unwrap();
-        let queries: Vec<_> = (1..=4).map(|i| make_query(i * 1000)).collect();
-        DnsQueryLog::batch_insert(&db.conn, &queries).await.unwrap();
-        DnsErrorLog::batch_insert(&db.conn, &[make_error(5000)]).await.unwrap();
 
-        let page1 = list_all(&db.conn, 3, 0).await;
-        let page2 = list_all(&db.conn, 3, 3).await;
+        let rows: Vec<_> = (1..=4)
+            .map(|i| make_query(i * 1000))
+            .chain(std::iter::once(make_error(5000)))
+            .collect();
+        ActivityLog::batch_insert(&db.conn, &rows).await.unwrap();
+
+        let page1 = ActivityLog::list(
+            &db.conn,
+            3,
+            0,
+            ListFilter::default(),
+            SortColumn::Timestamp,
+            SortDir::Desc,
+            true,
+        )
+        .await
+        .unwrap();
+        let page2 = ActivityLog::list(
+            &db.conn,
+            3,
+            3,
+            ListFilter::default(),
+            SortColumn::Timestamp,
+            SortDir::Desc,
+            true,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(page1.items.len(), 3);
         assert_eq!(page1.total, Some(5));
@@ -328,8 +413,9 @@ mod tests {
     #[tokio::test]
     async fn test_filter_error_only() {
         let db = setup_metrics_test_db().await.unwrap();
-        DnsQueryLog::batch_insert(&db.conn, &[make_query(1000)]).await.unwrap();
-        DnsErrorLog::batch_insert(&db.conn, &[make_error(2000)]).await.unwrap();
+        ActivityLog::batch_insert(&db.conn, &[make_query(1000), make_error(2000)])
+            .await
+            .unwrap();
 
         let page = ActivityLog::list(
             &db.conn,
@@ -355,8 +441,8 @@ mod tests {
     async fn test_filter_blocked() {
         let db = setup_metrics_test_db().await.unwrap();
         let mut blocked = make_query(1000);
-        blocked.blocked = true;
-        DnsQueryLog::batch_insert(&db.conn, &[make_query(2000), blocked])
+        blocked.blocked = Some(true);
+        ActivityLog::batch_insert(&db.conn, &[make_query(2000), blocked])
             .await
             .unwrap();
 
@@ -384,8 +470,8 @@ mod tests {
     async fn test_filter_qtype() {
         let db = setup_metrics_test_db().await.unwrap();
         let mut quad_a = make_query(1000);
-        quad_a.qtype = 28; // AAAA
-        DnsQueryLog::batch_insert(&db.conn, &[make_query(2000), quad_a])
+        quad_a.qtype = Some(28);
+        ActivityLog::batch_insert(&db.conn, &[make_query(2000), quad_a])
             .await
             .unwrap();
 
@@ -413,8 +499,8 @@ mod tests {
     async fn test_filter_cache_hit() {
         let db = setup_metrics_test_db().await.unwrap();
         let mut cached = make_query(1000);
-        cached.cache_hit = true;
-        DnsQueryLog::batch_insert(&db.conn, &[make_query(2000), cached])
+        cached.cache_hit = Some(true);
+        ActivityLog::batch_insert(&db.conn, &[make_query(2000), cached])
             .await
             .unwrap();
 
@@ -442,8 +528,8 @@ mod tests {
     async fn test_filter_rate_limited() {
         let db = setup_metrics_test_db().await.unwrap();
         let mut limited = make_query(1000);
-        limited.rate_limited = true;
-        DnsQueryLog::batch_insert(&db.conn, &[make_query(2000), limited])
+        limited.rate_limited = Some(true);
+        ActivityLog::batch_insert(&db.conn, &[make_query(2000), limited])
             .await
             .unwrap();
 
@@ -472,7 +558,7 @@ mod tests {
         let db = setup_metrics_test_db().await.unwrap();
         let mut other = make_query(1000);
         other.client = "10.0.0.1".to_string();
-        DnsQueryLog::batch_insert(&db.conn, &[make_query(2000), other])
+        ActivityLog::batch_insert(&db.conn, &[make_query(2000), other])
             .await
             .unwrap();
 
@@ -500,8 +586,8 @@ mod tests {
     async fn test_filter_qname() {
         let db = setup_metrics_test_db().await.unwrap();
         let mut other = make_query(1000);
-        other.qname = "other.com".to_string();
-        DnsQueryLog::batch_insert(&db.conn, &[make_query(2000), other])
+        other.qname = Some("other.com".to_string());
+        ActivityLog::batch_insert(&db.conn, &[make_query(2000), other])
             .await
             .unwrap();
 
@@ -530,21 +616,14 @@ mod tests {
         let db = setup_metrics_test_db().await.unwrap();
         let mut target = make_query(1000);
         target.client = "10.0.0.1".to_string();
-        target.blocked = true;
-        DnsQueryLog::batch_insert(
-            &db.conn,
-            &[
-                make_query(2000),
-                {
-                    let mut q = make_query(3000);
-                    q.client = "10.0.0.1".to_string();
-                    q
-                },
-                target,
-            ],
-        )
-        .await
-        .unwrap();
+        target.blocked = Some(true);
+
+        let mut other = make_query(3000);
+        other.client = "10.0.0.1".to_string();
+
+        ActivityLog::batch_insert(&db.conn, &[make_query(2000), other, target])
+            .await
+            .unwrap();
 
         let page = ActivityLog::list(
             &db.conn,
@@ -571,7 +650,7 @@ mod tests {
     #[tokio::test]
     async fn test_sort_by_duration_asc() {
         let db = setup_metrics_test_db().await.unwrap();
-        let queries: Vec<_> = [30, 10, 20]
+        let rows: Vec<_> = [30, 10, 20]
             .iter()
             .map(|&dur| {
                 let mut q = make_query(1000);
@@ -579,7 +658,7 @@ mod tests {
                 q
             })
             .collect();
-        DnsQueryLog::batch_insert(&db.conn, &queries).await.unwrap();
+        ActivityLog::batch_insert(&db.conn, &rows).await.unwrap();
 
         let page = ActivityLog::list(
             &db.conn,
@@ -600,7 +679,7 @@ mod tests {
     #[tokio::test]
     async fn test_filter_client_sql_injection() {
         let db = setup_metrics_test_db().await.unwrap();
-        DnsQueryLog::batch_insert(&db.conn, &[make_query(1000)]).await.unwrap();
+        ActivityLog::batch_insert(&db.conn, &[make_query(1000)]).await.unwrap();
 
         let page = ActivityLog::list(
             &db.conn,
@@ -624,7 +703,7 @@ mod tests {
     #[tokio::test]
     async fn test_filter_qname_sql_injection() {
         let db = setup_metrics_test_db().await.unwrap();
-        DnsQueryLog::batch_insert(&db.conn, &[make_query(1000)]).await.unwrap();
+        ActivityLog::batch_insert(&db.conn, &[make_query(1000)]).await.unwrap();
 
         let page = ActivityLog::list(
             &db.conn,
@@ -643,5 +722,36 @@ mod tests {
 
         assert_eq!(page.items.len(), 0, "injection payload should not match any rows");
         assert_eq!(page.total, Some(0), "injection payload should not match any rows");
+    }
+
+    #[tokio::test]
+    async fn test_delete_before() {
+        let db = setup_metrics_test_db().await.unwrap();
+        ActivityLog::batch_insert(&db.conn, &[make_query(1000), make_query(2000), make_error(3000)])
+            .await
+            .unwrap();
+
+        ActivityLog::delete_before(&db.conn, 2000).await.unwrap();
+
+        let page = ActivityLog::list(
+            &db.conn,
+            10,
+            0,
+            ListFilter::default(),
+            SortColumn::Timestamp,
+            SortDir::Desc,
+            true,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(page.items.len(), 2);
+        assert!(page.items.iter().all(|r| r.ts_ms >= 2000));
+    }
+
+    #[tokio::test]
+    async fn test_batch_insert_empty() {
+        let db = setup_metrics_test_db().await.unwrap();
+        ActivityLog::batch_insert(&db.conn, &[]).await.unwrap();
     }
 }

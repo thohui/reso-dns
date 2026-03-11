@@ -10,10 +10,7 @@ use tokio::{
 };
 
 use super::event::{ErrorLogEvent, QueryLogEvent};
-use crate::database::{
-    MetricsDatabasePool,
-    models::{error_log::DnsErrorLog, query_log::DnsQueryLog},
-};
+use crate::database::{MetricsDatabasePool, models::activity_log::ActivityLog};
 
 pub enum MetricsMessage {
     #[allow(clippy::code)]
@@ -26,8 +23,7 @@ pub enum MetricsMessage {
 pub struct MetricsService {
     connection: Arc<MetricsDatabasePool>,
     rx: Receiver<MetricsMessage>,
-    query_batch: Vec<QueryLogEvent>,
-    error_batch: Vec<ErrorLogEvent>,
+    batch: Vec<ActivityLog>,
     live_stats: Arc<RwLock<LiveStats>>,
 }
 
@@ -35,17 +31,6 @@ pub struct MetricsService {
 pub struct MetricsHandle(Sender<MetricsMessage>);
 
 impl MetricsHandle {
-    /// Signals the metrics service to shut down by sending a shutdown message.
-    ///
-    /// If sending the message fails (for example because the receiver was dropped), an error is logged.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # use crate::metrics::MetricsHandle;
-    /// let handle: MetricsHandle = /* obtain handle */ unimplemented!();
-    /// handle.shutdown();
-    /// ```
     #[allow(dead_code)]
     pub fn shutdown(&self) {
         if let Err(e) = self.0.try_send(MetricsMessage::Shutdown) {
@@ -130,8 +115,7 @@ impl MetricsService {
             Self {
                 connection,
                 rx,
-                query_batch: Vec::with_capacity(buffer),
-                error_batch: Vec::with_capacity(buffer),
+                batch: Vec::with_capacity(buffer),
                 live_stats: live,
             },
         )
@@ -156,11 +140,11 @@ impl MetricsService {
                         match msg {
                             MetricsMessage::Query(ev) => {
                                 self.live_stats.write().await.apply_event(&ev);
-                                self.query_batch.push(ev);
+                                self.batch.push(ev.into_db_model());
                             },
                             MetricsMessage::Error(ev) => {
                                 self.live_stats.write().await.apply_error(&ev);
-                                self.error_batch.push(ev);
+                                self.batch.push(ev.into_db_model());
                             },
                             MetricsMessage::Shutdown => break,
                         }
@@ -178,11 +162,11 @@ impl MetricsService {
                         },
                         Some(MetricsMessage::Query(ev)) => {
                             self.live_stats.write().await.apply_event(&ev);
-                            self.query_batch.push(ev);
+                            self.batch.push(ev.into_db_model());
                         },
                         Some(MetricsMessage::Error(ev)) => {
                             self.live_stats.write().await.apply_error(&ev);
-                            self.error_batch.push(ev);
+                            self.batch.push(ev.into_db_model());
                         }
                     }
                 }
@@ -193,38 +177,15 @@ impl MetricsService {
     }
 
     async fn flush_events(&mut self) {
-        if let Err(e) = tokio::try_join!(self.flush_query_events(), self.flush_error_events()) {
+        if self.batch.is_empty() {
+            return;
+        }
+
+        if let Err(e) = ActivityLog::batch_insert(&self.connection, &self.batch).await {
             tracing::error!("failed to flush events to db: {}", e);
+        } else {
+            tracing::debug!("flushed {} events to the database", self.batch.len());
+            self.batch.clear();
         }
-        self.error_batch.clear();
-        self.query_batch.clear();
-    }
-
-    async fn flush_query_events(&self) -> anyhow::Result<()> {
-        if self.query_batch.is_empty() {
-            return Ok(());
-        }
-
-        let db_rows: Vec<DnsQueryLog> = self.query_batch.iter().cloned().map(|r| r.into_db_model()).collect();
-
-        DnsQueryLog::batch_insert(&self.connection, &db_rows).await?;
-
-        tracing::debug!("flushed {} query events to the database", db_rows.len());
-
-        Ok(())
-    }
-
-    async fn flush_error_events(&self) -> anyhow::Result<()> {
-        if self.error_batch.is_empty() {
-            return Ok(());
-        }
-
-        let db_rows: Vec<DnsErrorLog> = self.error_batch.iter().cloned().map(|r| r.into_db_model()).collect();
-
-        DnsErrorLog::batch_insert(&self.connection, &db_rows).await?;
-
-        tracing::debug!("flushed {} error events to the database", db_rows.len());
-
-        Ok(())
     }
 }

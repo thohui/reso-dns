@@ -1,7 +1,7 @@
 use reso_context::{ErrorType, RequestType};
 use reso_dns::{DnsResponseCode, domain_name::DomainName, message::RecordType};
 
-use crate::database::models::{error_log::DnsErrorLog, query_log::DnsQueryLog};
+use crate::database::models::activity_log::ActivityLog;
 
 type TsMs = i64;
 
@@ -30,18 +30,22 @@ pub struct QueryLogEvent {
 }
 
 impl QueryLogEvent {
-    pub fn into_db_model(self) -> DnsQueryLog {
-        DnsQueryLog {
+    pub fn into_db_model(self) -> ActivityLog {
+        ActivityLog {
             ts_ms: self.ts_ms,
-            blocked: self.blocked,
+            kind: "query".to_string(),
+            id: 0,
             transport: self.transport as i64,
             client: self.client,
-            cache_hit: self.cache_hit,
+            qname: Some(self.qname.to_string()),
+            qtype: Some(self.qtype.to_u16() as i64),
             dur_ms: self.dur_ms as i64,
-            qname: self.qname.to_string(),
-            qtype: self.qtype.to_u16() as i64,
-            rcode: self.rcode.to_u16() as i64,
-            rate_limited: self.rate_limited,
+            rcode: Some(self.rcode.to_u16() as i64),
+            blocked: Some(self.blocked),
+            cache_hit: Some(self.cache_hit),
+            rate_limited: Some(self.rate_limited),
+            error_type: None,
+            error_message: None,
         }
     }
 }
@@ -68,16 +72,22 @@ pub struct ErrorLogEvent {
 }
 
 impl ErrorLogEvent {
-    pub fn into_db_model(self) -> DnsErrorLog {
-        DnsErrorLog {
+    pub fn into_db_model(self) -> ActivityLog {
+        ActivityLog {
             ts_ms: self.ts_ms,
+            kind: "error".to_string(),
+            id: 0,
             transport: self.transport as i64,
             client: self.client,
-            message: self.message,
-            r#type: self.r#type as i64,
-            dur_ms: self.dur_ms as i64,
             qname: self.qname,
             qtype: self.qtype,
+            dur_ms: self.dur_ms as i64,
+            rcode: None,
+            blocked: None,
+            cache_hit: None,
+            rate_limited: None,
+            error_type: Some(self.r#type as i64),
+            error_message: Some(self.message),
         }
     }
 }
@@ -130,15 +140,18 @@ mod tests {
         let db_model = event.into_db_model();
 
         assert_eq!(db_model.ts_ms, 1234567890);
+        assert_eq!(db_model.kind, "query");
         assert_eq!(db_model.transport, RequestType::TCP as i64);
         assert_eq!(db_model.client, "10.0.0.1");
-        assert_eq!(db_model.qname, "test.com");
-        assert_eq!(db_model.qtype, RecordType::AAAA.to_u16() as i64);
-        assert_eq!(db_model.rcode, DnsResponseCode::NxDomain.to_u16() as i64);
+        assert_eq!(db_model.qname.as_deref(), Some("test.com"));
+        assert_eq!(db_model.qtype, Some(RecordType::AAAA.to_u16() as i64));
+        assert_eq!(db_model.rcode, Some(DnsResponseCode::NxDomain.to_u16() as i64));
         assert_eq!(db_model.dur_ms, 100);
-        assert!(db_model.cache_hit);
-        assert!(!db_model.blocked);
-        assert!(db_model.rate_limited);
+        assert_eq!(db_model.cache_hit, Some(true));
+        assert_eq!(db_model.blocked, Some(false));
+        assert_eq!(db_model.rate_limited, Some(true));
+        assert!(db_model.error_type.is_none());
+        assert!(db_model.error_message.is_none());
     }
 
     #[test]
@@ -157,8 +170,8 @@ mod tests {
         };
 
         let db_model = event.into_db_model();
-        assert!(db_model.cache_hit);
-        assert_eq!(db_model.dur_ms, 5); // Should be faster from cache
+        assert_eq!(db_model.cache_hit, Some(true));
+        assert_eq!(db_model.dur_ms, 5);
     }
 
     #[test]
@@ -177,8 +190,8 @@ mod tests {
         };
 
         let db_model = event.into_db_model();
-        assert!(db_model.blocked);
-        assert_eq!(db_model.rcode, DnsResponseCode::Refused.to_u16() as i64);
+        assert_eq!(db_model.blocked, Some(true));
+        assert_eq!(db_model.rcode, Some(DnsResponseCode::Refused.to_u16() as i64));
     }
 
     #[test]
@@ -220,13 +233,16 @@ mod tests {
         let db_model = event.into_db_model();
 
         assert_eq!(db_model.ts_ms, 1111111111);
+        assert_eq!(db_model.kind, "error");
         assert_eq!(db_model.transport, RequestType::UDP as i64);
         assert_eq!(db_model.client, "8.8.8.8");
-        assert_eq!(db_model.message, "DNS server error");
-        assert_eq!(db_model.r#type, ErrorType::InvalidRequest as i64);
+        assert_eq!(db_model.error_message.as_deref(), Some("DNS server error"));
+        assert_eq!(db_model.error_type, Some(ErrorType::InvalidRequest as i64));
         assert_eq!(db_model.dur_ms, 200);
-        assert_eq!(db_model.qname, Some("fail.example.com".to_string()));
+        assert_eq!(db_model.qname.as_deref(), Some("fail.example.com"));
         assert_eq!(db_model.qtype, Some(28));
+        assert!(db_model.rcode.is_none());
+        assert!(db_model.blocked.is_none());
     }
 
     #[test]
@@ -350,7 +366,7 @@ mod tests {
             };
 
             let db_model = event.into_db_model();
-            assert_eq!(db_model.qtype, rtype.to_u16() as i64);
+            assert_eq!(db_model.qtype, Some(rtype.to_u16() as i64));
         }
     }
 
@@ -379,7 +395,7 @@ mod tests {
             };
 
             let db_model = event.into_db_model();
-            assert_eq!(db_model.rcode, rcode.to_u16() as i64);
+            assert_eq!(db_model.rcode, Some(rcode.to_u16() as i64));
         }
     }
 
@@ -398,7 +414,7 @@ mod tests {
         };
 
         let db_model = event.into_db_model();
-        assert_eq!(db_model.message, long_message);
+        assert_eq!(db_model.error_message.as_deref(), Some(long_message.as_str()));
     }
 
     #[test]
