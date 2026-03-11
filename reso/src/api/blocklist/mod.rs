@@ -58,7 +58,7 @@ pub async fn list(
         }
     };
 
-    Ok(Json(PagedResponse::new(blocked_domains, count, top, skip)))
+    Ok(Json(PagedResponse::new(blocked_domains, Some(count), top, skip)))
 }
 
 #[derive(Deserialize)]

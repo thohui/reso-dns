@@ -1,6 +1,6 @@
 export interface PagedResponse<T> {
 	items: T[];
-	total: number;
+	total: number | null;
 	top: number;
 	skip: number;
 	has_more: boolean;

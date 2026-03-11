@@ -20,6 +20,7 @@ export interface ActivityListRequest {
 	filter?: ActivityListFilter;
 	sort?: SortColumn;
 	dir?: SortDir;
+	count?: boolean;
 }
 
 export class Activities {
@@ -46,6 +47,7 @@ export class Activities {
 		if (f.error_only) params.set('error_only', 'true');
 		if (req.sort) params.set('sort', req.sort);
 		if (req.dir) params.set('dir', req.dir);
+		if (req.count) params.set('count', 'true');
 
 		const response = await this.httpClient.get(`api/activity?${params}`);
 		return response.json<PagedResponse<Activity>>();
