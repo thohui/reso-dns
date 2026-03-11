@@ -36,6 +36,8 @@ pub struct ActivityListQuery {
     // sort
     pub sort: Option<String>,
     pub dir: Option<String>,
+    // count
+    pub count: Option<bool>,
 }
 
 impl ActivityListQuery {
@@ -97,9 +99,10 @@ pub async fn activity(
 
     let sort = query.sort_column();
     let dir = query.sort_dir();
+    let include_count = query.count.unwrap_or(false);
     let filter = query.into_filter();
 
-    let page = match ActivityLog::list(conn, db_top, db_skip, filter, sort, dir).await {
+    let page = match ActivityLog::list(conn, db_top, db_skip, filter, sort, dir, include_count).await {
         Ok(page) => page,
         Err(e) => {
             tracing::error!("failed to get activity logs: {:?}", e);
@@ -107,8 +110,8 @@ pub async fn activity(
         }
     };
 
-    let total: u64 = page.total.try_into().map_err(|_| {
-        tracing::error!("negative row count: {}", page.total);
+    let total: Option<u64> = page.total.map(|t| t.try_into()).transpose().map_err(|_| {
+        tracing::error!("negative row count");
         ApiError::server_error()
     })?;
 

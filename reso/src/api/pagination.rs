@@ -19,7 +19,7 @@ impl PagedQuery {
 #[derive(Serialize, Debug)]
 pub struct PagedResponse<T: Serialize> {
     pub items: Vec<T>,
-    pub total: u64,
+    pub total: Option<u64>,
     pub top: u64,
     pub skip: u64,
     pub has_more: bool,
@@ -27,9 +27,12 @@ pub struct PagedResponse<T: Serialize> {
 }
 
 impl<T: Serialize> PagedResponse<T> {
-    pub fn new(items: Vec<T>, total: u64, top: u64, skip: u64) -> Self {
+    pub fn new(items: Vec<T>, total: Option<u64>, top: u64, skip: u64) -> Self {
         let next_offset = skip.saturating_add(items.len() as u64);
-        let has_more = next_offset < total;
+        let has_more = match total {
+            Some(t) => next_offset < t,
+            None => items.len() as u64 == top,
+        };
 
         Self {
             items,

@@ -9,7 +9,7 @@ import type {
 	SortDir,
 } from '../../lib/api/activity';
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 50;
 
 export default function LogsPage() {
 	const [page, setPage] = useState(0);
@@ -32,10 +32,11 @@ export default function LogsPage() {
 		filter,
 		sort,
 		dir,
+		count: true,
 	});
 
-	const total = data?.total ?? 0;
-	const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+	const total = data?.total ?? null;
+	const totalPages = total != null ? Math.max(1, Math.ceil(total / PAGE_SIZE)) : null;
 
 	function handlePresetChange(next: ActivityListFilter) {
 		setPresetFilter(next);

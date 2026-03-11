@@ -9,5 +9,5 @@ pub mod user_session;
 
 pub struct Page<T> {
     pub items: Vec<T>,
-    pub total: i64,
+    pub total: Option<i64>,
 }

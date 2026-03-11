@@ -49,7 +49,7 @@ pub async fn list(
         .try_into()
         .map_err(|_| ApiError::server_error())?;
 
-    Ok(Json(PagedResponse::new(records, count, top, skip)))
+    Ok(Json(PagedResponse::new(records, Some(count), top, skip)))
 }
 
 #[derive(Deserialize)]

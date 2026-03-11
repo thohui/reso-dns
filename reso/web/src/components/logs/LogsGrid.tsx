@@ -272,8 +272,9 @@ const SEARCH_FIELD_LABELS: Record<SearchField, string> = {
 interface LogsGridProps {
 	activities: Activity[];
 	page: number;
-	totalPages: number;
-	total: number;
+	totalPages: number | null;
+	total: number | null;
+	hasMore?: boolean;
 	onPageChange: (page: number) => void;
 	presetFilter: ActivityListFilter;
 	onPresetChange: (filter: ActivityListFilter) => void;
@@ -292,6 +293,7 @@ export function LogsGrid({
 	page,
 	totalPages,
 	total,
+	hasMore,
 	onPageChange,
 	presetFilter,
 	onPresetChange,
@@ -329,7 +331,7 @@ export function LogsGrid({
 		state: { sorting },
 		manualSorting: true,
 		manualPagination: true,
-		pageCount: totalPages,
+		pageCount: totalPages ?? undefined,
 		enableSortingRemoval: false,
 		sortDescFirst: true,
 		onSortingChange: handleSortingChange,
@@ -553,10 +555,10 @@ export function LogsGrid({
 				</Box>
 			</Box>
 
-			{totalPages > 1 && (
+			{(totalPages == null || totalPages > 1) && (
 				<HStack justify='space-between' mt='4' px='1'>
 					<Text fontSize='xs' color='fg.muted'>
-						{total.toLocaleString()} total entries
+						{total != null ? `${total.toLocaleString()} total entries` : ''}
 					</Text>
 					<HStack gap='2'>
 						<Button
@@ -571,14 +573,14 @@ export function LogsGrid({
 							Prev
 						</Button>
 						<Text fontSize='xs' color='fg.muted'>
-							{page + 1} / {totalPages}
+							{totalPages != null ? `${page + 1} / ${totalPages}` : `${page + 1}`}
 						</Text>
 						<Button
 							size='xs'
 							variant='ghost'
 							color='fg.muted'
 							_hover={{ bg: 'bg.subtle' }}
-							disabled={page >= totalPages - 1}
+							disabled={totalPages != null ? page >= totalPages - 1 : !hasMore}
 							onClick={() => onPageChange(page + 1)}
 						>
 							Next

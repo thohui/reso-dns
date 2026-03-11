@@ -132,6 +132,7 @@ impl ActivityLog {
         filter: ListFilter,
         sort: SortColumn,
         dir: SortDir,
+        include_count: bool,
     ) -> anyhow::Result<Page<Self>> {
         Ok(db
             .interact(move |c| {
@@ -176,9 +177,13 @@ impl ActivityLog {
                     iter.collect::<Result<Vec<_>, rusqlite::Error>>()?
                 };
 
-                let (count_where, count_params) = filter.build_where(0);
-                let count_sql = format!("SELECT COUNT(*) FROM activity_log WHERE 1=1 {count_where}");
-                let total = tx.query_row(&count_sql, rusqlite::params_from_iter(&count_params), |r| r.get(0))?;
+                let total = if include_count {
+                    let (count_where, count_params) = filter.build_where(0);
+                    let count_sql = format!("SELECT COUNT(*) FROM activity_log WHERE 1=1 {count_where}");
+                    Some(tx.query_row(&count_sql, rusqlite::params_from_iter(&count_params), |r| r.get(0))?)
+                } else {
+                    None
+                };
 
                 tx.commit()?;
 
