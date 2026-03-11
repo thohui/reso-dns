@@ -238,6 +238,7 @@ mod tests {
             ListFilter::default(),
             SortColumn::Timestamp,
             SortDir::Desc,
+            true,
         )
         .await
         .unwrap()
@@ -250,7 +251,7 @@ mod tests {
 
         let page = list_all(&db.conn, 10, 0).await;
         assert_eq!(page.items.len(), 1);
-        assert_eq!(page.total, 1);
+        assert_eq!(page.total, Some(1));
 
         let r = &page.items[0];
         assert_eq!(r.kind, "query");
@@ -271,7 +272,7 @@ mod tests {
 
         let page = list_all(&db.conn, 10, 0).await;
         assert_eq!(page.items.len(), 1);
-        assert_eq!(page.total, 1);
+        assert_eq!(page.total, Some(1));
 
         let r = &page.items[0];
         assert_eq!(r.kind, "error");
@@ -305,7 +306,7 @@ mod tests {
         DnsErrorLog::batch_insert(&db.conn, &[make_error(3000)]).await.unwrap();
 
         let page = list_all(&db.conn, 10, 0).await;
-        assert_eq!(page.total, 3);
+        assert_eq!(page.total, Some(3));
     }
 
     #[tokio::test]
@@ -319,9 +320,9 @@ mod tests {
         let page2 = list_all(&db.conn, 3, 3).await;
 
         assert_eq!(page1.items.len(), 3);
-        assert_eq!(page1.total, 5);
+        assert_eq!(page1.total, Some(5));
         assert_eq!(page2.items.len(), 2);
-        assert_eq!(page2.total, 5);
+        assert_eq!(page2.total, Some(5));
     }
 
     #[tokio::test]
@@ -340,12 +341,13 @@ mod tests {
             },
             SortColumn::Timestamp,
             SortDir::Desc,
+            true,
         )
         .await
         .unwrap();
 
         assert_eq!(page.items.len(), 1);
-        assert_eq!(page.total, 1);
+        assert_eq!(page.total, Some(1));
         assert_eq!(page.items[0].kind, "error");
     }
 
@@ -368,12 +370,13 @@ mod tests {
             },
             SortColumn::Timestamp,
             SortDir::Desc,
+            true,
         )
         .await
         .unwrap();
 
         assert_eq!(page.items.len(), 1);
-        assert_eq!(page.total, 1);
+        assert_eq!(page.total, Some(1));
         assert_eq!(page.items[0].blocked, Some(true));
     }
 
@@ -396,12 +399,13 @@ mod tests {
             },
             SortColumn::Timestamp,
             SortDir::Desc,
+            true,
         )
         .await
         .unwrap();
 
         assert_eq!(page.items.len(), 1);
-        assert_eq!(page.total, 1);
+        assert_eq!(page.total, Some(1));
         assert_eq!(page.items[0].qtype, Some(28));
     }
 
@@ -424,12 +428,13 @@ mod tests {
             },
             SortColumn::Timestamp,
             SortDir::Desc,
+            true,
         )
         .await
         .unwrap();
 
         assert_eq!(page.items.len(), 1);
-        assert_eq!(page.total, 1);
+        assert_eq!(page.total, Some(1));
         assert_eq!(page.items[0].cache_hit, Some(true));
     }
 
@@ -452,12 +457,13 @@ mod tests {
             },
             SortColumn::Timestamp,
             SortDir::Desc,
+            true,
         )
         .await
         .unwrap();
 
         assert_eq!(page.items.len(), 1);
-        assert_eq!(page.total, 1);
+        assert_eq!(page.total, Some(1));
         assert_eq!(page.items[0].rate_limited, Some(true));
     }
 
@@ -480,12 +486,13 @@ mod tests {
             },
             SortColumn::Timestamp,
             SortDir::Desc,
+            true,
         )
         .await
         .unwrap();
 
         assert_eq!(page.items.len(), 1);
-        assert_eq!(page.total, 1);
+        assert_eq!(page.total, Some(1));
         assert_eq!(page.items[0].client, "10.0.0.1");
     }
 
@@ -508,12 +515,13 @@ mod tests {
             },
             SortColumn::Timestamp,
             SortDir::Desc,
+            true,
         )
         .await
         .unwrap();
 
         assert_eq!(page.items.len(), 1);
-        assert_eq!(page.total, 1);
+        assert_eq!(page.total, Some(1));
         assert_eq!(page.items[0].qname.as_deref(), Some("other.com"));
     }
 
@@ -549,12 +557,13 @@ mod tests {
             },
             SortColumn::Timestamp,
             SortDir::Desc,
+            true,
         )
         .await
         .unwrap();
 
         assert_eq!(page.items.len(), 1);
-        assert_eq!(page.total, 1);
+        assert_eq!(page.total, Some(1));
         assert_eq!(page.items[0].client, "10.0.0.1");
         assert_eq!(page.items[0].blocked, Some(true));
     }
@@ -579,6 +588,7 @@ mod tests {
             ListFilter::default(),
             SortColumn::Duration,
             SortDir::Asc,
+            true,
         )
         .await
         .unwrap();
@@ -602,12 +612,13 @@ mod tests {
             },
             SortColumn::Timestamp,
             SortDir::Desc,
+            true,
         )
         .await
         .unwrap();
 
         assert_eq!(page.items.len(), 0, "injection payload should not match any rows");
-        assert_eq!(page.total, 0, "injection payload should not match any rows");
+        assert_eq!(page.total, Some(0), "injection payload should not match any rows");
     }
 
     #[tokio::test]
@@ -625,11 +636,12 @@ mod tests {
             },
             SortColumn::Timestamp,
             SortDir::Desc,
+            true,
         )
         .await
         .unwrap();
 
         assert_eq!(page.items.len(), 0, "injection payload should not match any rows");
-        assert_eq!(page.total, 0, "injection payload should not match any rows");
+        assert_eq!(page.total, Some(0), "injection payload should not match any rows");
     }
 }
