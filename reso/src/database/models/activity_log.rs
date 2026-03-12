@@ -138,10 +138,10 @@ impl ActivityLog {
                 r#"
                 SELECT
                     COUNT(*) as total,
-                    SUM(CASE WHEN blocked = 1 THEN 1 ELSE 0 END) as blocked,
-                    SUM(CASE WHEN cache_hit = 1 THEN 1 ELSE 0 END) as cached,
-                    SUM(CASE WHEN kind = 'error' THEN 1 ELSE 0 END) as errors,
-                    SUM(dur_ms) as sum_duration
+                    COALESCE(SUM(CASE WHEN blocked = 1 THEN 1 ELSE 0 END), 0) as blocked,
+                    COALESCE(SUM(CASE WHEN cache_hit = 1 THEN 1 ELSE 0 END), 0) as cached,
+                    COALESCE(SUM(CASE WHEN kind = 'error' THEN 1 ELSE 0 END), 0) as errors,
+                    COALESCE(SUM(dur_ms), 0) as sum_duration
                 FROM activity_log
                 "#,
                 [],
@@ -157,7 +157,7 @@ impl ActivityLog {
             )
         })
         .await
-        .map_err(|e| anyhow!("failed to fetch activity log stats: {}", e))
+        .context("failed to fetch activity log stats")
     }
     pub async fn batch_insert(db: &MetricsDatabasePool, rows: &[Self]) -> anyhow::Result<()> {
         if rows.is_empty() {
@@ -788,6 +788,18 @@ mod tests {
     async fn test_batch_insert_empty() {
         let db = setup_metrics_test_db().await.unwrap();
         ActivityLog::batch_insert(&db.conn, &[]).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_fetch_stats_empty() {
+        let db = setup_metrics_test_db().await.unwrap();
+        let stats = ActivityLog::fetch_stats(&db.conn).await.unwrap();
+
+        assert_eq!(stats.total, 0);
+        assert_eq!(stats.blocked, 0);
+        assert_eq!(stats.cached, 0);
+        assert_eq!(stats.errors, 0);
+        assert_eq!(stats.sum_duration, 0);
     }
 
     #[tokio::test]
