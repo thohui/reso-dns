@@ -86,6 +86,23 @@ pub struct Stats {
 }
 
 impl Stats {
+    pub async fn init(db: &MetricsDatabasePool) -> anyhow::Result<Self> {
+        let activity_stats = ActivityLog::fetch_stats(db).await?;
+        let ts_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        Ok(Self {
+            query: Arc::new(RwLock::new(LiveStats {
+                total: activity_stats.total as usize,
+                blocked: activity_stats.blocked as usize,
+                cached: activity_stats.cached as usize,
+                errors: activity_stats.errors as usize,
+                sum_duration: activity_stats.sum_duration as u128,
+                live_since: ts_ms,
+            })),
+        })
+    }
     pub async fn live(&self) -> LiveStats {
         let stats = self.query.read().await;
         stats.clone()
@@ -93,32 +110,25 @@ impl Stats {
 }
 
 impl MetricsService {
-    pub fn new(connection: Arc<MetricsDatabasePool>, buffer: usize) -> (MetricsHandle, Stats, Self) {
-        let ts_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis();
-
-        let live = Arc::new(RwLock::new(LiveStats {
-            blocked: 0,
-            cached: 0,
-            total: 0,
-            errors: 0,
-            sum_duration: 0,
-            live_since: ts_ms,
-        }));
+    pub async fn new(
+        connection: Arc<MetricsDatabasePool>,
+        buffer: usize,
+    ) -> anyhow::Result<(MetricsHandle, Stats, Self)> {
+        let live = Stats::init(&connection).await?;
 
         let (tx, rx) = mpsc::channel::<MetricsMessage>(buffer);
-        (
+        Ok((
             MetricsHandle(tx),
-            Stats { query: live.clone() },
+            Stats {
+                query: live.query.clone(),
+            },
             Self {
                 connection,
                 rx,
                 batch: Vec::with_capacity(buffer),
-                live_stats: live,
+                live_stats: live.query.clone(),
             },
-        )
+        ))
     }
 
     pub async fn run(mut self, shutdown: tokio_util::sync::CancellationToken) -> anyhow::Result<()> {

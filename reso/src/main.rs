@@ -61,7 +61,7 @@ async fn run() -> anyhow::Result<()> {
     let metrics_db_connection = Arc::new(connect_metrics_db(&config.metrics_db_path).await?);
     run_metrics_db_migrations(&metrics_db_connection).await?;
 
-    let (handle, stats, metrics_service) = MetricsService::new(metrics_db_connection.clone(), 1000);
+    let (handle, stats, metrics_service) = MetricsService::new(metrics_db_connection.clone(), 1000).await?;
 
     let global: SharedGlobal = Arc::new(Global {
         cache: DnsMessageCache::new(50_000),
