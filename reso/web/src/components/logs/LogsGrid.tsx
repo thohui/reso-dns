@@ -573,7 +573,9 @@ export function LogsGrid({
 							Prev
 						</Button>
 						<Text fontSize='xs' color='fg.muted'>
-							{totalPages != null ? `${page + 1} / ${totalPages}` : `${page + 1}`}
+							{totalPages != null
+								? `${page + 1} / ${totalPages}`
+								: `${page + 1}`}
 						</Text>
 						<Button
 							size='xs'

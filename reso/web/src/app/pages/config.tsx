@@ -142,7 +142,9 @@ export default function ConfigPage() {
 	const rateLimitEnabled = form.watch('rate_limit_enabled');
 	const logsEnabled = form.watch('logs_enabled');
 	const logsRetentionSecs = form.watch('logs_retention_secs') as number;
-	const logsTruncateIntervalSecs = form.watch('logs_truncate_interval_secs') as number;
+	const logsTruncateIntervalSecs = form.watch(
+		'logs_truncate_interval_secs',
+	) as number;
 
 	const hasChanges = form.formState.isDirty;
 
@@ -354,10 +356,20 @@ export default function ConfigPage() {
 				description='Limit the number of queries per client within a time window.'
 				icon={Shield}
 			>
-				<ConfigField label='Enabled' description='Enable rate limiting for DNS queries.' align='center'>
+				<ConfigField
+					label='Enabled'
+					description='Enable rate limiting for DNS queries.'
+					align='center'
+				>
 					<Switch.Root
 						checked={rateLimitEnabled}
-						onCheckedChange={({ checked }) => form.setValue('rate_limit_enabled', checked, { shouldDirty: true, shouldTouch: true, shouldValidate: true })}
+						onCheckedChange={({ checked }) =>
+							form.setValue('rate_limit_enabled', checked, {
+								shouldDirty: true,
+								shouldTouch: true,
+								shouldValidate: true,
+							})
+						}
 					>
 						<Switch.HiddenInput />
 						<Switch.Control
@@ -414,10 +426,20 @@ export default function ConfigPage() {
 				description='Configure activity log retention and cleanup.'
 				icon={FileText}
 			>
-				<ConfigField label='Enabled' description='Automatically clean up old activity logs.' align='center'>
+				<ConfigField
+					label='Enabled'
+					description='Automatically clean up old activity logs.'
+					align='center'
+				>
 					<Switch.Root
 						checked={logsEnabled}
-						onCheckedChange={({ checked }) => form.setValue('logs_enabled', checked, { shouldDirty: true, shouldTouch: true, shouldValidate: true })}
+						onCheckedChange={({ checked }) =>
+							form.setValue('logs_enabled', checked, {
+								shouldDirty: true,
+								shouldTouch: true,
+								shouldValidate: true,
+							})
+						}
 					>
 						<Switch.HiddenInput />
 						<Switch.Control
@@ -437,7 +459,12 @@ export default function ConfigPage() {
 				>
 					<DurationInput
 						value={logsRetentionSecs}
-						onChange={(v) => form.setValue('logs_retention_secs', v, { shouldDirty: true, shouldValidate: true })}
+						onChange={(v) =>
+							form.setValue('logs_retention_secs', v, {
+								shouldDirty: true,
+								shouldValidate: true,
+							})
+						}
 						min={60}
 					/>
 				</ConfigField>
@@ -447,7 +474,12 @@ export default function ConfigPage() {
 				>
 					<DurationInput
 						value={logsTruncateIntervalSecs}
-						onChange={(v) => form.setValue('logs_truncate_interval_secs', v, { shouldDirty: true, shouldValidate: true })}
+						onChange={(v) =>
+							form.setValue('logs_truncate_interval_secs', v, {
+								shouldDirty: true,
+								shouldValidate: true,
+							})
+						}
 						min={60}
 					/>
 				</ConfigField>

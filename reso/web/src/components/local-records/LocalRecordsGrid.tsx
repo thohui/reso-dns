@@ -1,18 +1,5 @@
-import {
-	Box,
-	Icon,
-	IconButton,
-	Input,
-	Table,
-	Text,
-} from '@chakra-ui/react';
-import {
-	Globe,
-	Search,
-	ToggleLeft,
-	ToggleRight,
-	Trash2,
-} from 'lucide-react';
+import { Box, Icon, IconButton, Input, Table, Text } from '@chakra-ui/react';
+import { Globe, Search, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { LocalRecord } from '../../lib/api/local-records';
 import { recordTypeName } from '../../lib/dns';
@@ -29,9 +16,9 @@ function formatTimeAgo(timestamp: number): string {
 }
 
 const TYPE_COLORS: Record<number, string> = {
-	1: '#60a5fa',    // A
-	28: '#a78bfa',   // AAAA
-	5: '#34d399',    // CNAME
+	1: '#60a5fa', // A
+	28: '#a78bfa', // AAAA
+	5: '#34d399', // CNAME
 };
 
 interface LocalRecordsGridProps {
@@ -97,9 +84,7 @@ export function LocalRecordsGrid({
 							mx='auto'
 						/>
 						<Text color='fg.muted' fontSize='sm' mb='1'>
-							{search
-								? 'No records match your search'
-								: 'No local records yet'}
+							{search ? 'No records match your search' : 'No local records yet'}
 						</Text>
 						<Text color='fg.subtle' fontSize='xs'>
 							{search
@@ -197,11 +182,7 @@ export function LocalRecordsGrid({
 											opacity={entry.enabled ? 1 : 0.5}
 										>
 											<Table.Cell py='3.5' px='4'>
-												<Text
-													fontFamily='mono'
-													fontSize='sm'
-													fontWeight='500'
-												>
+												<Text fontFamily='mono' fontSize='sm' fontWeight='500'>
 													{entry.name}
 												</Text>
 											</Table.Cell>
@@ -223,11 +204,7 @@ export function LocalRecordsGrid({
 												</Box>
 											</Table.Cell>
 											<Table.Cell py='3.5' px='4'>
-												<Text
-													fontFamily='mono'
-													fontSize='sm'
-													color='fg.muted'
-												>
+												<Text fontFamily='mono' fontSize='sm' color='fg.muted'>
 													{entry.value}
 												</Text>
 											</Table.Cell>
