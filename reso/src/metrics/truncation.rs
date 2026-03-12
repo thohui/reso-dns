@@ -16,7 +16,7 @@ pub async fn run_metrics_truncation(
         (
             cfg.logs.enabled,
             cfg.logs.retention_secs,
-            cfg.logs.truncate_interval_secs,
+            cfg.logs.truncate_interval_secs.max(60),
         )
     };
 
@@ -62,7 +62,7 @@ pub async fn run_metrics_truncation(
             Ok(()) = config_rx.changed() => {
                 let (new_enabled, new_retention, new_interval) = {
                     let cfg = config_rx.borrow_and_update();
-                    (cfg.logs.enabled, cfg.logs.retention_secs, cfg.logs.truncate_interval_secs.max(1))
+                    (cfg.logs.enabled, cfg.logs.retention_secs, cfg.logs.truncate_interval_secs.max(60))
                 };
 
                 if new_enabled != enabled {
@@ -71,7 +71,7 @@ pub async fn run_metrics_truncation(
                 }
 
                 if new_interval != interval_secs {
-                    interval_secs = new_interval.max(1); // enforce minimum 1s interval
+                    interval_secs = new_interval.max(60); // enforce minimum 60s interval
                     tick = time::interval(Duration::from_secs(interval_secs));
                     tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
                     tick.tick().await;
