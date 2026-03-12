@@ -22,6 +22,13 @@ export class Config {
 
 export interface ConfigModel {
 	dns: DnsConfig;
+	logs: LogsConfig;
+}
+
+export interface LogsConfig {
+	enabled: boolean;
+	retention_secs: number;
+	truncate_interval_secs: number;
 }
 
 export type ActiveResolver = 'forwarder';
