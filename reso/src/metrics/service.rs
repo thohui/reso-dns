@@ -131,7 +131,9 @@ impl MetricsService {
 
         loop {
             tokio::select! {
-                _ = tick.tick() =>  self.flush_events().await,
+                _ = tick.tick() =>  {
+                    self.flush_events().await;
+                }
                 _ = shutdown.cancelled() => {
                     tracing::info!("shutting down metrics service");
 

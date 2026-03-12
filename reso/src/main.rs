@@ -6,7 +6,7 @@ use api::serve_web;
 use database::{connect_core_db, run_core_db_migrations};
 use env_config::EnvConfig;
 use global::{Global, SharedGlobal};
-use metrics::service::MetricsService;
+use metrics::{service::MetricsService, truncation::run_metrics_truncation};
 use reso_cache::DnsMessageCache;
 use server_builder::{build_dns_server, update_server_state_on_config_changes};
 use services::{blocklist::BlocklistService, config::ConfigService};
@@ -71,13 +71,11 @@ async fn run() -> anyhow::Result<()> {
         metrics: handle,
         stats,
         core_database: core_db_connection,
-        metrics_database: metrics_db_connection,
+        metrics_database: metrics_db_connection.clone(),
         cipher: AesGcm::new(&GenericArray::clone_from_slice(&config.cookie_secret)),
     });
 
     let server = build_dns_server(global.clone()).await?;
-
-    let global_clone = global.clone();
 
     let shutdown = tokio_util::sync::CancellationToken::new();
 
@@ -101,9 +99,23 @@ async fn run() -> anyhow::Result<()> {
     });
 
     let metrics_handle = tokio::spawn(metrics_service.run(metrics_shutdown.clone()));
-    let web_handle = tokio::spawn(serve_web(config.http_server_address, global, web_shutdown.clone()));
 
-    let _ = tokio::spawn(async move { update_server_state_on_config_changes(global_clone, server).await });
+    let truncate_shutdown = shutdown.child_token();
+    let truncate_db = metrics_db_connection.clone();
+    let truncate_config_rx = global.config_service.subscribe();
+    let truncate_handle = tokio::spawn(run_metrics_truncation(
+        truncate_db,
+        truncate_config_rx,
+        truncate_shutdown,
+    ));
+    let web_handle = tokio::spawn(serve_web(
+        config.http_server_address,
+        global.clone(),
+        web_shutdown.clone(),
+    ));
+
+    let task_global = global.clone();
+    let _ = tokio::spawn(async move { update_server_state_on_config_changes(task_global, server).await });
 
     #[cfg(unix)]
     {
@@ -125,11 +137,28 @@ async fn run() -> anyhow::Result<()> {
         let _ = dns_udp_handle.await;
         let _ = dns_tcp_handle.await;
         let _ = web_handle.await;
+        let _ = truncate_handle.await;
     };
 
     match tokio::time::timeout(Duration::from_secs(10), drain).await {
         Ok(_) => tracing::info!("all connections drained"),
         Err(_) => tracing::warn!("drain timeout, forcing shutdown"),
+    }
+
+    if let Err(e) = &global
+        .metrics_database
+        .interact(|c| c.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);"))
+        .await
+    {
+        tracing::error!("failed to checkpoint metrics database: {}", e);
+    };
+
+    if let Err(e) = &global
+        .core_database
+        .interact(|c| c.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);"))
+        .await
+    {
+        tracing::error!("failed to checkpoint core database: {}", e);
     }
 
     tracing::info!("waiting for metrics service to shut down");

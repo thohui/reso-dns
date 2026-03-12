@@ -12,6 +12,7 @@ import {
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+	FileText,
 	Plus,
 	RotateCcw,
 	Save,
@@ -26,6 +27,7 @@ import z from 'zod';
 import { UpstreamSpecSchema } from '../..//lib/config/schema';
 import { ConfigField } from '../../components/config/ConfigField';
 import { ConfigSection } from '../../components/config/ConfigSection';
+import { DurationInput } from '../../components/config/DurationInput';
 import {
 	PROTOCOL_COLORS,
 	UpstreamPicker,
@@ -43,6 +45,9 @@ const schema = z.object({
 	rate_limit_enabled: z.boolean(),
 	rate_limit_window: z.coerce.number().int().min(1),
 	rate_limit_max: z.coerce.number().int().min(1),
+	logs_enabled: z.boolean(),
+	logs_retention_secs: z.coerce.number().int().min(60),
+	logs_truncate_interval_secs: z.coerce.number().int().min(60),
 });
 
 export default function ConfigPage() {
@@ -58,6 +63,9 @@ export default function ConfigPage() {
 			rate_limit_enabled: config.data.dns.rate_limit.enabled,
 			rate_limit_window: config.data.dns.rate_limit.window_duration,
 			rate_limit_max: config.data.dns.rate_limit.max_queries_per_window,
+			logs_enabled: config.data.logs.enabled,
+			logs_retention_secs: config.data.logs.retention_secs,
+			logs_truncate_interval_secs: config.data.logs.truncate_interval_secs,
 		},
 	});
 
@@ -81,6 +89,11 @@ export default function ConfigPage() {
 					max_queries_per_window: data.rate_limit_max,
 				},
 			},
+			logs: {
+				enabled: data.logs_enabled,
+				retention_secs: data.logs_retention_secs,
+				truncate_interval_secs: data.logs_truncate_interval_secs,
+			},
 		};
 
 		updateConfig.mutate(updatedConfig, {
@@ -92,6 +105,9 @@ export default function ConfigPage() {
 					rate_limit_enabled: data.dns.rate_limit.enabled,
 					rate_limit_window: data.dns.rate_limit.window_duration,
 					rate_limit_max: data.dns.rate_limit.max_queries_per_window,
+					logs_enabled: data.logs.enabled,
+					logs_retention_secs: data.logs.retention_secs,
+					logs_truncate_interval_secs: data.logs.truncate_interval_secs,
 				});
 				// Update cache
 				queryClient.setQueryData(useConfigQueryKey, () => data);
@@ -124,6 +140,9 @@ export default function ConfigPage() {
 
 	const upstreams = form.watch('upstreams');
 	const rateLimitEnabled = form.watch('rate_limit_enabled');
+	const logsEnabled = form.watch('logs_enabled');
+	const logsRetentionSecs = form.watch('logs_retention_secs') as number;
+	const logsTruncateIntervalSecs = form.watch('logs_truncate_interval_secs') as number;
 
 	const hasChanges = form.formState.isDirty;
 
@@ -387,6 +406,50 @@ export default function ConfigPage() {
 							</Field.ErrorText>
 						)}
 					</Field.Root>
+				</ConfigField>
+			</ConfigSection>
+
+			<ConfigSection
+				title='Log Retention'
+				description='Configure activity log retention and cleanup.'
+				icon={FileText}
+			>
+				<ConfigField label='Enabled' description='Automatically clean up old activity logs.' align='center'>
+					<Switch.Root
+						checked={logsEnabled}
+						onCheckedChange={({ checked }) => form.setValue('logs_enabled', checked, { shouldDirty: true, shouldTouch: true, shouldValidate: true })}
+					>
+						<Switch.HiddenInput />
+						<Switch.Control
+							bg={logsEnabled ? 'accent' : 'bg.elevated'}
+							borderWidth='1px'
+							borderColor={logsEnabled ? 'accent' : 'border.input'}
+							_hover={{ borderColor: 'accent' }}
+							transition='all 0.2s ease'
+						>
+							<Switch.Thumb bg='fg' />
+						</Switch.Control>
+					</Switch.Root>
+				</ConfigField>
+				<ConfigField
+					label='Retention'
+					description='How long to keep activity logs before cleanup.'
+				>
+					<DurationInput
+						value={logsRetentionSecs}
+						onChange={(v) => form.setValue('logs_retention_secs', v, { shouldDirty: true, shouldValidate: true })}
+						min={60}
+					/>
+				</ConfigField>
+				<ConfigField
+					label='Cleanup Interval'
+					description='How often to run log cleanup.'
+				>
+					<DurationInput
+						value={logsTruncateIntervalSecs}
+						onChange={(v) => form.setValue('logs_truncate_interval_secs', v, { shouldDirty: true, shouldValidate: true })}
+						min={60}
+					/>
 				</ConfigField>
 			</ConfigSection>
 

@@ -9,7 +9,7 @@ services:
       - reso-data:/data
     environment:
       RESO_DATABASE_PATH: /data/reso.db
-      RESO_METRICS_DATABASE_PATH: /data/reso-metrics.db
+      RESO_METRICS_DATABASE_PATH: /data/reso_metrics.db
       # generate with: openssl rand -base64 32
       RESO_COOKIE_SECRET: ${RESO_COOKIE_SECRET:?RESO_COOKIE_SECRET is required}
 

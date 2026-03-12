@@ -11,6 +11,17 @@ use crate::ratelimit;
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     pub dns: DnsConfig,
+    pub logs: LogsConfig,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct LogsConfig {
+    /// Whether log truncation is enabled.
+    pub enabled: bool,
+    /// How long to keep activity logs in seconds.
+    pub retention_secs: u64,
+    /// How often to run the truncation job in seconds.
+    pub truncate_interval_secs: u64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -180,6 +191,21 @@ impl Config {
             .and_then(|v| v.parse::<usize>().ok())
             .unwrap_or(defaults.dns.rate_limit.max_queries_per_window);
 
+        let logs_enabled = map
+            .get("logs.enabled")
+            .and_then(|v| v.parse::<bool>().ok())
+            .unwrap_or(defaults.logs.enabled);
+
+        let retention_secs = map
+            .get("logs.retention_secs")
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(defaults.logs.retention_secs);
+
+        let truncate_interval_secs = map
+            .get("logs.truncate_interval_secs")
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(defaults.logs.truncate_interval_secs);
+
         Self {
             dns: DnsConfig {
                 timeout,
@@ -190,6 +216,11 @@ impl Config {
                     window_duration,
                     max_queries_per_window,
                 },
+            },
+            logs: LogsConfig {
+                enabled: logs_enabled,
+                retention_secs,
+                truncate_interval_secs,
             },
         }
     }
@@ -219,6 +250,18 @@ impl Config {
                 "dns.rate_limit.max_queries_per_window".to_string(),
                 self.dns.rate_limit.max_queries_per_window.to_string(),
             ),
+            (
+                "logs.enabled".to_string(),
+                self.logs.enabled.to_string(),
+            ),
+            (
+                "logs.retention_secs".to_string(),
+                self.logs.retention_secs.to_string(),
+            ),
+            (
+                "logs.truncate_interval_secs".to_string(),
+                self.logs.truncate_interval_secs.to_string(),
+            ),
         ]
     }
 }
@@ -235,6 +278,11 @@ impl Default for Config {
                     window_duration: Duration::from_secs(10).as_secs() as usize,
                     max_queries_per_window: 100,
                 },
+            },
+            logs: LogsConfig {
+                enabled: true,
+                retention_secs: 7 * 24 * 3600,
+                truncate_interval_secs: 3600,
             },
         }
     }
