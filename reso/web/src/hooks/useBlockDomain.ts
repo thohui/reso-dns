@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { useApiClient } from '../contexts/ApiClientContext';
 
-export function useCreateDomain() {
+export function useBlockDomain() {
 	const apiClient = useApiClient();
 
 	return useMutation({

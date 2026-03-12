@@ -8,7 +8,10 @@ import { LocalRecordsGrid } from '../../components/local-records/LocalRecordsGri
 import { toastError } from '../../components/Toaster';
 import type { LocalRecord } from '../../lib/api/local-records';
 import type { PagedResponse } from '../../lib/api/pagination';
-import { localRecordsQueryKey, useLocalRecords } from '../../hooks/useLocalRecords';
+import {
+	localRecordsQueryKey,
+	useLocalRecords,
+} from '../../hooks/useLocalRecords';
 import { useCreateLocalRecord } from '../../hooks/useCreateLocalRecord';
 import { useRemoveLocalRecord } from '../../hooks/useRemoveLocalRecord';
 import { useToggleLocalRecord } from '../../hooks/useToggleLocalRecord';
@@ -23,7 +26,12 @@ export default function LocalRecordsPage() {
 
 	const [showDialog, setShowDialog] = useState(false);
 
-	const handleSubmit = async (record: { name: string; record_type: number; value: string; ttl?: number }) => {
+	const handleSubmit = async (record: {
+		name: string;
+		record_type: number;
+		value: string;
+		ttl?: number;
+	}) => {
 		try {
 			await createMutation.mutateAsync(record);
 			await refetch();
@@ -44,7 +52,10 @@ export default function LocalRecordsPage() {
 	};
 
 	const handleToggle = async (id: number) => {
-		const previous = queryClient.getQueryData<PagedResponse<LocalRecord>>(localRecordsQueryKey);
+		const previous =
+			queryClient.getQueryData<PagedResponse<LocalRecord>>(
+				localRecordsQueryKey,
+			);
 
 		queryClient.setQueryData<PagedResponse<LocalRecord>>(
 			localRecordsQueryKey,

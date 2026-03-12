@@ -44,7 +44,8 @@ export default function LogsPage() {
 	}
 
 	const total = data?.total ?? cachedTotal.current;
-	const totalPages = total != null ? Math.max(1, Math.ceil(total / PAGE_SIZE)) : null;
+	const totalPages =
+		total != null ? Math.max(1, Math.ceil(total / PAGE_SIZE)) : null;
 
 	function handlePresetChange(next: ActivityListFilter) {
 		setPresetFilter(next);

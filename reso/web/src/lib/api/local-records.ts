@@ -15,7 +15,12 @@ export class LocalRecords {
 		return await response.json<PagedResponse<LocalRecord>>();
 	}
 
-	public async create(record: { name: string; record_type: number; value: string; ttl?: number }) {
+	public async create(record: {
+		name: string;
+		record_type: number;
+		value: string;
+		ttl?: number;
+	}) {
 		await this.httpClient.post('api/local-records', {
 			json: record,
 		});

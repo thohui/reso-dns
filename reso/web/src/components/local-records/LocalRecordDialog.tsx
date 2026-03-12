@@ -18,14 +18,23 @@ import { LOCAL_RECORD_TYPES } from '../../lib/dns';
 
 interface LocalRecordDialogProps {
 	onClose: () => void;
-	onSubmit: (record: { name: string; record_type: number; value: string; ttl?: number }) => Promise<void>;
+	onSubmit: (record: {
+		name: string;
+		record_type: number;
+		value: string;
+		ttl?: number;
+	}) => Promise<void>;
 }
 
 const validTypeValues = LOCAL_RECORD_TYPES.map((t) => t.value);
 
 const schema = z.object({
 	name: z.string().min(1, 'Domain name is required'),
-	record_type: z.coerce.number().refine((v) => validTypeValues.includes(v as typeof validTypeValues[number])),
+	record_type: z.coerce
+		.number()
+		.refine((v) =>
+			validTypeValues.includes(v as (typeof validTypeValues)[number]),
+		),
 	value: z.string().min(1, 'Value is required'),
 	ttl: z.coerce.number().int().min(1).optional(),
 });
@@ -36,7 +45,10 @@ const VALUE_PLACEHOLDERS: Record<number, string> = {
 	5: 'e.g. example.com',
 };
 
-export function LocalRecordDialog({ onClose, onSubmit }: LocalRecordDialogProps) {
+export function LocalRecordDialog({
+	onClose,
+	onSubmit,
+}: LocalRecordDialogProps) {
 	const {
 		register,
 		handleSubmit,
@@ -113,12 +125,15 @@ export function LocalRecordDialog({ onClose, onSubmit }: LocalRecordDialogProps)
 
 					<Box px='6' pb='6' pt='4'>
 						<Text color='fg.muted' fontSize='sm' mb='5'>
-							Add a local DNS record. Queries matching this record will be answered directly by Reso.
+							Add a local DNS record. Queries matching this record will be
+							answered directly by Reso.
 						</Text>
 
 						<HStack gap='3' mb='4' align='flex-start'>
 							<Field.Root invalid={!!errors.name} flex='1'>
-								<Field.Label color='fg.muted' fontSize='sm'>Domain</Field.Label>
+								<Field.Label color='fg.muted' fontSize='sm'>
+									Domain
+								</Field.Label>
 								<Input
 									placeholder='e.g. myapp.home'
 									bg='bg.input'
@@ -136,7 +151,9 @@ export function LocalRecordDialog({ onClose, onSubmit }: LocalRecordDialogProps)
 							</Field.Root>
 
 							<Field.Root w='120px'>
-								<Field.Label color='fg.muted' fontSize='sm'>Type</Field.Label>
+								<Field.Label color='fg.muted' fontSize='sm'>
+									Type
+								</Field.Label>
 								<NativeSelect.Root>
 									<NativeSelect.Field
 										bg='bg.input'
@@ -144,7 +161,9 @@ export function LocalRecordDialog({ onClose, onSubmit }: LocalRecordDialogProps)
 										{...register('record_type', { valueAsNumber: true })}
 									>
 										{LOCAL_RECORD_TYPES.map((t) => (
-											<option key={t.value} value={t.value}>{t.label}</option>
+											<option key={t.value} value={t.value}>
+												{t.label}
+											</option>
 										))}
 									</NativeSelect.Field>
 									<NativeSelect.Indicator />
@@ -154,7 +173,9 @@ export function LocalRecordDialog({ onClose, onSubmit }: LocalRecordDialogProps)
 
 						<HStack gap='3' mb='6' align='flex-start'>
 							<Field.Root invalid={!!errors.value} flex='1'>
-								<Field.Label color='fg.muted' fontSize='sm'>Value</Field.Label>
+								<Field.Label color='fg.muted' fontSize='sm'>
+									Value
+								</Field.Label>
 								<Input
 									placeholder={VALUE_PLACEHOLDERS[recordType] ?? ''}
 									bg='bg.input'
@@ -171,7 +192,9 @@ export function LocalRecordDialog({ onClose, onSubmit }: LocalRecordDialogProps)
 							</Field.Root>
 
 							<Field.Root w='100px'>
-								<Field.Label color='fg.muted' fontSize='sm'>TTL</Field.Label>
+								<Field.Label color='fg.muted' fontSize='sm'>
+									TTL
+								</Field.Label>
 								<Input
 									type='number'
 									bg='bg.input'
