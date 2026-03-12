@@ -1,0 +1,1 @@
+CREATE INDEX idx_activity_log_ts_kind_id ON activity_log (ts_ms DESC, kind ASC, id DESC);
