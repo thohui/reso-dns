@@ -1,5 +1,6 @@
 import {
 	Box,
+	Button,
 	CloseButton,
 	Drawer,
 	HStack,
@@ -8,6 +9,8 @@ import {
 	Text,
 	VStack,
 } from '@chakra-ui/react';
+import { Ban } from 'lucide-react';
+import { useBlockDomain } from '../../hooks/useBlockDomain';
 import {
 	type Activity,
 	type ErrorActivity,
@@ -18,8 +21,9 @@ import {
 } from '../../lib/api/activity';
 import { recordTypeName } from '../../lib/dns';
 import { getStatusInfo } from '../../lib/status-info';
+import { toastError } from '../Toaster';
 
-function DetailRow({ label, value }: { label: string; value: string }) {
+function DetailRow({ label, value }: { label: string; value: string; }) {
 	return (
 		<HStack justify='space-between' py='2'>
 			<Text fontSize='xs' color='fg.faint' textTransform='uppercase'>
@@ -69,9 +73,13 @@ export function ActivityDetailDrawer({
 	open,
 	onClose,
 }: ActivityDetailDrawerProps) {
+
+	const blockDomain = useBlockDomain();
+
 	if (!activity) return null;
 
 	const statusInfo = getStatusInfo(activity);
+	const canBlock = activity.kind === 'query' && activity.qname && !activity.d.blocked;
 
 	const time = new Date(activity.timestamp).toLocaleString('en-US', {
 		hour12: false,
@@ -263,6 +271,34 @@ export function ActivityDetailDrawer({
 								)}
 							</VStack>
 						</Drawer.Body>
+
+						{canBlock && (
+							<Drawer.Footer
+								borderTopWidth='1px'
+								borderColor='border'
+								px='5'
+								py='4'
+							>
+								<Button
+									w='full'
+									variant='ghost'
+									borderWidth='1px'
+									borderColor='border'
+									color='fg.muted'
+									_hover={{ bg: 'status.error/10', borderColor: 'status.error', color: 'status.error' }}
+									onClick={() => {
+										blockDomain.mutate(activity.qname!, {
+											onError: (e) => toastError(e),
+											onSuccess: () => onClose(),
+										});
+									}}
+									loading={blockDomain.isPending}
+								>
+									<Icon as={Ban} boxSize='3.5' mr='2' />
+									Block {activity.qname}
+								</Button>
+							</Drawer.Footer>
+						)}
 					</Drawer.Content>
 				</Drawer.Positioner>
 			</Portal>

@@ -1,17 +1,17 @@
 import { Box, Button, Grid, Heading, HStack, Icon } from '@chakra-ui/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Ban, Plus, ShieldCheck, ShieldOff } from 'lucide-react';
-import { StatCard } from '../../components/dashboard/StatCard';
 import { useState } from 'react';
 import { BlocklistDialog } from '../../components/blocklist/BlocklistDialog';
 import { BlocklistGrid } from '../../components/blocklist/BlocklistGrid';
+import { StatCard } from '../../components/dashboard/StatCard';
 import { toastError } from '../../components/Toaster';
-import type { BlockedDomain } from '../../lib/api/blocklist';
-import type { PagedResponse } from '../../lib/api/pagination';
+import { useBlockDomain } from '../../hooks/useBlockDomain';
 import { useBlocklist } from '../../hooks/useBlocklist';
-import { useCreateDomain } from '../../hooks/useCreateDomain';
 import { useRemoveDomain } from '../../hooks/useRemoveDomain';
 import { useToggleDomain } from '../../hooks/useToggleDomain';
+import type { BlockedDomain } from '../../lib/api/blocklist';
+import type { PagedResponse } from '../../lib/api/pagination';
 
 export default function BlocklistPage() {
 	const { data, refetch } = useBlocklist();
@@ -27,7 +27,7 @@ export default function BlocklistPage() {
 		setShowDialog(false);
 	};
 
-	const createDomain = useCreateDomain();
+	const createDomain = useBlockDomain();
 	const removeDomain = useRemoveDomain();
 	const toggleDomain = useToggleDomain();
 
