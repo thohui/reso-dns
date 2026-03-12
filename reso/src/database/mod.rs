@@ -97,7 +97,7 @@ pub async fn connect_metrics_db(db_path: &str) -> anyhow::Result<MetricsDatabase
                 PRAGMA synchronous = NORMAL;
                 PRAGMA foreign_keys = ON;
                 PRAGMA busy_timeout = 5000;
-                PRAGMA wal_autocheckpoint = 1000;
+                PRAGMA wal_autocheckpoint = 200;
                 PRAGMA optimize=0x10002;
                 "#,
                     )
