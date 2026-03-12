@@ -21,7 +21,7 @@ A fast, self-hosted DNS resolver with a web UI. Supports forwarding over UDP and
 ![Configuration](docs/screenshots/configuration.png)
 ![Blocklist](docs/screenshots/blocklist.png)
 
-## Installation
+## Getting started
 
 ### Docker Compose
 
