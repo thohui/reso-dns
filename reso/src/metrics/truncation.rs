@@ -71,7 +71,7 @@ pub async fn run_metrics_truncation(
                 }
 
                 if new_interval != interval_secs {
-                    interval_secs = new_interval.max(60); // enforce minimum 60s interval
+                    interval_secs = new_interval;
                     tick = time::interval(Duration::from_secs(interval_secs));
                     tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
                     tick.tick().await;
