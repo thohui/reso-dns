@@ -250,14 +250,8 @@ impl Config {
                 "dns.rate_limit.max_queries_per_window".to_string(),
                 self.dns.rate_limit.max_queries_per_window.to_string(),
             ),
-            (
-                "logs.enabled".to_string(),
-                self.logs.enabled.to_string(),
-            ),
-            (
-                "logs.retention_secs".to_string(),
-                self.logs.retention_secs.to_string(),
-            ),
+            ("logs.enabled".to_string(), self.logs.enabled.to_string()),
+            ("logs.retention_secs".to_string(), self.logs.retention_secs.to_string()),
             (
                 "logs.truncate_interval_secs".to_string(),
                 self.logs.truncate_interval_secs.to_string(),
@@ -280,7 +274,7 @@ impl Default for Config {
                 },
             },
             logs: LogsConfig {
-                enabled: true,
+                enabled: false,
                 retention_secs: 7 * 24 * 3600,
                 truncate_interval_secs: 3600,
             },
