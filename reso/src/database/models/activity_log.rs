@@ -36,32 +36,41 @@ pub struct ListFilter {
 }
 
 impl ListFilter {
+    fn escape_like(s: &str) -> String {
+        s.replace('\\', r"\\").replace('%', r"\%").replace('_', r"\_")
+    }
+
     fn build_where(&self, param_offset: usize) -> (String, Vec<Value>) {
         let mut clauses: Vec<String> = Vec::new();
         let mut params: Vec<Value> = Vec::new();
 
-        let mut push = |col: &str, val: Value| {
+        let mut push = |col: &str, val: Value, use_like: bool| {
             params.push(val);
-            clauses.push(format!("AND {col} = ?{}", params.len() + param_offset));
+            let operator = if use_like { "LIKE" } else { "=" };
+            let escape_clause = if use_like { " ESCAPE '\\'" } else { "" };
+            clauses.push(format!(
+                "AND {col} {operator} ?{}{escape_clause}",
+                param_offset + params.len(),
+            ));
         };
 
         if let Some(ref v) = self.client {
-            push("client", Value::Text(v.clone()));
+            push("client", Value::Text(format!("%{}%", Self::escape_like(v))), true);
         }
         if let Some(ref v) = self.qname {
-            push("qname", Value::Text(v.clone()));
+            push("qname", Value::Text(format!("%{}%", Self::escape_like(v))), true);
         }
         if let Some(v) = self.qtype {
-            push("qtype", Value::Integer(v));
+            push("qtype", Value::Integer(v), false);
         }
         if let Some(v) = self.blocked {
-            push("blocked", Value::Integer(v as i64));
+            push("blocked", Value::Integer(v as i64), false);
         }
         if let Some(v) = self.cache_hit {
-            push("cache_hit", Value::Integer(v as i64));
+            push("cache_hit", Value::Integer(v as i64), false);
         }
         if let Some(v) = self.rate_limited {
-            push("rate_limited", Value::Integer(v as i64));
+            push("rate_limited", Value::Integer(v as i64), false);
         }
         if self.error_only {
             clauses.push("AND kind = 'error'".to_string());
@@ -639,6 +648,36 @@ mod tests {
         assert_eq!(page.items.len(), 1);
         assert_eq!(page.total, Some(1));
         assert_eq!(page.items[0].qname.as_deref(), Some("other.com"));
+    }
+
+    #[tokio::test]
+    async fn test_filter_qname_substring() {
+        let db = setup_metrics_test_db().await.unwrap();
+        let mut q1 = make_query(1000);
+        q1.qname = Some("ads.google.com".to_string());
+        let mut q2 = make_query(2000);
+        q2.qname = Some("mail.google.com".to_string());
+        ActivityLog::batch_insert(&db.conn, &[make_query(3000), q1, q2])
+            .await
+            .unwrap();
+
+        let page = ActivityLog::list(
+            &db.conn,
+            10,
+            0,
+            ListFilter {
+                qname: Some("google".to_string()),
+                ..Default::default()
+            },
+            SortColumn::Timestamp,
+            SortDir::Desc,
+            true,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(page.items.len(), 2);
+        assert_eq!(page.total, Some(2));
     }
 
     #[tokio::test]
