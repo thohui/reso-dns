@@ -15,9 +15,9 @@ pub type SharedGlobal = Arc<Global>;
 pub struct Global {
     pub cache: DnsMessageCache,
     pub blocklist: BlocklistService,
-    pub local_records_service: LocalRecordService,
+    pub local_records: LocalRecordService,
     pub metrics: MetricsHandle,
-    pub config_service: ConfigService,
+    pub config: ConfigService,
     pub stats: Stats,
     pub core_database: Arc<CoreDatabasePool>,
     pub metrics_database: Arc<MetricsDatabasePool>,

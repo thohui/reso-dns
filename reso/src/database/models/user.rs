@@ -1,9 +1,11 @@
-use anyhow::Context;
 use chrono::Utc;
 use rusqlite::{OptionalExtension, params};
 use uuid::Uuid;
 
-use crate::{database::CoreDatabasePool, utils::uuid::EntityId};
+use crate::{
+    database::{CoreDatabasePool, DatabaseError},
+    utils::uuid::EntityId,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct User {
@@ -25,7 +27,7 @@ impl User {
         }
     }
 
-    pub async fn insert(self, db: &CoreDatabasePool) -> anyhow::Result<()> {
+    pub async fn insert(self, db: &CoreDatabasePool) -> Result<(), DatabaseError> {
         db.interact(move |c| {
             c.execute(
                 r#"
@@ -37,12 +39,11 @@ impl User {
             )?;
             Ok(())
         })
-        .await
-        .context("failed to insert user")?;
+        .await?;
         Ok(())
     }
 
-    pub async fn find_by_name(db: &CoreDatabasePool, name: impl Into<String>) -> anyhow::Result<Option<Self>> {
+    pub async fn find_by_name(db: &CoreDatabasePool, name: impl Into<String>) -> Result<Option<Self>, DatabaseError> {
         let name = name.into();
 
         Ok(db
@@ -62,11 +63,10 @@ impl User {
                 )
                 .optional()
             })
-            .await
-            .context("failed to find user by name")?)
+            .await?)
     }
 
-    pub async fn find_by_id(db: &CoreDatabasePool, id: &EntityId<Self>) -> anyhow::Result<Option<Self>> {
+    pub async fn find_by_id(db: &CoreDatabasePool, id: &EntityId<Self>) -> Result<Option<Self>, DatabaseError> {
         let id = *id.id();
 
         Ok(db
@@ -85,17 +85,16 @@ impl User {
                 )
                 .optional()
             })
-            .await
-            .context("failed to find user by id")?)
+            .await?)
     }
 
-    pub async fn count(db: &CoreDatabasePool) -> anyhow::Result<i64> {
+    pub async fn count(db: &CoreDatabasePool) -> Result<i64, DatabaseError> {
         Ok(db
             .interact(|c| c.query_row("SELECT COUNT(*) FROM users", [], |r| r.get(0)))
             .await?)
     }
 
-    pub async fn list(db: &CoreDatabasePool) -> anyhow::Result<Vec<Self>> {
+    pub async fn list(db: &CoreDatabasePool) -> Result<Vec<Self>, DatabaseError> {
         Ok(db
             .interact(|c| {
                 let mut stmt = c.prepare("SELECT id, name, password_hash, created_at FROM users")?;
@@ -109,8 +108,7 @@ impl User {
                 })?;
                 iter.collect::<rusqlite::Result<Vec<_>>>()
             })
-            .await
-            .context("failed to list users")?)
+            .await?)
     }
 }
 

@@ -20,6 +20,17 @@ pub enum DatabaseError {
     Query(#[from] rusqlite::Error),
 }
 
+impl DatabaseError {
+    pub fn is_unique_constraint_violation(&self) -> bool {
+        matches!(
+            self,
+            DatabaseError::Query(rusqlite::Error::SqliteFailure(err, _))
+                if err.code == rusqlite::ErrorCode::ConstraintViolation
+                && err.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE
+        )
+    }
+}
+
 impl From<deadpool_sqlite::InteractError> for DatabaseError {
     fn from(e: deadpool_sqlite::InteractError) -> Self {
         DatabaseError::Interact(e.to_string())

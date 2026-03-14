@@ -1,9 +1,8 @@
-use anyhow::Context;
 use std::collections::HashMap;
 
 use rusqlite::params;
 
-use crate::database::CoreDatabasePool;
+use crate::database::{CoreDatabasePool, DatabaseError};
 
 pub struct ConfigSetting {
     pub key: String,
@@ -12,7 +11,7 @@ pub struct ConfigSetting {
 }
 
 impl ConfigSetting {
-    pub async fn get(db: &CoreDatabasePool, key: &str) -> anyhow::Result<Option<String>> {
+    pub async fn get(db: &CoreDatabasePool, key: &str) -> Result<Option<String>, DatabaseError> {
         let key = key.to_string();
 
         Ok(db
@@ -25,11 +24,10 @@ impl ConfigSetting {
                 };
                 Ok::<_, rusqlite::Error>(result)
             })
-            .await
-            .context("failed to get config setting")?)
+            .await?)
     }
 
-    pub async fn all(db: &CoreDatabasePool) -> anyhow::Result<HashMap<String, String>> {
+    pub async fn all(db: &CoreDatabasePool) -> Result<HashMap<String, String>, DatabaseError> {
         Ok(db
             .interact(move |c| {
                 let mut stmt = c.prepare("SELECT key, value FROM config_settings")?;
@@ -42,16 +40,16 @@ impl ConfigSetting {
                 }
                 Ok::<_, rusqlite::Error>(map)
             })
-            .await
-            .context("failed to get all config settings")?)
+            .await?)
     }
 
-    pub async fn set(db: &CoreDatabasePool, key: &str, value: &str) -> anyhow::Result<()> {
+    pub async fn set(db: &CoreDatabasePool, key: &str, value: &str) -> Result<(), DatabaseError> {
         let key = key.to_string();
         let value = value.to_string();
 
         let updated_at: i64 = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap() // this only fails if the system clock is before 1970, which is a unrealistic scenario
             .as_millis() as i64;
 
         db.interact(move |c| {
@@ -61,15 +59,15 @@ impl ConfigSetting {
             )?;
             Ok(())
         })
-        .await
-        .context("failed to set config setting")?;
+        .await?;
 
         Ok(())
     }
 
-    pub async fn batch_set(db: &CoreDatabasePool, entries: Vec<(String, String)>) -> anyhow::Result<()> {
+    pub async fn batch_set(db: &CoreDatabasePool, entries: Vec<(String, String)>) -> Result<(), DatabaseError> {
         let updated_at: i64 = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
             .as_millis() as i64;
 
         db.interact(move |c| {
@@ -84,8 +82,7 @@ impl ConfigSetting {
             tx.commit()?;
             Ok::<_, rusqlite::Error>(())
         })
-        .await
-        .context("failed to batch set config settings")?;
+        .await?;
 
         Ok(())
     }

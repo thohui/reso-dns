@@ -6,6 +6,8 @@ use reso_dns::domain_name::DomainName;
 
 use crate::database::{CoreDatabasePool, models::blocked_domain::BlockedDomain};
 
+use super::ServiceError;
+
 pub struct BlocklistService {
     matcher: ArcSwap<BlocklistMatcher>,
     connection: Arc<CoreDatabasePool>,
@@ -22,32 +24,57 @@ impl BlocklistService {
         })
     }
 
-    pub async fn add_domain(&self, domain: &str) -> anyhow::Result<()> {
-        // TODO: loading a matcher on demand is expensive, we should flush them periodically like we're doing with the metrics.
-        let domain = DomainName::from_user(domain)?;
-        BlockedDomain::new(domain.to_string()).insert(&self.connection).await?;
+    pub async fn add_domain(&self, domain: &str) -> Result<(), ServiceError> {
+        let domain =
+            DomainName::from_user(domain).map_err(|e| ServiceError::BadRequest(format!("Invalid domain: {e}")))?;
+
+        let model = BlockedDomain::new(domain.to_string());
+
+        model.insert(&self.connection).await.map_err(|e| {
+            if e.is_unique_constraint_violation() {
+                ServiceError::Conflict("Domain is already blocked.".into())
+            } else {
+                ServiceError::Internal(e.into())
+            }
+        })?;
+
         self.load_matcher().await?;
         Ok(())
     }
 
-    pub async fn remove_domain(&self, domain: &str) -> anyhow::Result<()> {
-        let domain = DomainName::from_user(domain)?;
+    pub async fn remove_domain(&self, domain: &str) -> Result<(), ServiceError> {
+        let domain =
+            DomainName::from_user(domain).map_err(|e| ServiceError::BadRequest(format!("Invalid domain: {e}")))?;
 
-        BlockedDomain::new(domain.to_string()).delete(&self.connection).await?;
+        let changed = BlockedDomain::new(domain.to_string()).delete(&self.connection).await?;
+
+        if !changed {
+            return Err(ServiceError::NotFound("Domain not found".into()));
+        }
+
         self.load_matcher().await?;
         Ok(())
     }
 
-    pub async fn toggle_domain(&self, domain: &str) -> anyhow::Result<()> {
-        let domain = DomainName::from_user(domain)?;
-        BlockedDomain::toggle(&domain.to_string(), &self.connection).await?;
+    pub async fn toggle_domain(&self, domain: &str) -> Result<(), ServiceError> {
+        let domain =
+            DomainName::from_user(domain).map_err(|e| ServiceError::BadRequest(format!("Invalid domain: {e}")))?;
+
+        let changed = BlockedDomain::toggle(&domain.to_string(), &self.connection).await?;
+
+        if !changed {
+            return Err(ServiceError::NotFound("Domain not found".into()));
+        }
+
         self.load_matcher().await?;
         Ok(())
     }
 
-    pub async fn load_matcher(&self) -> anyhow::Result<()> {
+    pub async fn load_matcher(&self) -> Result<(), ServiceError> {
         let domains = BlockedDomain::list_all(&self.connection).await?;
-        let updated_matcher = BlocklistMatcher::load(domains.iter().filter(|d| d.enabled).map(|d| d.domain.as_str()))?;
+
+        let updated_matcher = BlocklistMatcher::load(domains.iter().filter(|d| d.enabled).map(|d| d.domain.as_str()))
+            .map_err(|e| ServiceError::Internal(e.into()))?;
         self.matcher.swap(updated_matcher.into());
         Ok(())
     }
