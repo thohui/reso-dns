@@ -20,11 +20,7 @@ impl DnsMiddleware<Global, Local> for LocalRecordsMiddleware {
             return Ok(None);
         }
 
-        let resolved = match ctx
-            .global()
-            .local_records_service
-            .lookup(&question.qname, question.qtype)
-        {
+        let resolved = match ctx.global().local_records.lookup(&question.qname, question.qtype) {
             Some(r) => r,
             None => return Ok(None),
         };

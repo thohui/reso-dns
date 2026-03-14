@@ -1,8 +1,7 @@
-use anyhow::{Context, anyhow};
 use rusqlite::{params, types::Value};
 
-use crate::database::MetricsDatabasePool;
 use crate::database::models::Page;
+use crate::database::{DatabaseError, MetricsDatabasePool};
 
 #[derive(Debug, Clone)]
 pub struct ActivityLog {
@@ -132,7 +131,7 @@ pub struct Stats {
 }
 
 impl ActivityLog {
-    pub async fn fetch_stats(db: &MetricsDatabasePool) -> anyhow::Result<Stats> {
+    pub async fn fetch_stats(db: &MetricsDatabasePool) -> Result<Stats, DatabaseError> {
         db.interact(move |c| {
             c.query_row(
                 r#"
@@ -157,9 +156,8 @@ impl ActivityLog {
             )
         })
         .await
-        .context("failed to fetch activity log stats")
     }
-    pub async fn batch_insert(db: &MetricsDatabasePool, rows: &[Self]) -> anyhow::Result<()> {
+    pub async fn batch_insert(db: &MetricsDatabasePool, rows: &[Self]) -> Result<(), DatabaseError> {
         if rows.is_empty() {
             return Ok(());
         }
@@ -202,8 +200,7 @@ impl ActivityLog {
             tx.commit()?;
             Ok(())
         })
-        .await
-        .context("failed to batch insert activity logs")?;
+        .await?;
 
         Ok(())
     }
@@ -270,19 +267,17 @@ impl ActivityLog {
 
                 Ok(Page { items, total })
             })
-            .await
-            .context("failed to list activity logs")?)
+            .await?)
     }
 
-    pub async fn delete_before(db: &MetricsDatabasePool, cutoff_ts_ms: i64) -> anyhow::Result<()> {
-        db.interact(move |c| {
-            c.execute("DELETE FROM activity_log WHERE ts_ms < ?1", params![cutoff_ts_ms])?;
-            Ok(())
-        })
-        .await
-        .context("failed to delete old activity logs")?;
-
-        Ok(())
+    pub async fn delete_before(db: &MetricsDatabasePool, cutoff_ts_ms: i64) -> Result<bool, DatabaseError> {
+        let rows = db
+            .interact(move |c| {
+                let rows = c.execute("DELETE FROM activity_log WHERE ts_ms < ?1", params![cutoff_ts_ms])?;
+                Ok(rows)
+            })
+            .await?;
+        Ok(rows > 0)
     }
 }
 

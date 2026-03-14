@@ -86,7 +86,6 @@ pub enum Upstream {
 }
 
 /// String representation of an `Upstream`.
-///
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct UpstreamSpec(pub String);

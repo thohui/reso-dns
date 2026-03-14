@@ -71,7 +71,7 @@ async fn create_server_state(
 
 /// Starts a background task that updates the server state based on configuration change events.
 pub async fn update_server_state_on_config_changes(global: SharedGlobal, server: Arc<DnsServer<Global, Local>>) {
-    let mut rx = global.config_service.subscribe();
+    let mut rx = global.config.subscribe();
 
     // skip the initial value.
     rx.mark_unchanged();
@@ -91,7 +91,7 @@ pub async fn update_server_state_on_config_changes(global: SharedGlobal, server:
 }
 
 pub async fn build_dns_server(global: SharedGlobal) -> anyhow::Result<Arc<DnsServer<Global, Local>>> {
-    let config = global.config_service.get_config();
+    let config = global.config.get_config();
     let server_state = create_server_state(&global, &config).await?;
     Ok(Arc::new(DnsServer::new(server_state)))
 }

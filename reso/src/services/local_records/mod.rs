@@ -5,6 +5,8 @@ use reso_dns::{ClassType, DnsRecord, RecordType, domain_name::DomainName, messag
 
 use crate::database::{CoreDatabasePool, models::local_record::LocalRecord};
 
+use super::ServiceError;
+
 /// A resolved local record ready to be served as a DNS answer.
 #[derive(Debug, Clone)]
 pub struct ResolvedRecord {
@@ -21,12 +23,12 @@ pub struct LocalRecordService {
 /// Supported record types for local records.
 const SUPPORTED_TYPES: &[RecordType] = &[RecordType::A, RecordType::AAAA, RecordType::CNAME];
 
-fn parse_record_type(rtype: u16) -> anyhow::Result<RecordType> {
+fn parse_record_type(rtype: u16) -> Result<RecordType, ServiceError> {
     let rt = RecordType::from(rtype);
     if SUPPORTED_TYPES.contains(&rt) {
         Ok(rt)
     } else {
-        anyhow::bail!("unsupported record type: {}", rtype)
+        Err(ServiceError::BadRequest(format!("Unsupported record type: {}", rtype)))
     }
 }
 
@@ -40,23 +42,38 @@ impl LocalRecordService {
         Ok(service)
     }
 
-    pub async fn add_record(&self, name: &str, record_type: u16, value: &str, ttl: u32) -> anyhow::Result<()> {
+    pub async fn add_record(&self, name: &str, record_type: u16, value: &str, ttl: u32) -> Result<(), ServiceError> {
         let rtype = parse_record_type(record_type)?;
         parse_value(name, rtype, value)?;
         let record = LocalRecord::new(name.to_string(), record_type, value.to_string(), ttl);
-        record.insert(&self.connection).await?;
-        self.reload().await?;
+        record.insert(&self.connection).await.map_err(|e| {
+            if e.is_unique_constraint_violation() {
+                ServiceError::Conflict("A record with the same name and type already exists.".into())
+            } else {
+                ServiceError::Internal(e.into())
+            }
+        })?;
+        self.reload().await.map_err(|e| ServiceError::Internal(e.into()))?;
         Ok(())
     }
 
-    pub async fn remove_record(&self, id: i64) -> anyhow::Result<()> {
-        LocalRecord::delete(&self.connection, id).await?;
-        self.reload().await?;
+    pub async fn remove_record(&self, id: i64) -> Result<(), ServiceError> {
+        LocalRecord::delete(&self.connection, id)
+            .await
+            .map_err(|e| ServiceError::Internal(e.into()))?;
+        self.reload().await.map_err(|e| ServiceError::Internal(e.into()))?;
         Ok(())
     }
 
-    pub async fn toggle_record(&self, id: i64) -> anyhow::Result<()> {
-        LocalRecord::toggle(&self.connection, id).await?;
+    pub async fn toggle_record(&self, id: i64) -> Result<(), ServiceError> {
+        let changed = LocalRecord::toggle(&self.connection, id)
+            .await
+            .map_err(|e| ServiceError::Internal(e.into()))?;
+
+        if !changed {
+            return Err(ServiceError::NotFound("Record not found".into()));
+        }
+
         self.reload().await?;
         Ok(())
     }
@@ -67,8 +84,10 @@ impl LocalRecordService {
         records.get(&key).cloned()
     }
 
-    async fn reload(&self) -> anyhow::Result<()> {
-        let all = LocalRecord::list_all(&self.connection).await?;
+    async fn reload(&self) -> Result<(), ServiceError> {
+        let all = LocalRecord::list_all(&self.connection)
+            .await
+            .map_err(|e| ServiceError::Internal(e.into()))?;
         let mut map: HashMap<RecordKey, Vec<ResolvedRecord>> = HashMap::new();
 
         for record in all.into_iter().filter(|r| r.enabled) {
@@ -93,29 +112,46 @@ impl LocalRecordService {
     }
 }
 
-fn parse_value(name: &str, rtype: RecordType, value: &str) -> anyhow::Result<ResolvedRecord> {
-    let domain = DomainName::from_user(name)?;
+fn parse_value(name: &str, rtype: RecordType, value: &str) -> Result<ResolvedRecord, ServiceError> {
+    let domain = DomainName::from_user(name).map_err(|e| ServiceError::BadRequest(format!("Invalid domain: {e}")))?;
 
     let data = match rtype {
         RecordType::A => {
-            let ip: IpAddr = value.parse()?;
+            let ip: IpAddr = value
+                .parse()
+                .map_err(|e| ServiceError::BadRequest(format!("Invalid IP address: {e}")))?;
             match ip {
                 IpAddr::V4(v4) => DnsRecordData::Ipv4(v4),
-                _ => anyhow::bail!("expected IPv4 address for A record, got IPv6"),
+                _ => {
+                    return Err(ServiceError::BadRequest(
+                        "Expected IPv4 address for A record, got IPv6.".into(),
+                    ));
+                }
             }
         }
         RecordType::AAAA => {
-            let ip: IpAddr = value.parse()?;
+            let ip: IpAddr = value
+                .parse()
+                .map_err(|e| ServiceError::BadRequest(format!("Invalid IP address: {e}")))?;
             match ip {
                 IpAddr::V6(v6) => DnsRecordData::Ipv6(v6),
-                _ => anyhow::bail!("expected IPv6 address for AAAA record, got IPv4"),
+                _ => {
+                    return Err(ServiceError::BadRequest(
+                        "Expected IPv6 address for AAAA record, got IPv4.".into(),
+                    ));
+                }
             }
         }
         RecordType::CNAME => {
-            let target = DomainName::from_user(value)?;
+            let target = DomainName::from_user(value)
+                .map_err(|e| ServiceError::BadRequest(format!("Invalid CNAME target: {e}")))?;
             DnsRecordData::DomainName(target)
         }
-        _ => anyhow::bail!("unsupported record type for local records"),
+        _ => {
+            return Err(ServiceError::BadRequest(
+                "Unsupported record type for local records.".into(),
+            ));
+        }
     };
 
     let dns_record = DnsRecord::new(domain, rtype, ClassType::IN, 300, data);

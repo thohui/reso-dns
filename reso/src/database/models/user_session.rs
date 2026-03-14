@@ -3,7 +3,10 @@ use chrono::Utc;
 use rusqlite::{OptionalExtension, params};
 use uuid::Uuid;
 
-use crate::{database::CoreDatabasePool, utils::uuid::EntityId};
+use crate::{
+    database::{CoreDatabasePool, DatabaseError},
+    utils::uuid::EntityId,
+};
 
 use super::user::User;
 
@@ -35,7 +38,7 @@ impl UserSession {
         }
     }
 
-    pub async fn insert(self, db: &CoreDatabasePool) -> anyhow::Result<()> {
+    pub async fn insert(self, db: &CoreDatabasePool) -> Result<(), DatabaseError> {
         db.interact(move |c| {
             c.execute(
                 r#"
@@ -47,13 +50,12 @@ impl UserSession {
             )?;
             Ok(())
         })
-        .await
-        .context("failed to insert user session")?;
+        .await?;
 
         Ok(())
     }
 
-    pub async fn find_by_id(db: &CoreDatabasePool, id: EntityId<Self>) -> anyhow::Result<Option<Self>> {
+    pub async fn find_by_id(db: &CoreDatabasePool, id: EntityId<Self>) -> Result<Option<Self>, DatabaseError> {
         Ok(db
             .interact(move |c| {
                 c.query_row(
@@ -72,27 +74,21 @@ impl UserSession {
                 )
                 .optional()
             })
-            .await
-            .context("failed to find user session by id")?)
+            .await?)
     }
 
-    pub async fn delete(self, db: &CoreDatabasePool) -> anyhow::Result<()> {
-        db.interact(move |c| {
-            c.execute("DELETE FROM user_sessions where id = ?", params![self.id.id()])?;
-            Ok(())
-        })
-        .await?;
-        Ok(())
+    pub async fn delete(self, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
+        let rows = db
+            .interact(move |c| Ok(c.execute("DELETE FROM user_sessions where id = ?", params![self.id.id()])?))
+            .await?;
+        Ok(rows > 0)
     }
 
-    pub async fn delete_by_user_id(db: &CoreDatabasePool, user_id: EntityId<User>) -> anyhow::Result<()> {
-        db.interact(move |c| {
-            c.execute("DELETE FROM user_sessions where user_id = ?", params![user_id.id()])?;
-            Ok(())
-        })
-        .await
-        .context("failed to delete user session")?;
-        Ok(())
+    pub async fn delete_by_user_id(db: &CoreDatabasePool, user_id: EntityId<User>) -> Result<bool, DatabaseError> {
+        let rows = db
+            .interact(move |c| Ok(c.execute("DELETE FROM user_sessions where user_id = ?", params![user_id.id()])?))
+            .await?;
+        Ok(rows > 0)
     }
 
     pub fn is_expired(&self) -> bool {

@@ -22,13 +22,13 @@ pub fn create_config_router(global: SharedGlobal) -> Router<SharedGlobal> {
 }
 
 pub async fn config(global: State<SharedGlobal>) -> Json<Arc<services::config::model::Config>> {
-    Json(global.config_service.get_config())
+    Json(global.config.get_config())
 }
 
 pub async fn update(global: State<SharedGlobal>, Json(config): Json<Config>) -> Result<Json<Arc<Config>>, ApiError> {
-    if let Err(e) = global.config_service.update_config(config).await {
+    if let Err(e) = global.config.update_config(config).await {
         tracing::error!("failed to update config: {}", e);
         return Err(ApiError::server_error());
     }
-    Ok(Json(global.config_service.get_config()))
+    Ok(Json(global.config.get_config()))
 }

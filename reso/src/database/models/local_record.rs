@@ -1,9 +1,8 @@
-use anyhow::Context;
 use chrono::Utc;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
-use crate::database::CoreDatabasePool;
+use crate::database::{CoreDatabasePool, DatabaseError};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LocalRecord {
@@ -29,7 +28,7 @@ impl LocalRecord {
         }
     }
 
-    pub async fn insert(&self, db: &CoreDatabasePool) -> anyhow::Result<()> {
+    pub async fn insert(&self, db: &CoreDatabasePool) -> Result<(), DatabaseError> {
         let name = self.name.clone();
         let record_type = self.record_type;
         let value = self.value.clone();
@@ -42,35 +41,30 @@ impl LocalRecord {
             )?;
             Ok(())
         })
-        .await
-        .context("failed to insert local record")?;
+        .await?;
         Ok(())
     }
 
-    pub async fn delete(db: &CoreDatabasePool, id: i64) -> anyhow::Result<()> {
-        db.interact(move |c| {
-            c.execute("DELETE FROM local_records WHERE id = ?1", params![id])?;
-            Ok(())
-        })
-        .await
-        .context("failed to delete local record")?;
-        Ok(())
+    pub async fn delete(db: &CoreDatabasePool, id: i64) -> Result<bool, DatabaseError> {
+        let rows = db
+            .interact(move |c| Ok(c.execute("DELETE FROM local_records WHERE id = ?1", params![id])?))
+            .await?;
+        Ok(rows > 0)
     }
 
-    pub async fn toggle(db: &CoreDatabasePool, id: i64) -> anyhow::Result<()> {
-        db.interact(move |c| {
-            c.execute(
-                "UPDATE local_records SET enabled = NOT enabled WHERE id = ?1",
-                params![id],
-            )?;
-            Ok(())
-        })
-        .await
-        .context("failed to toggle local record")?;
-        Ok(())
+    pub async fn toggle(db: &CoreDatabasePool, id: i64) -> Result<bool, DatabaseError> {
+        let rows = db
+            .interact(move |c| {
+                Ok(c.execute(
+                    "UPDATE local_records SET enabled = NOT enabled WHERE id = ?1",
+                    params![id],
+                )?)
+            })
+            .await?;
+        Ok(rows > 0)
     }
 
-    pub async fn list(db: &CoreDatabasePool, limit: i64, offset: i64) -> anyhow::Result<Vec<Self>> {
+    pub async fn list(db: &CoreDatabasePool, limit: i64, offset: i64) -> Result<Vec<Self>, DatabaseError> {
         Ok(db
             .interact(move |c| {
                 let mut stmt = c.prepare(
@@ -79,11 +73,10 @@ impl LocalRecord {
                 let iter = stmt.query_map(params![limit, offset], Self::from_row)?;
                 iter.collect::<rusqlite::Result<Vec<_>>>()
             })
-            .await
-            .context("failed to list local records")?)
+            .await?)
     }
 
-    pub async fn list_all(db: &CoreDatabasePool) -> anyhow::Result<Vec<Self>> {
+    pub async fn list_all(db: &CoreDatabasePool) -> Result<Vec<Self>, DatabaseError> {
         Ok(db
             .interact(move |c| {
                 let mut stmt = c.prepare(
@@ -92,11 +85,10 @@ impl LocalRecord {
                 let iter = stmt.query_map([], Self::from_row)?;
                 iter.collect::<rusqlite::Result<Vec<_>>>()
             })
-            .await
-            .context("failed to list all local records")?)
+            .await?)
     }
 
-    pub async fn row_count(db: &CoreDatabasePool) -> anyhow::Result<i64> {
+    pub async fn row_count(db: &CoreDatabasePool) -> Result<i64, DatabaseError> {
         Ok(db
             .interact(|c| c.query_row("SELECT COUNT(*) FROM local_records", [], |r| r.get(0)))
             .await?)

@@ -4,6 +4,8 @@ use axum::{http::StatusCode, response::IntoResponse};
 use axum_extra::extract::CookieJar;
 use serde::Serialize;
 
+use crate::services::ServiceError;
+
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct ApiError {
     #[serde(skip)]
@@ -66,6 +68,35 @@ impl ApiError {
 
     pub fn cookie_jar(self, jar: CookieJar) -> Self {
         Self { jar: Some(jar), ..self }
+    }
+}
+
+impl From<ServiceError> for ApiError {
+    fn from(err: ServiceError) -> Self {
+        match err {
+            ServiceError::BadRequest(msg) => Self {
+                status_code: StatusCode::BAD_REQUEST,
+                error: Cow::Borrowed("bad_request"),
+                message: Cow::Owned(msg),
+                jar: None,
+            },
+            ServiceError::Conflict(msg) => Self {
+                status_code: StatusCode::CONFLICT,
+                error: Cow::Borrowed("conflict"),
+                message: Cow::Owned(msg),
+                jar: None,
+            },
+            ServiceError::NotFound(msg) => Self {
+                status_code: StatusCode::NOT_FOUND,
+                error: Cow::Borrowed("not_found"),
+                message: Cow::Owned(msg),
+                jar: None,
+            },
+            ServiceError::Internal(err) => {
+                tracing::error!("internal error: {:?}", err);
+                Self::server_error()
+            }
+        }
     }
 }
 

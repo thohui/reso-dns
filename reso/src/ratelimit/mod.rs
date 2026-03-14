@@ -25,6 +25,7 @@ impl RateLimiter {
         }
     }
 
+    /// Checks if an ip address is rate limited. Returns true if the request should be blocked.
     pub async fn check(&self, ip: IpAddr) -> bool {
         let now = Instant::now();
         let window_duration = self.config.window_duration;

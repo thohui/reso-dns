@@ -70,13 +70,9 @@ pub async fn add_record(
     Json(payload): Json<AddRecordPayload>,
 ) -> Result<StatusCode, ApiError> {
     global
-        .local_records_service
+        .local_records
         .add_record(&payload.name, payload.record_type, &payload.value, payload.ttl)
-        .await
-        .map_err(|e| {
-            tracing::error!("failed to add local record: {:?}", e);
-            ApiError::server_error()
-        })?;
+        .await?;
     Ok(StatusCode::CREATED)
 }
 
@@ -85,24 +81,12 @@ pub struct IdPayload {
     id: i64,
 }
 
-pub async fn remove_record(
-    global: State<SharedGlobal>,
-    Json(payload): Json<IdPayload>,
-) -> Result<(), ApiError> {
-    global.local_records_service.remove_record(payload.id).await.map_err(|e| {
-        tracing::error!("failed to remove local record: {:?}", e);
-        ApiError::server_error()
-    })?;
+pub async fn remove_record(global: State<SharedGlobal>, Json(payload): Json<IdPayload>) -> Result<(), ApiError> {
+    global.local_records.remove_record(payload.id).await?;
     Ok(())
 }
 
-pub async fn toggle_record(
-    global: State<SharedGlobal>,
-    Json(payload): Json<IdPayload>,
-) -> Result<(), ApiError> {
-    global.local_records_service.toggle_record(payload.id).await.map_err(|e| {
-        tracing::error!("failed to toggle local record: {:?}", e);
-        ApiError::server_error()
-    })?;
+pub async fn toggle_record(global: State<SharedGlobal>, Json(payload): Json<IdPayload>) -> Result<(), ApiError> {
+    global.local_records.toggle_record(payload.id).await?;
     Ok(())
 }

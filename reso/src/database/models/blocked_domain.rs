@@ -1,9 +1,8 @@
-use anyhow::Context;
 use chrono::Utc;
 use rusqlite::params;
 use serde::Serialize;
 
-use crate::database::CoreDatabasePool;
+use crate::database::{CoreDatabasePool, DatabaseError};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct BlockedDomain {
@@ -24,7 +23,7 @@ impl BlockedDomain {
 }
 
 impl BlockedDomain {
-    pub async fn insert(self, db: &CoreDatabasePool) -> anyhow::Result<()> {
+    pub async fn insert(self, db: &CoreDatabasePool) -> Result<(), DatabaseError> {
         db.interact(move |c| {
             c.execute(
                 "INSERT INTO blocklist (domain, created_at, enabled) VALUES (?1, ?2, ?3)",
@@ -32,22 +31,18 @@ impl BlockedDomain {
             )?;
             Ok(())
         })
-        .await
-        .context("failed to insert blocked domain")?;
+        .await?;
         Ok(())
     }
 
-    pub async fn delete(self, db: &CoreDatabasePool) -> anyhow::Result<()> {
-        db.interact(move |c| {
-            c.execute("DELETE FROM blocklist where domain = ?1", params![self.domain])?;
-            Ok(())
-        })
-        .await
-        .context("failed to delete blocked domain")?;
-        Ok(())
+    pub async fn delete(self, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
+        let rows = db
+            .interact(move |c| Ok(c.execute("DELETE FROM blocklist where domain = ?1", params![self.domain])?))
+            .await?;
+        Ok(rows > 0)
     }
 
-    pub async fn list(db: &CoreDatabasePool, limit: i64, offset: i64) -> anyhow::Result<Vec<Self>> {
+    pub async fn list(db: &CoreDatabasePool, limit: i64, offset: i64) -> Result<Vec<Self>, DatabaseError> {
         Ok(db
             .interact(move |c| {
                 let mut stmt = c.prepare(
@@ -67,11 +62,10 @@ impl BlockedDomain {
                 })?;
                 iter.collect::<rusqlite::Result<Vec<_>>>()
             })
-            .await
-            .context("failed to list blocked domains")?)
+            .await?)
     }
 
-    pub async fn list_all(db: &CoreDatabasePool) -> anyhow::Result<Vec<Self>> {
+    pub async fn list_all(db: &CoreDatabasePool) -> Result<Vec<Self>, DatabaseError> {
         Ok(db
             .interact(move |c| {
                 let mut stmt = c.prepare(
@@ -90,25 +84,23 @@ impl BlockedDomain {
                 })?;
                 iter.collect::<rusqlite::Result<Vec<_>>>()
             })
-            .await
-            .context("failed to list all blocked domains")?)
+            .await?)
     }
 
-    pub async fn toggle(domain: &str, db: &CoreDatabasePool) -> anyhow::Result<()> {
+    pub async fn toggle(domain: &str, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
         let domain = domain.to_string();
-        db.interact(move |c| {
-            c.execute(
-                "UPDATE blocklist SET enabled = NOT enabled WHERE domain = ?1",
-                params![domain],
-            )?;
-            Ok(())
-        })
-        .await
-        .context("failed to toggle blocked domain")?;
-        Ok(())
+        let rows = db
+            .interact(move |c| {
+                Ok(c.execute(
+                    "UPDATE blocklist SET enabled = NOT enabled WHERE domain = ?1",
+                    params![domain],
+                )?)
+            })
+            .await?;
+        Ok(rows > 0)
     }
 
-    pub async fn row_count(db: &CoreDatabasePool) -> anyhow::Result<i64> {
+    pub async fn row_count(db: &CoreDatabasePool) -> Result<i64, DatabaseError> {
         Ok(db
             .interact(|c| c.query_row("SELECT COUNT(*) FROM blocklist", [], |r| r.get(0)))
             .await?)

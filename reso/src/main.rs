@@ -66,8 +66,8 @@ async fn run() -> anyhow::Result<()> {
     let global: SharedGlobal = Arc::new(Global {
         cache: DnsMessageCache::new(50_000),
         blocklist: BlocklistService::initialize(core_db_connection.clone()).await?,
-        local_records_service: LocalRecordService::initialize(core_db_connection.clone()).await?,
-        config_service: ConfigService::initialize(core_db_connection.clone()).await?,
+        local_records: LocalRecordService::initialize(core_db_connection.clone()).await?,
+        config: ConfigService::initialize(core_db_connection.clone()).await?,
         metrics: handle,
         stats,
         core_database: core_db_connection,
@@ -102,7 +102,7 @@ async fn run() -> anyhow::Result<()> {
 
     let truncate_shutdown = shutdown.child_token();
     let truncate_db = metrics_db_connection.clone();
-    let truncate_config_rx = global.config_service.subscribe();
+    let truncate_config_rx = global.config.subscribe();
     let truncate_handle = tokio::spawn(run_metrics_truncation(
         truncate_db,
         truncate_config_rx,
