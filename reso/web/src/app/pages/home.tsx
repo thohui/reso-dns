@@ -148,6 +148,7 @@ export default function HomePage() {
 
 			<Box mb='8'>
 				<QueryTimeline
+					range={range}
 					data={timelineData?.buckets ?? []}
 					loading={timelineLoading}
 				/>

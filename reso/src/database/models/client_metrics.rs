@@ -9,13 +9,13 @@ pub struct TimelineBucket {
     pub ts: i64,
     /// Total number of requests in this bucket.
     pub total: i64,
-    //// Total number of blocked requests in this bucket.
+    /// Total number of blocked requests in this bucket.
     pub blocked: i64,
     /// Total number of cached requests in this bucket.
     pub cached: i64,
     /// Total number of errored requests in this bucket.
     pub errors: i64,
-    /// Sum of the duration of all requests in this bucket, in milliseconds. EXCLUDES errored requests.
+    /// Sum of the duration of all requests in this bucket, in milliseconds
     pub sum_duration: i64,
 }
 
@@ -32,7 +32,7 @@ pub struct ClientMetrics {
     pub cached_count: i64,
     /// Total number of errored requests in this bucket.
     pub error_count: i64,
-    /// Sum of the duration of all requests in this bucket, in milliseconds. EXCLUDES errored requests.
+    /// Sum of the duration of all requests in this bucket, in milliseconds.
     pub sum_duration: i64,
 }
 

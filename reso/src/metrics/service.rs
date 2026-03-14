@@ -77,8 +77,10 @@ impl LiveStats {
         self.cached += if stats.cache_hit { 1 } else { 0 };
         self.sum_duration += stats.dur_ms as u128
     }
-    fn apply_error(&mut self, _error: &ErrorLogEvent) {
+    fn apply_error(&mut self, error: &ErrorLogEvent) {
+        self.total += 1;
         self.errors += 1;
+        self.sum_duration += error.dur_ms as u128;
     }
 }
 
@@ -208,11 +210,11 @@ impl MetricsService {
             let client_metrics = ClientMetrics {
                 bucket_ts,
                 client: event.client.clone(),
-                total_count: if is_error { 0 } else { 1 },
+                total_count: 1,
                 blocked_count: if event.blocked == Some(true) { 1 } else { 0 },
                 cached_count: if event.cache_hit == Some(true) { 1 } else { 0 },
                 error_count: if is_error { 1 } else { 0 },
-                sum_duration: if is_error { 0 } else { event.dur_ms as i64 },
+                sum_duration: event.dur_ms as i64,
             };
 
             client_map

@@ -76,11 +76,18 @@ pub struct TopResponse {
     pub blocked_domains: Vec<TopEntry>,
 }
 
+const MAX_TOP_LIMIT: usize = 100;
+
 pub async fn top(global: State<SharedGlobal>, query: Query<TopQuery>) -> Result<Json<TopResponse>, ApiError> {
     let since = range_to_duration(&query.range);
     let db = &global.metrics_database;
 
     let db_top: i64 = query.top.try_into().map_err(|_| ApiError::bad_request())?;
+
+    // Limit the maximum number of entries to prevent abuse
+    if db_top <= 0 || db_top > MAX_TOP_LIMIT as i64 {
+        return Err(ApiError::bad_request());
+    }
 
     let (clients, domains, blocked_domains) = match tokio::join!(
         ClientMetrics::top_clients(db, since, db_top),

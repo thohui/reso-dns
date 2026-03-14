@@ -8,27 +8,31 @@ import {
 	XAxis,
 	YAxis,
 } from 'recharts';
-import type { TimelineBucket } from '../../lib/api/stats';
+import type { TimelineBucket, TopRange } from '../../lib/api/stats';
 
 interface Props {
 	data: TimelineBucket[];
 	loading?: boolean;
+	range: TopRange;
 }
 
-function formatTime(ts: number) {
+function formatTime(ts: number, range: TopRange) {
 	return new Date(ts).toLocaleTimeString([], {
 		hour: '2-digit',
 		minute: '2-digit',
+		month: range === 'year' || range === 'all' ? 'short' : undefined,
+		day: range === 'year' || range === 'all' ? 'numeric' : undefined,
 	});
 }
 
-export function QueryTimeline({ data, loading }: Props) {
+export function QueryTimeline({ data, loading, range }: Props) {
 	const chart = useChart({
 		data,
 		series: [
 			{ name: 'total', color: 'pink.solid' },
 			{ name: 'blocked', color: 'orange.solid' },
 			{ name: 'cached', color: 'blue.solid' },
+			{ name: 'errors', color: 'red.solid' },
 		],
 	});
 
@@ -94,7 +98,7 @@ export function QueryTimeline({ data, loading }: Props) {
 						axisLine={false}
 						tickLine={false}
 						dataKey={chart.key('ts')}
-						tickFormatter={formatTime}
+						tickFormatter={(ts) => formatTime(ts, range)}
 					/>
 					<YAxis axisLine={false} tickLine={false} />
 					<Tooltip
