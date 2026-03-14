@@ -213,7 +213,7 @@ impl ActivityLog {
         sort: SortColumn,
         dir: SortDir,
         include_count: bool,
-    ) -> anyhow::Result<Page<Self>> {
+    ) -> Result<Page<Self>, DatabaseError> {
         Ok(db
             .interact(move |c| {
                 let (where_clause, filter_params) = filter.build_where(2);

@@ -1,4 +1,3 @@
-use anyhow::Context;
 use chrono::Utc;
 use rusqlite::{OptionalExtension, params};
 use uuid::Uuid;

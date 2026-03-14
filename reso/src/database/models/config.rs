@@ -1,4 +1,3 @@
-use anyhow::Context;
 use std::collections::HashMap;
 
 use rusqlite::params;
@@ -50,7 +49,7 @@ impl ConfigSetting {
 
         let updated_at: i64 = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_millis() as i64;
 
         db.interact(move |c| {

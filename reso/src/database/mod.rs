@@ -22,7 +22,12 @@ pub enum DatabaseError {
 
 impl DatabaseError {
     pub fn is_unique_constraint_violation(&self) -> bool {
-        matches!(self, DatabaseError::Query(e) if e.sqlite_error_code() == Some(rusqlite::ErrorCode::ConstraintViolation))
+        matches!(
+            self,
+            DatabaseError::Query(rusqlite::Error::SqliteFailure(err, _))
+                if err.code == rusqlite::ErrorCode::ConstraintViolation
+                && err.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE
+        )
     }
 }
 
