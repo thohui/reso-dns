@@ -40,28 +40,29 @@ impl ListFilter {
         let mut clauses: Vec<String> = Vec::new();
         let mut params: Vec<Value> = Vec::new();
 
-        let mut push = |col: &str, val: Value| {
+        let mut push = |col: &str, val: Value, use_like: bool| {
             params.push(val);
-            clauses.push(format!("AND {col} = ?{}", params.len() + param_offset));
+            let operator = if use_like { "LIKE" } else { "=" };
+            clauses.push(format!("AND {col} {operator} ?{}", param_offset + params.len()));
         };
 
         if let Some(ref v) = self.client {
-            push("client", Value::Text(v.clone()));
+            push("client", Value::Text(format!("%{v}%")), true);
         }
         if let Some(ref v) = self.qname {
-            push("qname", Value::Text(v.clone()));
+            push("qname", Value::Text(format!("%{v}%")), true);
         }
         if let Some(v) = self.qtype {
-            push("qtype", Value::Integer(v));
+            push("qtype", Value::Integer(v), false);
         }
         if let Some(v) = self.blocked {
-            push("blocked", Value::Integer(v as i64));
+            push("blocked", Value::Integer(v as i64), false);
         }
         if let Some(v) = self.cache_hit {
-            push("cache_hit", Value::Integer(v as i64));
+            push("cache_hit", Value::Integer(v as i64), false);
         }
         if let Some(v) = self.rate_limited {
-            push("rate_limited", Value::Integer(v as i64));
+            push("rate_limited", Value::Integer(v as i64), false);
         }
         if self.error_only {
             clauses.push("AND kind = 'error'".to_string());
