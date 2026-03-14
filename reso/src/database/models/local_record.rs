@@ -36,7 +36,9 @@ impl LocalRecord {
         let created_at = self.created_at;
         db.interact(move |c| {
             c.execute(
-                "INSERT INTO local_records (name, record_type, value, ttl, enabled, created_at) VALUES (?1, ?2, ?3, ?4, 1, ?5)",
+                "INSERT INTO local_records (name, record_type, value, ttl, enabled, created_at)
+                 VALUES (?1, ?2, ?3, ?4, 1, ?5)
+                 ",
                 params![name, record_type, value, ttl, created_at],
             )?;
             Ok(())

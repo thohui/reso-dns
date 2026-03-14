@@ -3,12 +3,10 @@ use reso_dns::{DnsResponseCode, domain_name::DomainName, message::RecordType};
 
 use crate::database::models::activity_log::ActivityLog;
 
-type TsMs = i64;
-
 #[derive(Debug, Clone)]
 pub struct QueryLogEvent {
     /// Timestamp in milliseconds.
-    pub ts_ms: TsMs,
+    pub ts_ms: i64,
     /// Transport
     pub transport: RequestType,
     /// Client IP
@@ -53,7 +51,7 @@ impl QueryLogEvent {
 #[derive(Debug, Clone)]
 pub struct ErrorLogEvent {
     /// Timestamp in milliseconds.
-    pub ts_ms: TsMs,
+    pub ts_ms: i64,
     /// Transport
     pub transport: RequestType,
     /// Client IP
