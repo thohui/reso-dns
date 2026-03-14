@@ -643,6 +643,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_filter_qname_substring() {
+        let db = setup_metrics_test_db().await.unwrap();
+        let mut q1 = make_query(1000);
+        q1.qname = Some("ads.google.com".to_string());
+        let mut q2 = make_query(2000);
+        q2.qname = Some("mail.google.com".to_string());
+        ActivityLog::batch_insert(&db.conn, &[make_query(3000), q1, q2])
+            .await
+            .unwrap();
+
+        let page = ActivityLog::list(
+            &db.conn,
+            10,
+            0,
+            ListFilter {
+                qname: Some("google".to_string()),
+                ..Default::default()
+            },
+            SortColumn::Timestamp,
+            SortDir::Desc,
+            true,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(page.items.len(), 2);
+        assert_eq!(page.total, Some(2));
+    }
+
+    #[tokio::test]
     async fn test_filter_combined() {
         let db = setup_metrics_test_db().await.unwrap();
         let mut target = make_query(1000);
