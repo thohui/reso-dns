@@ -46,10 +46,12 @@ impl BlocklistService {
         let domain =
             DomainName::from_user(domain).map_err(|e| ServiceError::BadRequest(format!("Invalid domain: {e}")))?;
 
-        BlockedDomain::new(domain.to_string())
-            .delete(&self.connection)
-            .await
-            .map_err(|e| ServiceError::Internal(e.into()))?;
+        let changed = BlockedDomain::new(domain.to_string()).delete(&self.connection).await?;
+
+        if !changed {
+            return Err(ServiceError::NotFound("Domain not found".into()));
+        }
+
         self.load_matcher().await?;
         Ok(())
     }
@@ -58,9 +60,7 @@ impl BlocklistService {
         let domain =
             DomainName::from_user(domain).map_err(|e| ServiceError::BadRequest(format!("Invalid domain: {e}")))?;
 
-        let changed = BlockedDomain::toggle(&domain.to_string(), &self.connection)
-            .await
-            .map_err(|e| ServiceError::Internal(e.into()))?;
+        let changed = BlockedDomain::toggle(&domain.to_string(), &self.connection).await?;
 
         if !changed {
             return Err(ServiceError::NotFound("Domain not found".into()));
@@ -71,9 +71,7 @@ impl BlocklistService {
     }
 
     pub async fn load_matcher(&self) -> Result<(), ServiceError> {
-        let domains = BlockedDomain::list_all(&self.connection)
-            .await
-            .map_err(|e| ServiceError::Internal(e.into()))?;
+        let domains = BlockedDomain::list_all(&self.connection).await?;
 
         let updated_matcher = BlocklistMatcher::load(domains.iter().filter(|d| d.enabled).map(|d| d.domain.as_str()))
             .map_err(|e| ServiceError::Internal(e.into()))?;

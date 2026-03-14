@@ -24,10 +24,6 @@ impl DatabaseError {
     pub fn is_unique_constraint_violation(&self) -> bool {
         matches!(self, DatabaseError::Query(e) if e.sqlite_error_code() == Some(rusqlite::ErrorCode::ConstraintViolation))
     }
-
-    pub fn is_no_rows_returned(&self) -> bool {
-        matches!(self, DatabaseError::Query(e) if *e == rusqlite::Error::QueryReturnedNoRows)
-    }
 }
 
 impl From<deadpool_sqlite::InteractError> for DatabaseError {

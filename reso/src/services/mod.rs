@@ -16,5 +16,11 @@ pub enum ServiceError {
     NotFound(String),
 
     #[error("internal error")]
-    Internal(#[from] Box<dyn std::error::Error + Send + Sync>),
+    Internal(#[from] anyhow::Error),
+}
+
+impl From<DatabaseError> for ServiceError {
+    fn from(e: DatabaseError) -> Self {
+        ServiceError::Internal(e.into())
+    }
 }

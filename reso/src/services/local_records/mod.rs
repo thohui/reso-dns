@@ -53,22 +53,18 @@ impl LocalRecordService {
                 ServiceError::Internal(e.into())
             }
         })?;
-        self.reload().await.map_err(|e| ServiceError::Internal(e.into()))?;
+        self.reload().await?;
         Ok(())
     }
 
     pub async fn remove_record(&self, id: i64) -> Result<(), ServiceError> {
-        LocalRecord::delete(&self.connection, id)
-            .await
-            .map_err(|e| ServiceError::Internal(e.into()))?;
-        self.reload().await.map_err(|e| ServiceError::Internal(e.into()))?;
+        LocalRecord::delete(&self.connection, id).await?;
+        self.reload().await?;
         Ok(())
     }
 
     pub async fn toggle_record(&self, id: i64) -> Result<(), ServiceError> {
-        let changed = LocalRecord::toggle(&self.connection, id)
-            .await
-            .map_err(|e| ServiceError::Internal(e.into()))?;
+        let changed = LocalRecord::toggle(&self.connection, id).await?;
 
         if !changed {
             return Err(ServiceError::NotFound("Record not found".into()));
@@ -85,9 +81,7 @@ impl LocalRecordService {
     }
 
     async fn reload(&self) -> Result<(), ServiceError> {
-        let all = LocalRecord::list_all(&self.connection)
-            .await
-            .map_err(|e| ServiceError::Internal(e.into()))?;
+        let all = LocalRecord::list_all(&self.connection).await?;
         let mut map: HashMap<RecordKey, Vec<ResolvedRecord>> = HashMap::new();
 
         for record in all.into_iter().filter(|r| r.enabled) {
