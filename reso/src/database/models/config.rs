@@ -49,7 +49,7 @@ impl ConfigSetting {
 
         let updated_at: i64 = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
+            .unwrap() // this only fails if the system clock is before 1970, which is a unrealistic scenario
             .as_millis() as i64;
 
         db.interact(move |c| {

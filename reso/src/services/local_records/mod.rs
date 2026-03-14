@@ -58,7 +58,10 @@ impl LocalRecordService {
     }
 
     pub async fn remove_record(&self, id: i64) -> Result<(), ServiceError> {
-        LocalRecord::delete(&self.connection, id).await?;
+        let changed = LocalRecord::delete(&self.connection, id).await?;
+        if !changed {
+            return Err(ServiceError::NotFound("Record not found".into()));
+        }
         self.reload().await?;
         Ok(())
     }
