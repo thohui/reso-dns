@@ -36,6 +36,10 @@ pub struct ListFilter {
 }
 
 impl ListFilter {
+    fn escape_like(s: &str) -> String {
+        s.replace('\\', r"\\").replace('%', r"\%").replace('_', r"\_")
+    }
+
     fn build_where(&self, param_offset: usize) -> (String, Vec<Value>) {
         let mut clauses: Vec<String> = Vec::new();
         let mut params: Vec<Value> = Vec::new();
@@ -43,14 +47,18 @@ impl ListFilter {
         let mut push = |col: &str, val: Value, use_like: bool| {
             params.push(val);
             let operator = if use_like { "LIKE" } else { "=" };
-            clauses.push(format!("AND {col} {operator} ?{}", param_offset + params.len()));
+            let escape_clause = if use_like { " ESCAPE '\\'" } else { "" };
+            clauses.push(format!(
+                "AND {col} {operator} ?{}{escape_clause}",
+                param_offset + params.len(),
+            ));
         };
 
         if let Some(ref v) = self.client {
-            push("client", Value::Text(format!("%{v}%")), true);
+            push("client", Value::Text(format!("%{}%", Self::escape_like(v))), true);
         }
         if let Some(ref v) = self.qname {
-            push("qname", Value::Text(format!("%{v}%")), true);
+            push("qname", Value::Text(format!("%{}%", Self::escape_like(v))), true);
         }
         if let Some(v) = self.qtype {
             push("qtype", Value::Integer(v), false);
