@@ -28,7 +28,7 @@ pub struct ClientMetrics {
     pub total_count: i64,
     /// Total number of blocked requests in this bucket.
     pub blocked_count: i64,
-    /// 	Total number of cached requests in this bucket.
+    /// Total number of cached requests in this bucket.
     pub cached_count: i64,
     /// Total number of errored requests in this bucket.
     pub error_count: i64,
@@ -166,7 +166,15 @@ mod tests {
     use super::*;
     use crate::database::setup_metrics_test_db;
 
-    fn make_client_metrics(bucket_ts: i64, client: &str, total: i64, blocked: i64, cached: i64, errors: i64, duration: i64) -> ClientMetrics {
+    fn make_client_metrics(
+        bucket_ts: i64,
+        client: &str,
+        total: i64,
+        blocked: i64,
+        cached: i64,
+        errors: i64,
+        duration: i64,
+    ) -> ClientMetrics {
         ClientMetrics {
             bucket_ts,
             client: client.to_string(),
@@ -277,5 +285,4 @@ mod tests {
         assert_eq!(result[1].ts, 2000);
         assert_eq!(result[1].total, 3);
     }
-
 }

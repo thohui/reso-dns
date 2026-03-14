@@ -3,9 +3,13 @@ use rusqlite::params;
 use crate::database::{DatabaseError, MetricsDatabasePool};
 
 pub struct DomainMetrics {
+    /// Timestamp of the start of this bucket, in milliseconds since epoch.
     pub bucket_ts: i64,
+    /// Queried domain name (qname).
     pub qname: String,
+    /// Total number of queries for this domain in this bucket.
     pub total_count: i64,
+    /// Total number of blocked queries for this domain in this bucket.
     pub blocked_count: i64,
 }
 
@@ -202,5 +206,4 @@ mod tests {
         assert_eq!(result[1].0, "some-blocked.com");
         assert_eq!(result[1].1, 2);
     }
-
 }
