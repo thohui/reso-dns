@@ -215,7 +215,7 @@ impl Config {
             .and_then(|v| v.parse::<bool>().ok())
             .unwrap_or(defaults.dns.security.block_designated_resolver);
 
-        let block_firefox_doh = map
+        let block_firefox_canary = map
             .get("dns.security.block_firefox_canary")
             .and_then(|v| v.parse::<bool>().ok())
             .unwrap_or(defaults.dns.security.block_firefox_canary);
@@ -248,7 +248,7 @@ impl Config {
                 security: SecurityConfig {
                     block_icloud_private_relay,
                     block_designated_resolver,
-                    block_firefox_canary: block_firefox_doh,
+                    block_firefox_canary,
                 },
             },
             logs: LogsConfig {
