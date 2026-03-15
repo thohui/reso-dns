@@ -1,9 +1,7 @@
 use std::sync::LazyLock;
 
 use reso_context::{DnsMiddleware, DnsRequestCtx, DnsResponse};
-use reso_dns::{
-    DnsFlags, DnsMessage, DnsMessageBuilder, DnsOpcode, DnsResponseCode, RecordType, domain_name::DomainName,
-};
+use reso_dns::{DnsFlags, DnsMessage, DnsMessageBuilder, DnsResponseCode, RecordType, domain_name::DomainName};
 
 use crate::{global::Global, local::Local, middleware::echo_edns};
 
@@ -111,7 +109,7 @@ fn build_flags(message: &DnsMessage) -> DnsFlags {
     DnsFlags::new(
         true,
         message.flags.opcode,
-        true,
+        false,
         false,
         message.flags.recursion_desired,
         true,

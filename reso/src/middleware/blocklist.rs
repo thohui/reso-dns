@@ -18,7 +18,7 @@ impl DnsMiddleware<Global, Local> for BlocklistMiddleware {
             let flags = DnsFlags::new(
                 true,
                 message.flags.opcode,
-                true,
+                false,
                 false,
                 message.flags.recursion_desired,
                 true,
