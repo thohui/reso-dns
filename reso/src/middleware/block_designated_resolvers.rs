@@ -53,7 +53,8 @@ impl DnsMiddleware<Global, Local> for BlockDesignatedResolversMiddleware {
                 let response_message = echo_edns(message, builder).build();
                 let bytes = response_message.encode()?;
 
-                tracing::debug!("blocked Apple Private Relay query for {}", qname);
+                tracing::debug!("blocked iCloud Private Relay query for {}", qname);
+                ctx.local_mut().blocked = true;
                 return Ok(Some(DnsResponse::from_parsed(bytes, response_message)));
             }
 
@@ -67,7 +68,8 @@ impl DnsMiddleware<Global, Local> for BlockDesignatedResolversMiddleware {
                 let response_message = echo_edns(message, builder).build();
                 let bytes = response_message.encode()?;
 
-                tracing::debug!("Blocked Firefox Canary query for {}", qname);
+                tracing::debug!("blocked Firefox Canary query for {}", qname);
+                ctx.local_mut().blocked = true;
                 return Ok(Some(DnsResponse::from_parsed(bytes, response_message)));
             }
 
@@ -83,7 +85,9 @@ impl DnsMiddleware<Global, Local> for BlockDesignatedResolversMiddleware {
 
                 let response_message = echo_edns(message, builder).build();
                 let bytes = response_message.encode()?;
-                tracing::info!("Blocked Designated Resolver query for {}", qname);
+
+                tracing::debug!("blocked Designated Resolver query for {}", qname);
+                ctx.local_mut().blocked = true;
                 return Ok(Some(DnsResponse::from_parsed(bytes, response_message)));
             }
         }
