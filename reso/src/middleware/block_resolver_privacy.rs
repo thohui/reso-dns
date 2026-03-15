@@ -114,7 +114,7 @@ fn build_flags(message: &DnsMessage) -> DnsFlags {
         true,
         false,
         message.flags.recursion_desired,
-        false,
+        true,
         false,
         message.flags.checking_disabled,
     )
