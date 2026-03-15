@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use futures::StreamExt;
+use reso_context::DnsMiddleware;
 use reso_resolver::forwarder::resolver::ForwardResolver;
 use reso_server::{DnsServer, ServerMiddlewares, ServerState};
 use tokio_stream::wrappers::WatchStream;
@@ -21,11 +22,8 @@ use crate::{
 };
 
 pub fn server_middlewares(config: &Config) -> ServerMiddlewares<Global, Local> {
-    let mut middlewares: Vec<Arc<dyn reso_context::DnsMiddleware<Global, Local> + 'static>> = vec![
-        Arc::new(MetricsMiddleware),
-        Arc::new(ResoLocalMiddleware::new()),
-        Arc::new(LocalRecordsMiddleware),
-    ];
+    let mut middlewares: Vec<Arc<dyn DnsMiddleware<Global, Local> + 'static>> =
+        vec![Arc::new(MetricsMiddleware), Arc::new(ResoLocalMiddleware::new())];
 
     if config.dns.security.block_designated_resolver
         || config.dns.security.block_icloud_private_relay
@@ -33,6 +31,8 @@ pub fn server_middlewares(config: &Config) -> ServerMiddlewares<Global, Local> {
     {
         middlewares.push(Arc::new(BlockDesignatedResolversMiddleware));
     }
+
+    middlewares.push(Arc::new(LocalRecordsMiddleware));
 
     if config.dns.rate_limit.enabled {
         let ratelimit_config = RateLimitConfig {

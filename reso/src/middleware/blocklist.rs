@@ -13,18 +13,19 @@ impl DnsMiddleware<Global, Local> for BlocklistMiddleware {
         let message = ctx.message()?;
 
         if let Some(question) = message.questions().first()
-            && ctx.global().blocklist.is_blocked(&question.qname) {
-                let resp_bytes = DnsMessageBuilder::new()
-                    .with_id(message.id)
-                    .with_questions(message.questions().to_vec())
-                    .with_response(DnsResponseCode::NxDomain)
-                    .build()
-                    .encode()?;
+            && ctx.global().blocklist.is_blocked(&question.qname)
+        {
+            let resp_bytes = DnsMessageBuilder::new()
+                .with_id(message.id)
+                .with_questions(message.questions().to_vec())
+                .with_response(DnsResponseCode::NxDomain)
+                .build()
+                .encode()?;
 
-                ctx.local_mut().blocked = true;
+            ctx.local_mut().blocked = true;
 
-                return Ok(Some(DnsResponse::from_bytes(resp_bytes)));
-            }
+            return Ok(Some(DnsResponse::from_bytes(resp_bytes)));
+        }
 
         Ok(None)
     }

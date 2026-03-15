@@ -383,7 +383,7 @@ export default function ConfigPage() {
 				icon={Shield}
 			>
 				<ConfigField
-					label='iCloud Private Relay Bypass'
+					label='Block iCloud Private Relay'
 					description='Prevents Apple devices from bypassing Reso by routing DNS queries through iCloud Private Relay.'
 					align='center'
 				>
@@ -412,7 +412,7 @@ export default function ConfigPage() {
 					</Switch.Root>
 				</ConfigField>
 				<ConfigField
-					label='Firefox DoH Bypass'
+					label='Block Firefox Canary'
 					description="Blocks Firefox's built-in DNS-over-HTTPS detection, which would otherwise bypass Reso."
 					align='center'
 				>
@@ -441,7 +441,7 @@ export default function ConfigPage() {
 					</Switch.Root>
 				</ConfigField>
 				<ConfigField
-					label='Auto Resolver Discovery'
+					label='Block Auto Resolver Discovery'
 					description='Prevents devices from auto-discovering alternative DNS resolvers via the resolver.arpa zone, keeping all DNS traffic routed through Reso.'
 					align='center'
 				>

@@ -1,7 +1,9 @@
 use std::sync::LazyLock;
 
 use reso_context::{DnsMiddleware, DnsRequestCtx, DnsResponse};
-use reso_dns::{DnsMessageBuilder, DnsResponseCode, RecordType, domain_name::DomainName};
+use reso_dns::{
+    DnsFlags, DnsMessage, DnsMessageBuilder, DnsOpcode, DnsResponseCode, RecordType, domain_name::DomainName,
+};
 
 use crate::{global::Global, local::Local, middleware::echo_edns};
 
@@ -49,8 +51,10 @@ impl DnsMiddleware<Global, Local> for BlockDesignatedResolversMiddleware {
                     .iter()
                     .any(|d| d == qname && matches!(question.qtype, RecordType::A | RecordType::AAAA))
             {
+                let flags = build_flags(message);
                 let builder = DnsMessageBuilder::new()
                     .with_id(message.id)
+                    .with_flags(flags)
                     .with_questions(questions.to_vec())
                     .with_response(DnsResponseCode::NxDomain);
 
@@ -64,8 +68,10 @@ impl DnsMiddleware<Global, Local> for BlockDesignatedResolversMiddleware {
 
             // Firefox Canary
             if config.dns.security.block_firefox_canary && qname == &*FIREFOX_CANARY_DOMAIN {
+                let flags = build_flags(message);
                 let builder = DnsMessageBuilder::new()
                     .with_id(message.id)
+                    .with_flags(flags)
                     .with_questions(questions.to_vec())
                     .with_response(DnsResponseCode::NxDomain);
 
@@ -81,8 +87,10 @@ impl DnsMiddleware<Global, Local> for BlockDesignatedResolversMiddleware {
             if config.dns.security.block_designated_resolver
                 && (qname == &*DESIGNATED_RESOLVER_ZONE || qname.ends_with(&*DESIGNATED_RESOLVER_SUFFIX))
             {
+                let flags = build_flags(message);
                 let builder = DnsMessageBuilder::new()
                     .with_id(message.id)
+                    .with_flags(flags)
                     .with_questions(questions.to_vec())
                     .with_response(DnsResponseCode::NoError);
 
@@ -97,4 +105,17 @@ impl DnsMiddleware<Global, Local> for BlockDesignatedResolversMiddleware {
 
         Ok(None)
     }
+}
+
+fn build_flags(message: &DnsMessage) -> DnsFlags {
+    DnsFlags::new(
+        true,
+        message.flags.opcode,
+        false,
+        false,
+        message.flags.recursion_desired,
+        false,
+        false,
+        message.flags.checking_disabled,
+    )
 }
