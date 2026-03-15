@@ -9,8 +9,9 @@ use crate::{
     global::{Global, SharedGlobal},
     local::Local,
     middleware::{
-        blocklist::BlocklistMiddleware, cache::CacheMiddleware, local_records::LocalRecordsMiddleware,
-        metrics::MetricsMiddleware, ratelimit::RateLimitMiddleware, reso::ResoLocalMiddleware,
+        block_designated_resolvers::BlockDesignatedResolversMiddleware, blocklist::BlocklistMiddleware,
+        cache::CacheMiddleware, local_records::LocalRecordsMiddleware, metrics::MetricsMiddleware,
+        ratelimit::RateLimitMiddleware, reso::ResoLocalMiddleware,
     },
     ratelimit::RateLimitConfig,
     services::{
@@ -25,6 +26,13 @@ pub fn server_middlewares(config: &Config) -> ServerMiddlewares<Global, Local> {
         Arc::new(ResoLocalMiddleware::new()),
         Arc::new(LocalRecordsMiddleware),
     ];
+
+    if config.dns.security.block_designated_resolver
+        || config.dns.security.block_icloud_private_relay
+        || config.dns.security.block_firefox_canary
+    {
+        middlewares.push(Arc::new(BlockDesignatedResolversMiddleware));
+    }
 
     if config.dns.rate_limit.enabled {
         let ratelimit_config = RateLimitConfig {

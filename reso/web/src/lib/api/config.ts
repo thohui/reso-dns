@@ -44,6 +44,13 @@ export interface DnsConfig {
 	active: ActiveResolver;
 	forwarder: ForwarderConfig;
 	rate_limit: RateLimitConfig;
+	security: SecurityConfig;
+}
+
+export interface SecurityConfig {
+	block_icloud_private_relay: boolean;
+	block_firefox_canary: boolean;
+	block_designated_resolver: boolean;
 }
 
 export type Upstream = string;

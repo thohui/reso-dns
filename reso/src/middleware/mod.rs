@@ -1,5 +1,6 @@
 use reso_dns::{DnsMessage, DnsMessageBuilder, Edns};
 
+pub mod block_designated_resolvers;
 pub mod blocklist;
 pub mod cache;
 pub mod local_records;

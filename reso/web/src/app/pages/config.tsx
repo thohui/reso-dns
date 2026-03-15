@@ -48,6 +48,9 @@ const schema = z.object({
 	logs_enabled: z.boolean(),
 	logs_retention_secs: z.coerce.number().int().min(60),
 	logs_truncate_interval_secs: z.coerce.number().int().min(60),
+	block_icloud_private_relay: z.boolean(),
+	block_firefox_canary: z.boolean(),
+	block_designated_resolver: z.boolean(),
 });
 
 export default function ConfigPage() {
@@ -66,6 +69,11 @@ export default function ConfigPage() {
 			logs_enabled: config.data.logs.enabled,
 			logs_retention_secs: config.data.logs.retention_secs,
 			logs_truncate_interval_secs: config.data.logs.truncate_interval_secs,
+			block_icloud_private_relay:
+				config.data.dns.security.block_icloud_private_relay,
+			block_firefox_canary: config.data.dns.security.block_firefox_canary,
+			block_designated_resolver:
+				config.data.dns.security.block_designated_resolver,
 		},
 	});
 
@@ -88,6 +96,11 @@ export default function ConfigPage() {
 					window_duration: data.rate_limit_window,
 					max_queries_per_window: data.rate_limit_max,
 				},
+				security: {
+					block_icloud_private_relay: data.block_icloud_private_relay,
+					block_firefox_canary: data.block_firefox_canary,
+					block_designated_resolver: data.block_designated_resolver,
+				},
 			},
 			logs: {
 				enabled: data.logs_enabled,
@@ -108,6 +121,11 @@ export default function ConfigPage() {
 					logs_enabled: data.logs.enabled,
 					logs_retention_secs: data.logs.retention_secs,
 					logs_truncate_interval_secs: data.logs.truncate_interval_secs,
+					block_icloud_private_relay:
+						data.dns.security.block_icloud_private_relay,
+					block_firefox_canary: data.dns.security.block_firefox_canary,
+					block_designated_resolver:
+						data.dns.security.block_designated_resolver,
 				});
 				// Update cache
 				queryClient.setQueryData(useConfigQueryKey, () => data);
@@ -145,6 +163,14 @@ export default function ConfigPage() {
 	const logsTruncateIntervalSecs = form.watch(
 		'logs_truncate_interval_secs',
 	) as number;
+
+	const blockIcloudPrivateRelayEnabled = form.watch(
+		'block_icloud_private_relay',
+	);
+	const blockFirefoxCanaryEnabled = form.watch('block_firefox_canary');
+	const blockDesignatedResolverEnabled = form.watch(
+		'block_designated_resolver',
+	);
 
 	const hasChanges = form.formState.isDirty;
 
@@ -348,6 +374,100 @@ export default function ConfigPage() {
 							</Field.ErrorText>
 						)}
 					</Field.Root>
+				</ConfigField>
+			</ConfigSection>
+
+			<ConfigSection
+				title='Security'
+				description='Options to block certain types of queries for improved privacy and security.'
+				icon={Shield}
+			>
+				<ConfigField
+					label='iCloud Private Relay Bypass'
+					description='Prevents Apple devices from bypassing Reso by routing DNS queries through iCloud Private Relay.'
+					align='center'
+				>
+					<Switch.Root
+						checked={blockIcloudPrivateRelayEnabled}
+						onCheckedChange={({ checked }) =>
+							form.setValue('block_icloud_private_relay', checked, {
+								shouldDirty: true,
+								shouldTouch: true,
+								shouldValidate: true,
+							})
+						}
+					>
+						<Switch.HiddenInput />
+						<Switch.Control
+							bg={blockIcloudPrivateRelayEnabled ? 'accent' : 'bg.elevated'}
+							borderWidth='1px'
+							borderColor={
+								blockIcloudPrivateRelayEnabled ? 'accent' : 'border.input'
+							}
+							_hover={{ borderColor: 'accent' }}
+							transition='all 0.2s ease'
+						>
+							<Switch.Thumb bg='fg' />
+						</Switch.Control>
+					</Switch.Root>
+				</ConfigField>
+				<ConfigField
+					label='Firefox DoH Bypass'
+					description="Blocks Firefox's built-in DNS-over-HTTPS detection, which would otherwise bypass Reso."
+					align='center'
+				>
+					<Switch.Root
+						checked={blockFirefoxCanaryEnabled}
+						onCheckedChange={({ checked }) =>
+							form.setValue('block_firefox_canary', checked, {
+								shouldDirty: true,
+								shouldTouch: true,
+								shouldValidate: true,
+							})
+						}
+					>
+						<Switch.HiddenInput />
+						<Switch.Control
+							bg={blockFirefoxCanaryEnabled ? 'accent' : 'bg.elevated'}
+							borderWidth='1px'
+							borderColor={
+								blockFirefoxCanaryEnabled ? 'accent' : 'border.input'
+							}
+							_hover={{ borderColor: 'accent' }}
+							transition='all 0.2s ease'
+						>
+							<Switch.Thumb bg='fg' />
+						</Switch.Control>
+					</Switch.Root>
+				</ConfigField>
+				<ConfigField
+					label='Auto Resolver Discovery'
+					description='Prevents devices from auto-discovering alternative DNS resolvers via the resolver.arpa zone, keeping all DNS traffic routed through Reso.'
+					align='center'
+				>
+					<Switch.Root
+						checked={blockDesignatedResolverEnabled}
+						onCheckedChange={({ checked }) =>
+							form.setValue('block_designated_resolver', checked, {
+								shouldDirty: true,
+								shouldTouch: true,
+								shouldValidate: true,
+							})
+						}
+					>
+						<Switch.HiddenInput />
+						<Switch.Control
+							bg={blockDesignatedResolverEnabled ? 'accent' : 'bg.elevated'}
+							borderWidth='1px'
+							borderColor={
+								blockDesignatedResolverEnabled ? 'accent' : 'border.input'
+							}
+							_hover={{ borderColor: 'accent' }}
+							transition='all 0.2s ease'
+						>
+							<Switch.Thumb bg='fg' />
+						</Switch.Control>
+					</Switch.Root>
 				</ConfigField>
 			</ConfigSection>
 
