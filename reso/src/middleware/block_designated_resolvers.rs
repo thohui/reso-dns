@@ -111,7 +111,7 @@ fn build_flags(message: &DnsMessage) -> DnsFlags {
     DnsFlags::new(
         true,
         message.flags.opcode,
-        false,
+        true,
         false,
         message.flags.recursion_desired,
         false,
