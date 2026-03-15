@@ -5,6 +5,7 @@ use reso_dns::{DnsMessageBuilder, DnsResponseCode, RecordType, domain_name::Doma
 
 use crate::{global::Global, local::Local, middleware::echo_edns};
 
+/// Middleware that blocks queries to designated resolvers, iCloud Private Relay, and Firefox Canary.
 pub struct BlockDesignatedResolversMiddleware;
 
 static ICLOUD_RELAY_DOMAINS: LazyLock<Vec<DomainName>> = LazyLock::new(|| {
