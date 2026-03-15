@@ -10,9 +10,9 @@ use crate::{
     global::{Global, SharedGlobal},
     local::Local,
     middleware::{
-        block_designated_resolvers::BlockDesignatedResolversMiddleware, blocklist::BlocklistMiddleware,
-        cache::CacheMiddleware, local_records::LocalRecordsMiddleware, metrics::MetricsMiddleware,
-        ratelimit::RateLimitMiddleware, reso::ResoLocalMiddleware,
+        block_resolver_privacy::BlockResolverPrivacyMiddleware, blocklist::BlocklistMiddleware, cache::CacheMiddleware,
+        local_records::LocalRecordsMiddleware, metrics::MetricsMiddleware, ratelimit::RateLimitMiddleware,
+        reso::ResoLocalMiddleware,
     },
     ratelimit::RateLimitConfig,
     services::{
@@ -29,7 +29,7 @@ pub fn server_middlewares(config: &Config) -> ServerMiddlewares<Global, Local> {
         || config.dns.security.block_icloud_private_relay
         || config.dns.security.block_firefox_canary
     {
-        middlewares.push(Arc::new(BlockDesignatedResolversMiddleware));
+        middlewares.push(Arc::new(BlockResolverPrivacyMiddleware));
     }
 
     middlewares.push(Arc::new(LocalRecordsMiddleware));

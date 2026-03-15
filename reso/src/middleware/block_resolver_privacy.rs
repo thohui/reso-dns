@@ -8,7 +8,7 @@ use reso_dns::{
 use crate::{global::Global, local::Local, middleware::echo_edns};
 
 /// Middleware that blocks queries to designated resolvers, iCloud Private Relay, and Firefox Canary.
-pub struct BlockDesignatedResolversMiddleware;
+pub struct BlockResolverPrivacyMiddleware;
 
 static ICLOUD_RELAY_DOMAINS: LazyLock<Vec<DomainName>> = LazyLock::new(|| {
     vec![
@@ -27,7 +27,7 @@ static FIREFOX_CANARY_DOMAIN: LazyLock<DomainName> =
     LazyLock::new(|| DomainName::from_ascii("use-application-dns.net").unwrap());
 
 #[async_trait::async_trait]
-impl DnsMiddleware<Global, Local> for BlockDesignatedResolversMiddleware {
+impl DnsMiddleware<Global, Local> for BlockResolverPrivacyMiddleware {
     async fn on_query(&self, ctx: &mut DnsRequestCtx<Global, Local>) -> anyhow::Result<Option<DnsResponse>> {
         let message = ctx.message()?;
         let questions = message.questions();
