@@ -290,6 +290,18 @@ impl Config {
                 "logs.truncate_interval_secs".to_string(),
                 self.logs.truncate_interval_secs.to_string(),
             ),
+            (
+                "dns.security.block_icloud_private_relay".to_string(),
+                self.dns.security.block_icloud_private_relay.to_string(),
+            ),
+            (
+                "dns.security.block_designated_resolver".to_string(),
+                self.dns.security.block_designated_resolver.to_string(),
+            ),
+            (
+                "dns.security.block_firefox_canary".to_string(),
+                self.dns.security.block_firefox_canary.to_string(),
+            ),
         ]
     }
 }

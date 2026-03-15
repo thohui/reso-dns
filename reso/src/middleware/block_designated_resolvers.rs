@@ -17,6 +17,9 @@ static ICLOUD_RELAY_DOMAINS: LazyLock<Vec<DomainName>> = LazyLock::new(|| {
 static DESIGNATED_RESOLVER_ZONE: LazyLock<DomainName> =
     LazyLock::new(|| DomainName::from_ascii("resolver.arpa").unwrap());
 
+static DESIGNATED_RESOLVER_SUFFIX: LazyLock<String> =
+    LazyLock::new(|| format!(".{}", DESIGNATED_RESOLVER_ZONE.as_str()));
+
 static FIREFOX_CANARY_DOMAIN: LazyLock<DomainName> =
     LazyLock::new(|| DomainName::from_ascii("use-application-dns.net").unwrap());
 
@@ -75,8 +78,7 @@ impl DnsMiddleware<Global, Local> for BlockDesignatedResolversMiddleware {
 
             // Designated Resolver
             if config.dns.security.block_designated_resolver
-                && (qname == &*DESIGNATED_RESOLVER_ZONE
-                    || qname.ends_with(&format!(".{}", DESIGNATED_RESOLVER_ZONE.as_str())))
+                && (qname == &*DESIGNATED_RESOLVER_ZONE || qname.ends_with(&*DESIGNATED_RESOLVER_SUFFIX))
             {
                 let builder = DnsMessageBuilder::new()
                     .with_id(message.id)
