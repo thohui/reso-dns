@@ -25,7 +25,7 @@ fn ratelimit_response_flags(query: &DnsMessage) -> DnsFlags {
     DnsFlags::new(
         true,
         query.flags.opcode,
-        false,
+        true,
         false,
         query.flags.recursion_desired,
         true,
@@ -42,17 +42,18 @@ impl DnsMiddleware<Global, Local> for RateLimitMiddleware {
         } else {
             ctx.local_mut().rate_limited = true;
             let message = ctx.message()?;
-            let builder = echo_edns(
+            let message = echo_edns(
                 message,
                 DnsMessageBuilder::new()
                     .with_id(message.id)
                     .with_response(DnsResponseCode::Refused)
                     .with_flags(ratelimit_response_flags(message))
                     .with_questions(message.questions().to_vec()),
-            );
+            )
+            .build();
 
-            let bytes = builder.build().encode()?;
-            Ok(Some(DnsResponse::from_bytes(bytes)))
+            let bytes = message.encode()?;
+            Ok(Some(DnsResponse::from_parsed(bytes, message)))
         }
     }
 }

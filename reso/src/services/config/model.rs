@@ -34,6 +34,8 @@ pub struct DnsConfig {
     pub forwarder: ForwarderConfig,
     /// Rate limit config.
     pub rate_limit: RateLimitConfigModel,
+    /// Security related config.
+    pub security: SecurityConfig,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -155,6 +157,19 @@ impl ForwarderConfig {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct SecurityConfig {
+    /// Whether to block queries from Apple Private Relay.
+    /// Apple private relay causes apple devices to send dns queries to a designated resolver, thus bypassing reso.
+    pub block_icloud_private_relay: bool,
+    /// Whether to block queries from the `resolver.arpa` domain,
+    /// which is used for designated resolvers by some devices and can be abused to bypass reso (https://www.rfc-editor.org/rfc/rfc9462.pdf).
+    pub block_designated_resolver: bool,
+    /// Whether to block Firefox's "Canary" DoH endpoint (https://support.mozilla.org/en-US/kb/configuring-networks-disable-dns-over-https).
+    /// Firefox browsers can be configured to use DoH, thus bypassing reso.
+    pub block_firefox_canary: bool,
+}
+
 impl Config {
     pub fn from_kv(map: &HashMap<String, String>) -> Self {
         let defaults = Self::default();
@@ -190,6 +205,21 @@ impl Config {
             .and_then(|v| v.parse::<usize>().ok())
             .unwrap_or(defaults.dns.rate_limit.max_queries_per_window);
 
+        let block_icloud_private_relay = map
+            .get("dns.security.block_icloud_private_relay")
+            .and_then(|v| v.parse::<bool>().ok())
+            .unwrap_or(defaults.dns.security.block_icloud_private_relay);
+
+        let block_designated_resolver = map
+            .get("dns.security.block_designated_resolver")
+            .and_then(|v| v.parse::<bool>().ok())
+            .unwrap_or(defaults.dns.security.block_designated_resolver);
+
+        let block_firefox_canary = map
+            .get("dns.security.block_firefox_canary")
+            .and_then(|v| v.parse::<bool>().ok())
+            .unwrap_or(defaults.dns.security.block_firefox_canary);
+
         let logs_enabled = map
             .get("logs.enabled")
             .and_then(|v| v.parse::<bool>().ok())
@@ -214,6 +244,11 @@ impl Config {
                     enabled: rate_limit_enabled,
                     window_duration,
                     max_queries_per_window,
+                },
+                security: SecurityConfig {
+                    block_icloud_private_relay,
+                    block_designated_resolver,
+                    block_firefox_canary,
                 },
             },
             logs: LogsConfig {
@@ -255,6 +290,18 @@ impl Config {
                 "logs.truncate_interval_secs".to_string(),
                 self.logs.truncate_interval_secs.to_string(),
             ),
+            (
+                "dns.security.block_icloud_private_relay".to_string(),
+                self.dns.security.block_icloud_private_relay.to_string(),
+            ),
+            (
+                "dns.security.block_designated_resolver".to_string(),
+                self.dns.security.block_designated_resolver.to_string(),
+            ),
+            (
+                "dns.security.block_firefox_canary".to_string(),
+                self.dns.security.block_firefox_canary.to_string(),
+            ),
         ]
     }
 }
@@ -270,6 +317,11 @@ impl Default for Config {
                     enabled: false,
                     window_duration: Duration::from_secs(10).as_secs() as usize,
                     max_queries_per_window: 100,
+                },
+                security: SecurityConfig {
+                    block_icloud_private_relay: true,
+                    block_designated_resolver: true,
+                    block_firefox_canary: true,
                 },
             },
             logs: LogsConfig {

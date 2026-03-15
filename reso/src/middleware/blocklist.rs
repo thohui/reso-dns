@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use reso_context::{DnsMiddleware, DnsRequestCtx, DnsResponse};
-use reso_dns::{DnsMessageBuilder, DnsResponseCode};
+use reso_dns::{DnsFlags, DnsMessageBuilder, DnsResponseCode};
 
 use crate::{global::Global, local::Local};
 
@@ -13,18 +13,32 @@ impl DnsMiddleware<Global, Local> for BlocklistMiddleware {
         let message = ctx.message()?;
 
         if let Some(question) = message.questions().first()
-            && ctx.global().blocklist.is_blocked(&question.qname) {
-                let resp_bytes = DnsMessageBuilder::new()
-                    .with_id(message.id)
-                    .with_questions(message.questions().to_vec())
-                    .with_response(DnsResponseCode::NxDomain)
-                    .build()
-                    .encode()?;
+            && ctx.global().blocklist.is_blocked(&question.qname)
+        {
+            let flags = DnsFlags::new(
+                true,
+                message.flags.opcode,
+                false,
+                false,
+                message.flags.recursion_desired,
+                true,
+                false,
+                message.flags.checking_disabled,
+            );
 
-                ctx.local_mut().blocked = true;
+            let message = DnsMessageBuilder::new()
+                .with_id(message.id)
+                .with_flags(flags)
+                .with_questions(message.questions().to_vec())
+                .with_response(DnsResponseCode::NxDomain)
+                .build();
 
-                return Ok(Some(DnsResponse::from_bytes(resp_bytes)));
-            }
+            let bytes = message.encode()?;
+
+            ctx.local_mut().blocked = true;
+
+            return Ok(Some(DnsResponse::from_parsed(bytes, message)));
+        }
 
         Ok(None)
     }

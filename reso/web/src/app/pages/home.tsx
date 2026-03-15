@@ -10,7 +10,7 @@ import { useApiClient } from '../../contexts/ApiClientContext';
 import { useUptime } from '../../hooks/useUptime';
 import type { TopRange } from '../../lib/api/stats';
 
-const RANGE_OPTIONS: { value: TopRange; label: string; }[] = [
+const RANGE_OPTIONS: { value: TopRange; label: string }[] = [
 	{ value: '5min', label: '5M' },
 	{ value: 'hour', label: '1H' },
 	{ value: 'day', label: '24H' },

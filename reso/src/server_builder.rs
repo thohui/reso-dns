@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use futures::StreamExt;
+use reso_context::DnsMiddleware;
 use reso_resolver::forwarder::resolver::ForwardResolver;
 use reso_server::{DnsServer, ServerMiddlewares, ServerState};
 use tokio_stream::wrappers::WatchStream;
@@ -9,8 +10,9 @@ use crate::{
     global::{Global, SharedGlobal},
     local::Local,
     middleware::{
-        blocklist::BlocklistMiddleware, cache::CacheMiddleware, local_records::LocalRecordsMiddleware,
-        metrics::MetricsMiddleware, ratelimit::RateLimitMiddleware, reso::ResoLocalMiddleware,
+        block_resolver_privacy::BlockResolverPrivacyMiddleware, blocklist::BlocklistMiddleware, cache::CacheMiddleware,
+        local_records::LocalRecordsMiddleware, metrics::MetricsMiddleware, ratelimit::RateLimitMiddleware,
+        reso::ResoLocalMiddleware,
     },
     ratelimit::RateLimitConfig,
     services::{
@@ -20,11 +22,17 @@ use crate::{
 };
 
 pub fn server_middlewares(config: &Config) -> ServerMiddlewares<Global, Local> {
-    let mut middlewares: Vec<Arc<dyn reso_context::DnsMiddleware<Global, Local> + 'static>> = vec![
-        Arc::new(MetricsMiddleware),
-        Arc::new(ResoLocalMiddleware::new()),
-        Arc::new(LocalRecordsMiddleware),
-    ];
+    let mut middlewares: Vec<Arc<dyn DnsMiddleware<Global, Local> + 'static>> =
+        vec![Arc::new(MetricsMiddleware), Arc::new(ResoLocalMiddleware::new())];
+
+    if config.dns.security.block_designated_resolver
+        || config.dns.security.block_icloud_private_relay
+        || config.dns.security.block_firefox_canary
+    {
+        middlewares.push(Arc::new(BlockResolverPrivacyMiddleware));
+    }
+
+    middlewares.push(Arc::new(LocalRecordsMiddleware));
 
     if config.dns.rate_limit.enabled {
         let ratelimit_config = RateLimitConfig {

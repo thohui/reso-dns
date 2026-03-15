@@ -1,0 +1,119 @@
+use std::sync::LazyLock;
+
+use reso_context::{DnsMiddleware, DnsRequestCtx, DnsResponse};
+use reso_dns::{DnsFlags, DnsMessage, DnsMessageBuilder, DnsResponseCode, RecordType, domain_name::DomainName};
+
+use crate::{global::Global, local::Local, middleware::echo_edns};
+
+/// Middleware that blocks queries to designated resolvers, iCloud Private Relay, and Firefox Canary.
+pub struct BlockResolverPrivacyMiddleware;
+
+static ICLOUD_RELAY_DOMAINS: LazyLock<Vec<DomainName>> = LazyLock::new(|| {
+    vec![
+        DomainName::from_ascii("mask.icloud.com").unwrap(),
+        DomainName::from_ascii("mask-h2.icloud.com").unwrap(),
+    ]
+});
+
+static DESIGNATED_RESOLVER_ZONE: LazyLock<DomainName> =
+    LazyLock::new(|| DomainName::from_ascii("resolver.arpa").unwrap());
+
+static DESIGNATED_RESOLVER_SUFFIX: LazyLock<String> =
+    LazyLock::new(|| format!(".{}", DESIGNATED_RESOLVER_ZONE.as_str()));
+
+static FIREFOX_CANARY_DOMAIN: LazyLock<DomainName> =
+    LazyLock::new(|| DomainName::from_ascii("use-application-dns.net").unwrap());
+
+#[async_trait::async_trait]
+impl DnsMiddleware<Global, Local> for BlockResolverPrivacyMiddleware {
+    async fn on_query(&self, ctx: &mut DnsRequestCtx<Global, Local>) -> anyhow::Result<Option<DnsResponse>> {
+        let message = ctx.message()?;
+        let questions = message.questions();
+
+        let config = ctx.global().config.get_config();
+
+        let should_process = config.dns.security.block_icloud_private_relay
+            || config.dns.security.block_designated_resolver
+            || config.dns.security.block_firefox_canary;
+
+        if !should_process {
+            return Ok(None);
+        }
+
+        for question in questions {
+            let qname = &question.qname;
+
+            // iCloud Private Relay
+            if config.dns.security.block_icloud_private_relay
+                && ICLOUD_RELAY_DOMAINS
+                    .iter()
+                    .any(|d| d == qname && matches!(question.qtype, RecordType::A | RecordType::AAAA))
+            {
+                let flags = build_flags(message);
+                let builder = DnsMessageBuilder::new()
+                    .with_id(message.id)
+                    .with_flags(flags)
+                    .with_questions(questions.to_vec())
+                    .with_response(DnsResponseCode::NxDomain);
+
+                let response_message = echo_edns(message, builder).build();
+                let bytes = response_message.encode()?;
+
+                tracing::debug!("blocked iCloud Private Relay query for {}", qname);
+                ctx.local_mut().blocked = true;
+                return Ok(Some(DnsResponse::from_parsed(bytes, response_message)));
+            }
+
+            // Firefox Canary
+            if config.dns.security.block_firefox_canary && qname == &*FIREFOX_CANARY_DOMAIN {
+                let flags = build_flags(message);
+                let builder = DnsMessageBuilder::new()
+                    .with_id(message.id)
+                    .with_flags(flags)
+                    .with_questions(questions.to_vec())
+                    .with_response(DnsResponseCode::NxDomain);
+
+                let response_message = echo_edns(message, builder).build();
+                let bytes = response_message.encode()?;
+
+                tracing::debug!("blocked Firefox Canary query for {}", qname);
+                ctx.local_mut().blocked = true;
+                return Ok(Some(DnsResponse::from_parsed(bytes, response_message)));
+            }
+
+            // Designated Resolver
+            if config.dns.security.block_designated_resolver
+                && (qname == &*DESIGNATED_RESOLVER_ZONE || qname.ends_with(&*DESIGNATED_RESOLVER_SUFFIX))
+            {
+                let flags = build_flags(message);
+                let builder = DnsMessageBuilder::new()
+                    .with_id(message.id)
+                    .with_flags(flags)
+                    .with_questions(questions.to_vec())
+                    .with_response(DnsResponseCode::NoError);
+
+                let response_message = echo_edns(message, builder).build();
+                let bytes = response_message.encode()?;
+
+                tracing::debug!("blocked Designated Resolver query for {}", qname);
+                ctx.local_mut().blocked = true;
+                return Ok(Some(DnsResponse::from_parsed(bytes, response_message)));
+            }
+        }
+
+        Ok(None)
+    }
+}
+
+fn build_flags(message: &DnsMessage) -> DnsFlags {
+    DnsFlags::new(
+        true,
+        message.flags.opcode,
+        false,
+        false,
+        message.flags.recursion_desired,
+        true,
+        false,
+        message.flags.checking_disabled,
+    )
+}
