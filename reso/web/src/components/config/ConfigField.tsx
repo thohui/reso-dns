@@ -1,19 +1,28 @@
-import { Box, HStack, Text } from '@chakra-ui/react';
+import { Box, Flex, Text } from '@chakra-ui/react';
+
+export interface Props {
+	label: string;
+	description?: string;
+	align?: 'flex-start' | 'center';
+	children: React.ReactNode;
+}
 
 export function ConfigField({
 	label,
 	description,
 	children,
 	align = 'flex-start',
-}: {
-	label: string;
-	description?: string;
-	children: React.ReactNode;
-	align?: 'flex-start' | 'center';
-}) {
+}: Props
+) {
 	return (
-		<HStack justify='space-between' align={align} py='3'>
-			<Box flex='1' mr='8'>
+		<Flex
+			direction={{ base: 'column', sm: 'row' }}
+			justify='space-between'
+			align={{ base: 'flex-start', sm: align }}
+			gap={{ base: '2', sm: '0' }}
+			py='3'
+		>
+			<Box flex='1' mr={{ base: '0', sm: '8' }}>
 				<Text fontSize='sm' fontWeight='medium'>
 					{label}
 				</Text>
@@ -23,9 +32,13 @@ export function ConfigField({
 					</Text>
 				)}
 			</Box>
-			<Box minW='200px' maxW='280px' w='full'>
+			<Box
+				minW={{ base: '0', sm: '200px' }}
+				maxW={{ base: 'full', sm: '280px' }}
+				w='full'
+			>
 				{children}
 			</Box>
-		</HStack>
+		</Flex>
 	);
 }
