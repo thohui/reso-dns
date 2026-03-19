@@ -1,0 +1,12 @@
+ads.example.com
+tracker.example.com
+telemetry.example.com
+
+metrics.example.com # this should be stripped!!!
+
+# Wildcard
+*.ads.example.com
+
+# Empty lines mixed in
+
+another.example.com

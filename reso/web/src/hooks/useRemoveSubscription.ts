@@ -1,9 +1,10 @@
 import { useMutation } from '@tanstack/react-query';
 import { useApiClient } from '../contexts/ApiClientContext';
 
-export function useRemoveDomain() {
+export function useRemoveSubscription() {
 	const apiClient = useApiClient();
+
 	return useMutation({
-		mutationFn: async (domain: string) => apiClient.blocklist.remove(domain),
+		mutationFn: (id: string) => apiClient.listSubscriptions.remove(id),
 	});
 }

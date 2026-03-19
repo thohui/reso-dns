@@ -1,4 +1,4 @@
-use base64::{Engine, engine::general_purpose::STANDARD};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use std::{
     env::{self, VarError},
     net::SocketAddr,

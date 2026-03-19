@@ -5,6 +5,7 @@ use include_dir::{Dir, include_dir};
 use rusqlite_migration::MigrationsBuilder;
 
 pub mod models;
+pub mod query;
 
 const DB_POOL_SIZE: usize = 5;
 

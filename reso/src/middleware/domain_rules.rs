@@ -4,16 +4,16 @@ use reso_dns::{DnsFlags, DnsMessageBuilder, DnsResponseCode};
 
 use crate::{global::Global, local::Local};
 
-/// Middleware that blocks queries for blocklisted domain names.
-pub struct BlocklistMiddleware;
+/// Middleware that blocks queries for blocked domain names.
+pub struct DomainRulesMiddleware;
 
 #[async_trait]
-impl DnsMiddleware<Global, Local> for BlocklistMiddleware {
+impl DnsMiddleware<Global, Local> for DomainRulesMiddleware {
     async fn on_query(&self, ctx: &mut DnsRequestCtx<Global, Local>) -> anyhow::Result<Option<DnsResponse>> {
         let message = ctx.message()?;
 
         if let Some(question) = message.questions().first()
-            && ctx.global().blocklist.is_blocked(&question.qname)
+            && ctx.global().domain_rules.is_blocked(&question.qname)
         {
             let flags = DnsFlags::new(
                 true,

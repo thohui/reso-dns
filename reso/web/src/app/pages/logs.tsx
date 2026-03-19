@@ -27,10 +27,9 @@ export default function LogsPage() {
 		...(debouncedSearch !== '' ? { [searchField]: debouncedSearch } : {}),
 	};
 
-	// Only request count on the first page; reuse cached total for subsequent pages
 	const needsCount = page === 0;
 
-	const { data, isLoading } = useActivities({
+	const { data, isFetching: isLoading } = useActivities({
 		top: PAGE_SIZE,
 		skip: page * PAGE_SIZE,
 		filter,

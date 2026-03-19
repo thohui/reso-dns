@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct PagedQuery {
     skip: Option<u64>,
     top: Option<u64>,
+    pub search: Option<String>,
 }
 
 impl PagedQuery {

@@ -10,9 +10,9 @@ use crate::{
     global::{Global, SharedGlobal},
     local::Local,
     middleware::{
-        block_resolver_privacy::BlockResolverPrivacyMiddleware, blocklist::BlocklistMiddleware, cache::CacheMiddleware,
-        local_records::LocalRecordsMiddleware, metrics::MetricsMiddleware, ratelimit::RateLimitMiddleware,
-        reso::ResoLocalMiddleware,
+        block_resolver_privacy::BlockResolverPrivacyMiddleware, cache::CacheMiddleware,
+        domain_rules::DomainRulesMiddleware, local_records::LocalRecordsMiddleware, metrics::MetricsMiddleware,
+        ratelimit::RateLimitMiddleware, reso::ResoLocalMiddleware,
     },
     ratelimit::RateLimitConfig,
     services::{
@@ -42,7 +42,7 @@ pub fn server_middlewares(config: &Config) -> ServerMiddlewares<Global, Local> {
         middlewares.push(Arc::new(RateLimitMiddleware::new(ratelimit_config)));
     }
 
-    middlewares.push(Arc::new(BlocklistMiddleware));
+    middlewares.push(Arc::new(DomainRulesMiddleware));
     middlewares.push(Arc::new(CacheMiddleware));
 
     Arc::new(middlewares)

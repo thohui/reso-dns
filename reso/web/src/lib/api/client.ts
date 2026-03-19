@@ -1,7 +1,8 @@
 import ky, { type KyInstance } from 'ky';
 import { Activities } from './activity';
-import { Blocklist } from './blocklist';
+import { DomainRules } from './domain-rules';
 import { Config } from './config';
+import { ListSubscriptions } from './list-subscriptions';
 import { LocalRecords } from './local-records';
 import { Stats } from './stats';
 
@@ -13,7 +14,8 @@ export class ApiClient {
 
 	public activities: Activities;
 	public stats: Stats;
-	public blocklist: Blocklist;
+	public domainRules: DomainRules;
+	public listSubscriptions: ListSubscriptions;
 	public localRecords: LocalRecords;
 	public config: Config;
 
@@ -37,7 +39,8 @@ export class ApiClient {
 
 		this.activities = new Activities(this.httpClient);
 		this.stats = new Stats(this.httpClient);
-		this.blocklist = new Blocklist(this.httpClient);
+		this.domainRules = new DomainRules(this.httpClient);
+		this.listSubscriptions = new ListSubscriptions(this.httpClient);
 		this.localRecords = new LocalRecords(this.httpClient);
 		this.config = new Config(this.httpClient);
 	}

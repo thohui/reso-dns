@@ -11,18 +11,20 @@ use axum::{
     },
     response::IntoResponse,
 };
-use blocklist::create_blocklist_router;
 use config::create_config_router;
+use domain_rules::create_domain_rules_router;
+use list_subscriptions::create_list_subscriptions_router;
 use local_records::create_local_records_router;
 use stats::create_stats_router;
 use tower_http::cors::{AllowMethods, CorsLayer};
 
 mod activity;
 mod auth;
-mod blocklist;
 mod config;
 mod cookie;
+mod domain_rules;
 mod error;
+mod list_subscriptions;
 mod local_records;
 mod pagination;
 mod stats;
@@ -38,7 +40,8 @@ pub async fn serve_web(
         .nest("/auth", create_auth_router(global.clone()))
         .nest("/stats", create_stats_router(global.clone()))
         .nest("/activity", create_activity_router(global.clone()))
-        .nest("/blocklist", create_blocklist_router(global.clone()))
+        .nest("/domain-rules", create_domain_rules_router(global.clone()))
+        .nest("/list-subscriptions", create_list_subscriptions_router(global.clone()))
         .nest("/local-records", create_local_records_router(global.clone()))
         .nest("/config", create_config_router(global.clone()));
 

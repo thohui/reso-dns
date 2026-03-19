@@ -1,4 +1,4 @@
-use chrono::Utc;
+use crate::utils::now_millis;
 use rusqlite::{OptionalExtension, params};
 use uuid::Uuid;
 
@@ -18,7 +18,7 @@ pub struct User {
 
 impl User {
     pub fn new(name: impl Into<String>, password_hash: impl Into<String>) -> Self {
-        let created_at = Utc::now().timestamp_millis();
+        let created_at = now_millis();
         User {
             id: EntityId::new(),
             name: name.into(),
@@ -217,9 +217,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_user_created_at_timestamp() {
-        let before = chrono::Utc::now().timestamp_millis();
+        let before = now_millis();
         let user = User::new("testuser", "hash");
-        let after = chrono::Utc::now().timestamp_millis();
+        let after = now_millis();
 
         assert!(user.created_at >= before);
         assert!(user.created_at <= after);

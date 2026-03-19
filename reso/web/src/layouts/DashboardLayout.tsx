@@ -30,7 +30,7 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
 	{ path: '/home', label: 'Home', icon: Home },
-	{ path: '/blocklist', label: 'Blocklist', icon: Ban },
+	{ path: '/domain-rules', label: 'Domain Rules', icon: Ban },
 	{ path: '/local-records', label: 'Local Records', icon: Globe },
 	{ path: '/logs', label: 'Logs', icon: FileText },
 	{ path: '/config', label: 'Config', icon: Settings },
@@ -127,7 +127,7 @@ export function DashboardLayout() {
 				</Box>
 			</Box>
 
-			<Box flex='1' p='8' overflowY='auto' maxH='100vh'>
+			<Box id='main-scroll' flex='1' p='8' overflowY='auto' maxH='100vh'>
 				<Box maxW='1400px' mx='auto'>
 					<Suspense fallback={<PageLoader />}>
 						<Box key={location.pathname} className='animate-fade-in'>

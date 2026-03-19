@@ -84,7 +84,7 @@ pub fn unescape_label(label: &str) -> Vec<u8> {
 }
 
 /// Try reading 3 ASCII digits at `pos` and turn them into one byte.
-/// e.g. "255" at pos => Some(0xFF), "abc" → None.
+/// e.g. "255" at pos => Some(0xFF), "abc" => None.
 fn try_parse_decimal_escape(bytes: &[u8], pos: usize) -> Option<u8> {
     if pos + 3 > bytes.len() {
         return None;
@@ -101,7 +101,7 @@ fn try_parse_decimal_escape(bytes: &[u8], pos: usize) -> Option<u8> {
     Some(value as u8)
 }
 
-/// Convert an ASCII digit char to its numeric value (e.g. b'3' → 3).
+/// Convert an ASCII digit char to its numeric value (e.g. b'3' => 3).
 /// Returns None if the byte isn't '0'-'9'.
 fn ascii_digit_value(byte: u8) -> Option<u8> {
     if byte.is_ascii_digit() { Some(byte - b'0') } else { None }

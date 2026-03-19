@@ -1,4 +1,4 @@
-use chrono::Utc;
+use crate::utils::now_millis;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
@@ -24,7 +24,7 @@ impl LocalRecord {
             value,
             ttl,
             enabled: true,
-            created_at: Utc::now().timestamp_millis(),
+            created_at: now_millis(),
         }
     }
 
