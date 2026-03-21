@@ -222,7 +222,7 @@ impl DomainRulesService {
     /// Adds a new list subscription with the given URL and list type.
     /// This will also trigger an immediate sync for the new subscription.
     pub async fn add_list_subscription(&self, list_subscription: ListSubscription) -> Result<(), ServiceError> {
-        validate_url(&list_subscription.url)?;
+        validate_list_subscription_url(&list_subscription.url)?;
 
         // send a head request first to check if the url is reachable.
         let head_response = self
@@ -413,20 +413,39 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
     Ok(true)
 }
 
-/// Validates that a URL is well-formed, uses http/https scheme, and does not point to a loopback/multicast/unspecified IP.
-fn validate_url(url: &str) -> Result<(), ServiceError> {
+/// Validates a list subscription URL.
+fn validate_list_subscription_url(url: &str) -> Result<(), ServiceError> {
     let parsed = reqwest::Url::parse(url).map_err(|_| ServiceError::BadRequest("Invalid URL".into()))?;
 
     if !matches!(parsed.scheme(), "http" | "https") {
         return Err(ServiceError::BadRequest("URL scheme must be http or https".into()));
     }
 
+    if parsed
+        .host_str()
+        .is_some_and(|str| str.ends_with(".local") || str == "localhost")
+    {
+        return Err(ServiceError::BadRequest("URL host cannot be a local domain".into()));
+    }
+
     if let Ok(ip) = parsed.host_str().unwrap_or("").parse::<std::net::IpAddr>() {
-        // prevent SSRF.
         if ip.is_loopback() || ip.is_multicast() || ip.is_unspecified() {
             return Err(ServiceError::BadRequest(
                 "URL host cannot be a loopback, multicast, or unspecified IP address".into(),
             ));
+        }
+        if let std::net::IpAddr::V4(ipv4) = ip {
+            if ipv4.is_private() {
+                return Err(ServiceError::BadRequest(
+                    "URL host cannot be a private IP address".into(),
+                ));
+            }
+        } else if let std::net::IpAddr::V6(ipv6) = ip {
+            if ipv6.is_unique_local() {
+                return Err(ServiceError::BadRequest(
+                    "URL host cannot be a unique local IPv6 address".into(),
+                ));
+            }
         }
     }
 
