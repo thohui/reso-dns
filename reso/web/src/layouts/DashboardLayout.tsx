@@ -202,7 +202,14 @@ export function DashboardLayout() {
 				<SidebarContent />
 			</Box>
 
-			<Box id='main-scroll' flex='1' p='8' overflowY='auto' maxH='100vh'>
+			<Box
+				id='main-scroll'
+				flex='1'
+				p={{ base: '4', md: '8' }}
+				overflowY='auto'
+				maxH={{ base: 'auto', md: '100vh' }}
+			>
+
 				<Box maxW='1400px' mx='auto'>
 					<Suspense fallback={<PageLoader />}>
 						<Box key={location.pathname} className='animate-fade-in'>

@@ -112,6 +112,7 @@ export default function DomainRulesPage() {
 				};
 			},
 		);
+
 		try {
 			await toggleRule.mutateAsync(domain);
 		} catch (e) {
@@ -189,13 +190,20 @@ export default function DomainRulesPage() {
 	const rules = rulesData?.items ?? [];
 
 	return (
-		<Box>
+		<Box gap='8'>
 			<HStack justify='space-between' mb='8'>
 				<Heading size='lg'>Domain Rules</Heading>
 			</HStack>
-
 			<Tabs.Root defaultValue='rules' variant='line'>
-				<HStack justify='space-between' mb='4'>
+				<Box
+					display='flex'
+					flexDir={{ base: 'column', sm: 'row' }}
+					justifyContent='space-between'
+					alignItems={{ base: 'flex-start', sm: 'center' }}
+					gap={{ base: '3', sm: '0' }}
+					mb='4'
+					w='full'
+				>
 					<Tabs.List borderColor='border'>
 						<Tabs.Trigger
 							value='rules'
@@ -222,38 +230,38 @@ export default function DomainRulesPage() {
 							</Text>
 						</Tabs.Trigger>
 					</Tabs.List>
-
 					<Tabs.Context>
 						{({ value }) =>
-							value === 'rules' ? (
-								<Button
-									bg='accent'
-									color='fg'
-									_hover={{ bg: 'accent.hover' }}
-									h='9'
-									fontSize='sm'
-									onClick={() => setShowRuleDialog(true)}
-								>
-									<Icon as={Plus} boxSize='3.5' mr='2' />
-									Add Rule
-								</Button>
-							) : (
-								<Button
-									bg='accent'
-									color='fg'
-									_hover={{ bg: 'accent.hover' }}
-									h='9'
-									fontSize='sm'
-									onClick={() => setShowSubscriptionDialog(true)}
-								>
-									<Icon as={Plus} boxSize='3.5' mr='2' />
-									Add Subscription
-								</Button>
-							)
+							<Box>
+								{value === 'rules' ? (
+									<Button
+										bg='accent'
+										color='fg'
+										_hover={{ bg: 'accent.hover' }}
+										h='9'
+										fontSize='sm'
+										onClick={() => setShowRuleDialog(true)}
+									>
+										<Icon as={Plus} boxSize='3.5' mr='2' />
+										Add Rule
+									</Button>
+								) : (
+									<Button
+										bg='accent'
+										color='fg'
+										_hover={{ bg: 'accent.hover' }}
+										h='9'
+										fontSize='sm'
+										onClick={() => setShowSubscriptionDialog(true)}
+									>
+										<Icon as={Plus} boxSize='3.5' mr='2' />
+										Add Subscription
+									</Button>
+								)}
+							</Box>
 						}
 					</Tabs.Context>
-				</HStack>
-
+				</Box>
 				<Tabs.Content value='rules' pt='0'>
 					<DomainRulesGrid
 						rules={rules}
