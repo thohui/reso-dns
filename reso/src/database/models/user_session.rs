@@ -92,6 +92,6 @@ impl UserSession {
 
     pub fn is_expired(&self) -> bool {
         let now = now_millis();
-        now.saturating_sub(self.expires_at) > INACTIVE_SESSION_TIMEOUT
+        now > self.expires_at
     }
 }

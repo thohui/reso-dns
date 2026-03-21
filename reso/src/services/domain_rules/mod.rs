@@ -206,10 +206,6 @@ impl DomainRulesService {
                 if updated {
                     any_updated = true;
                 }
-            } else if let Err(e) =
-                fetch_domain_rules_from_list_subscription_task(sub, &self.http_client, &self.connection).await
-            {
-                tracing::error!("failed to fetch domain rules from subscription {}: {}", sub.url, e);
             }
         }
 
@@ -244,12 +240,22 @@ impl DomainRulesService {
                 }
             })?;
 
+        head_response.error_for_status_ref().map_err(|e| {
+            if e.is_connect() || e.is_timeout() {
+                ServiceError::BadRequest("URL is not reachable".into())
+            } else if e.status() == Some(reqwest::StatusCode::NOT_FOUND) {
+                ServiceError::BadRequest("URL not found".into())
+            } else {
+                ServiceError::Internal(e.into())
+            }
+        })?;
+
         let content_type = head_response.headers().get("content-type");
 
         if let Some(content_type) = content_type {
             if !content_type
                 .to_str()
-                .map_err(|_| ServiceError::BadRequest("Invalid content-type header from UR".into()))?
+                .map_err(|_| ServiceError::BadRequest("Invalid content-type header from URL".into()))?
                 .contains("text/plain")
             {
                 return Err(ServiceError::BadRequest(
@@ -364,6 +370,19 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
         .parse()
         .into_iter()
         .map(str::to_owned)
+        .filter(|d| {
+            if let Err(e) = normalize_domain_pattern(d) {
+                tracing::warn!(
+                    "skipping invalid domain pattern '{}' from subscription {}: {}",
+                    d,
+                    subscription.url,
+                    e
+                );
+                false
+            } else {
+                true
+            }
+        })
         .collect();
 
     if domains.is_empty() {

@@ -21,13 +21,13 @@ interface SubscriptionDialogProps {
 		name: string,
 		url: string,
 		list_type: ListAction,
-		sync_periodically: boolean,
+		sync_enabled: boolean,
 	) => Promise<void>;
 }
 
 const schema = z.object({
 	name: z.string().min(1, 'Name is required'),
-	url: z.string().url('Must be a valid URL'),
+	url: z.url('Must be a valid URL'),
 	sync_enabled: z.boolean().optional().default(true),
 });
 
@@ -35,7 +35,11 @@ export function SubscriptionDialog({
 	onClose,
 	onSubmit,
 }: SubscriptionDialogProps) {
-	const form = useForm({ resolver: zodResolver(schema) });
+
+	const form = useForm({
+		resolver: zodResolver(schema),
+		defaultValues: { sync_enabled: true }
+	});
 
 	const onSubmitHandler = form.handleSubmit(
 		async ({ name, url, sync_enabled }) => {
@@ -123,11 +127,11 @@ export function SubscriptionDialog({
 								/>
 								{(form.formState.errors.url?.message ||
 									form.formState.errors.root?.message) && (
-									<Field.ErrorText color='status.error' fontSize='xs' mt='1'>
-										{form.formState.errors.url?.message ??
-											form.formState.errors.root?.message}
-									</Field.ErrorText>
-								)}
+										<Field.ErrorText color='status.error' fontSize='xs' mt='1'>
+											{form.formState.errors.url?.message ??
+												form.formState.errors.root?.message}
+										</Field.ErrorText>
+									)}
 							</Field.Root>
 
 							<Field.Root mb='6'>

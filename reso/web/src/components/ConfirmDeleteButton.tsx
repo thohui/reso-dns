@@ -39,6 +39,7 @@ export function ConfirmDeleteButton({ onConfirm }: Props) {
 			) : (
 				<IconButton
 					size='md'
+					aria-label='Delete'
 					cursor='pointer'
 					variant='ghost'
 					display='inline-flex'

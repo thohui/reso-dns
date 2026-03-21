@@ -10,6 +10,7 @@ CREATE TABLE list_subscriptions (
     created_at     INTEGER NOT NULL,
     sync_enabled   INTEGER NOT NULL DEFAULT 1,
     CHECK (enabled IN (0, 1))
+    CHECK (sync_enabled IN (0, 1))
 );
 
 DROP TABLE blocklist;
@@ -23,3 +24,4 @@ CREATE TABLE domain_rules (
     subscription_id BLOB    REFERENCES list_subscriptions(id) ON DELETE CASCADE,
     CHECK (enabled IN (0, 1))
 );
+

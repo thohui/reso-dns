@@ -93,9 +93,12 @@ impl<G, L> DnsRequestCtx<G, L> {
         &self.global
     }
 
+    /// Local context
     pub fn local(&self) -> &L {
         &self.local
     }
+
+    /// Mutable access to local context
     pub fn local_mut(&mut self) -> &mut L {
         &mut self.local
     }

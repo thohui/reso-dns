@@ -93,7 +93,12 @@ fn parse_hosts_line(line: &str) -> Option<&str> {
 
 fn parse_plain_line(line: &str) -> Option<&str> {
     let line = strip_comment(line).trim();
-    validate(line)
+    let mut parts = line.split_ascii_whitespace();
+    let domain = parts.next()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    validate(domain)
 }
 
 #[cfg(test)]

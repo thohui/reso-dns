@@ -22,7 +22,7 @@ interface AddRuleDialogProps {
 }
 
 const schema = z.object({
-	domain: z.string().min(1),
+	domain: z.string().trim().min(1),
 });
 
 export function AddRuleDialog({ onClose, onSubmit }: AddRuleDialogProps) {
@@ -37,7 +37,7 @@ export function AddRuleDialog({ onClose, onSubmit }: AddRuleDialogProps) {
 
 	const onSubmitHandler = handleSubmit(async ({ domain }) => {
 		try {
-			await onSubmit(domain, action);
+			await onSubmit(domain.trim().toLowerCase(), action);
 		} catch (e) {
 			if (e instanceof Error) {
 				setError('root', { message: e.message });

@@ -1,5 +1,5 @@
 export function formatTimeAgo(timestamp: number | null): string {
-	if (!timestamp) return 'Never';
+	if (timestamp === null) return 'Never';
 	const seconds = Math.floor((Date.now() - timestamp) / 1000);
 	if (seconds < 60) return 'just now';
 	const minutes = Math.floor(seconds / 60);

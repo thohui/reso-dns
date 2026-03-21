@@ -32,7 +32,7 @@ import { useDebounce } from '../../hooks/useDebounce';
 import type { DomainRule, ListAction } from '../../lib/api/domain-rules';
 import type { ListSubscription } from '../../lib/api/list-subscriptions';
 import type { PagedResponse } from '../../lib/api/pagination';
-import { useToggleSubscriptionSync } from '../../hooks/useToggleSubscriptionSync,';
+import { useToggleSubscriptionSync } from '../../hooks/useToggleSubscriptionSync';
 
 export default function DomainRulesPage() {
 	const queryClient = useQueryClient();
