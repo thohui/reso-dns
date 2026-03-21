@@ -175,6 +175,8 @@ impl DomainRule {
             .interact(move |c| {
                 let tx = c.transaction()?;
 
+                // using a temporary table to reduce the number of queries.
+                // sqlite has a variable limit which would be hit if we directly insert into domain_rules with a large list.
                 tx.execute_batch(
                     "CREATE TEMP TABLE IF NOT EXISTS temp.domain_rules_sync_staging (domain TEXT PRIMARY KEY)",
                 )?;

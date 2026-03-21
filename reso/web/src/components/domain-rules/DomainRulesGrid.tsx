@@ -1,4 +1,4 @@
-import { Box, HStack, Icon, Input, Table, Text } from '@chakra-ui/react';
+import { Box, HStack, Icon, IconButton, Input, Table, Text } from '@chakra-ui/react';
 import {
 	createColumnHelper,
 	flexRender,
@@ -54,6 +54,7 @@ export function DomainRulesGrid({
 								as={row.original.action === 'block' ? Ban : ShieldCheck}
 								boxSize='3.5'
 								color={
+									// TODO: this is ugly, should refactor later.
 									!row.original.enabled
 										? 'fg.subtle'
 										: row.original.action === 'block'
@@ -94,7 +95,11 @@ export function DomainRulesGrid({
 				id: 'status',
 				header: 'Status',
 				cell: ({ row }) => (
-					<Table.Cell py='3.5' px='4' textAlign='center'>
+					<Table.Cell
+						py='3.5'
+						px='4'
+						textAlign='center'
+					>
 						<ToggleButton
 							enabled={row.original.enabled}
 							label='rule'
@@ -108,10 +113,8 @@ export function DomainRulesGrid({
 				header: '',
 				cell: ({ row }) => (
 					<Table.Cell py='3.5' px='4'>
-						<Box
-							as='button'
-							cursor='pointer'
-							display='inline-flex'
+						<IconButton
+							variant='ghost'
 							p='1'
 							borderRadius='md'
 							color='fg.subtle'
@@ -120,7 +123,7 @@ export function DomainRulesGrid({
 							onClick={() => onEdit(row.original)}
 						>
 							<Icon as={Pencil} boxSize='3.5' />
-						</Box>
+						</IconButton>
 					</Table.Cell>
 				),
 			}),

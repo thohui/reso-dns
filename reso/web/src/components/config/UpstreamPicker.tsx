@@ -24,15 +24,13 @@ import {
 import { UpstreamSpecSchema } from '../../lib/config/schema';
 import { hexToRgba } from '../../lib/theme';
 
-export function UpstreamPicker({
-	existingUpstreams,
-	onAdd,
-	onClose,
-}: {
+interface Props {
 	existingUpstreams: Upstream[];
 	onAdd: (upstream: Upstream) => void;
 	onClose: () => void;
-}) {
+}
+
+export function UpstreamPicker({ existingUpstreams, onAdd, onClose }: Props) {
 	const [view, setView] = useState<'providers' | 'servers' | 'custom'>(
 		'providers',
 	);
@@ -64,16 +62,16 @@ export function UpstreamPicker({
 		} else if (view === 'custom') setView('providers');
 	};
 
-	const title =
-		view === 'providers'
-			? 'Add Upstream Server'
-			: view === 'servers' && selectedGroup
-				? selectedGroup.name
-				: 'Custom Server';
+	let title = 'Custom Server';
+	if (view === 'providers') title = 'Add Upstream Server';
+	else if (view === 'servers' && selectedGroup) title = selectedGroup.name;
 
 	return (
 		<Dialog.Root open onOpenChange={({ open }) => !open && onClose()}>
-			<Dialog.Backdrop backdropFilter='blur(8px)' bg='blackAlpha.800' />
+			<Dialog.Backdrop
+				backdropFilter='blur(8px)'
+				bg='blackAlpha.800'
+			/>
 			<Dialog.Positioner>
 				<Dialog.Content
 					bg='bg.panel'

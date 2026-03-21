@@ -131,7 +131,10 @@ export function SubscriptionsGrid({
 			<Table.Root size='sm'>
 				<Table.Header>
 					{table.getHeaderGroups().map((headerGroup) => (
-						<Table.Row key={headerGroup.id} bg='bg.subtle' borderColor='border'>
+						<Table.Row
+							key={headerGroup.id}
+							bg='bg.subtle'
+							borderColor='border'>
 							{headerGroup.headers.map((header) => (
 								<Table.ColumnHeader
 									key={header.id}
@@ -146,8 +149,7 @@ export function SubscriptionsGrid({
 										header.id === 'domain_count' ||
 											header.id === 'last_synced_at'
 											? 'right'
-											: header.id === 'status' ||
-												header.id === 'sync_status'
+											: header.id === 'status' || header.id === 'sync_status'
 												? 'center'
 												: undefined
 									}

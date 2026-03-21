@@ -1,4 +1,4 @@
-import { Box, Button, HStack, Icon, Table } from '@chakra-ui/react';
+import { Button, HStack, Icon, IconButton, Table } from '@chakra-ui/react';
 import { Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -14,7 +14,7 @@ export function ConfirmDeleteButton({ onConfirm }: Props) {
 			{confirming ? (
 				<HStack gap='1'>
 					<Button
-						size='xs'
+						size='md'
 						variant='ghost'
 						color='status.error'
 						bg='status.errorMuted'
@@ -27,7 +27,7 @@ export function ConfirmDeleteButton({ onConfirm }: Props) {
 						Confirm
 					</Button>
 					<Button
-						size='xs'
+						size='md'
 						variant='ghost'
 						color='fg.muted'
 						_hover={{ bg: 'bg.subtle' }}
@@ -37,11 +37,11 @@ export function ConfirmDeleteButton({ onConfirm }: Props) {
 					</Button>
 				</HStack>
 			) : (
-				<Box
-					as='button'
+				<IconButton
+					size='md'
 					cursor='pointer'
+					variant='ghost'
 					display='inline-flex'
-					p='1'
 					borderRadius='md'
 					color='fg.subtle'
 					_hover={{ color: 'status.error', bg: 'status.errorMuted' }}
@@ -49,7 +49,7 @@ export function ConfirmDeleteButton({ onConfirm }: Props) {
 					onClick={() => setConfirming(true)}
 				>
 					<Icon as={Trash2} boxSize='3.5' />
-				</Box>
+				</IconButton>
 			)}
 		</Table.Cell>
 	);

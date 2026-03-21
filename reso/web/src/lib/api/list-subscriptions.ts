@@ -14,7 +14,12 @@ export class ListSubscriptions {
 			.json<ListSubscription[]>();
 	}
 
-	public async create(name: string, url: string, list_type: ListAction, sync_enabled: boolean) {
+	public async create(
+		name: string,
+		url: string,
+		list_type: ListAction,
+		sync_enabled: boolean,
+	) {
 		await this.httpClient.post('api/list-subscriptions', {
 			json: { name, url, list_type, sync_enabled },
 		});

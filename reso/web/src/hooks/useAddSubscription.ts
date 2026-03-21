@@ -16,6 +16,7 @@ export function useAddSubscription() {
 			url: string;
 			list_type: ListAction;
 			sync_enabled: boolean;
-		}) => apiClient.listSubscriptions.create(name, url, list_type, sync_enabled),
+		}) =>
+			apiClient.listSubscriptions.create(name, url, list_type, sync_enabled),
 	});
 }
