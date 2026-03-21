@@ -149,7 +149,7 @@ impl DomainRulesService {
         self.blocklist_matcher.load().is_blocked(name)
     }
 
-    /// Lists all domain rules.
+    /// Lists all subscriptions.
     pub async fn list_subscriptions(&self) -> Result<Vec<ListSubscription>, ServiceError> {
         Ok(ListSubscription::list(&self.connection).await?)
     }
@@ -200,11 +200,14 @@ impl DomainRulesService {
         let mut any_updated = false;
 
         for sub in subscriptions.iter().filter(|s| s.enabled && s.sync_enabled) {
-            if let Ok(updated) =
-                fetch_domain_rules_from_list_subscription_task(sub, &self.http_client, &self.connection).await
-            {
-                if updated {
-                    any_updated = true;
+            match fetch_domain_rules_from_list_subscription_task(sub, &self.http_client, &self.connection).await {
+                Ok(updated) => {
+                    if updated {
+                        any_updated = true;
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("failed to fetch domain rules from subscription {}: {}", sub.url, e);
                 }
             }
         }
@@ -370,19 +373,7 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
         .parse()
         .into_iter()
         .map(str::to_owned)
-        .filter(|d| {
-            if let Err(e) = normalize_domain_pattern(d) {
-                tracing::warn!(
-                    "skipping invalid domain pattern '{}' from subscription {}: {}",
-                    d,
-                    subscription.url,
-                    e
-                );
-                false
-            } else {
-                true
-            }
-        })
+        .filter_map(|d| normalize_domain_pattern(&d).ok())
         .collect();
 
     if domains.is_empty() {

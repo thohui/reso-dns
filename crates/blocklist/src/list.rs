@@ -63,6 +63,15 @@ fn validate(s: &str) -> Option<&str> {
     if s.is_empty() || s.len() > 253 {
         return None;
     }
+
+    // basic validation, the full validation is up to the consumer.
+    if !s
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | '*'))
+    {
+        return None;
+    }
+
     Some(s)
 }
 
