@@ -2,6 +2,7 @@ import {
 	Box,
 	Button,
 	Field,
+	Flex,
 	Heading,
 	HStack,
 	Icon,
@@ -176,10 +177,14 @@ export default function ConfigPage() {
 
 	return (
 		<Box>
-			<HStack justify='space-between' mb='8'>
-				<Box>
-					<Heading size='lg'>Configuration</Heading>
-				</Box>
+			<Flex
+				justify='space-between'
+				align={{ base: 'flex-start', sm: 'center' }}
+				direction={{ base: 'column', sm: 'row' }}
+				gap={{ base: '4', sm: '0' }}
+				mb='8'
+			>
+				<Heading size='lg'>Configuration</Heading>
 				<HStack gap='3'>
 					<Button
 						variant='ghost'
@@ -211,7 +216,7 @@ export default function ConfigPage() {
 						Save Changes
 					</Button>
 				</HStack>
-			</HStack>
+			</Flex>
 
 			<ConfigSection
 				title='Upstream Servers'
@@ -294,6 +299,7 @@ export default function ConfigPage() {
 												color='fg.muted'
 												fontFamily='mono'
 												mt='0.5'
+												wordBreak='break-all'
 											>
 												{upstream}
 											</Text>
