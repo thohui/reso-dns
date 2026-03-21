@@ -131,7 +131,7 @@ export default function ConfigPage() {
 				// Update cache
 				queryClient.setQueryData(useConfigQueryKey, () => data);
 			},
-			onError: (e) => toastError(e),
+			onError: toastError,
 		});
 	});
 

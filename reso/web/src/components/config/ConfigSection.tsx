@@ -1,5 +1,5 @@
 import { Box, Heading, HStack, Icon, Text } from '@chakra-ui/react';
-import { type LucideIcon } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 export interface Props {
 	title: string;

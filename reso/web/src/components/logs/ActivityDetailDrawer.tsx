@@ -10,7 +10,7 @@ import {
 	VStack,
 } from '@chakra-ui/react';
 import { Ban } from 'lucide-react';
-import { useBlockDomain } from '../../hooks/useBlockDomain';
+import { useAddDomainRule } from '../../hooks/useAddDomainRule';
 import {
 	type Activity,
 	type ErrorActivity,
@@ -73,7 +73,7 @@ export function ActivityDetailDrawer({
 	open,
 	onClose,
 }: ActivityDetailDrawerProps) {
-	const blockDomain = useBlockDomain();
+	const addDomainRule = useAddDomainRule();
 
 	if (!activity) return null;
 
@@ -291,12 +291,15 @@ export function ActivityDetailDrawer({
 										color: 'status.error',
 									}}
 									onClick={() => {
-										blockDomain.mutate(activity.qname!, {
-											onError: (e) => toastError(e),
-											onSuccess: () => onClose(),
-										});
+										addDomainRule.mutate(
+											{ domain: activity.qname!, action: 'block' },
+											{
+												onError: toastError,
+												onSuccess: () => onClose(),
+											},
+										);
 									}}
-									loading={blockDomain.isPending}
+									loading={addDomainRule.isPending}
 								>
 									<Icon as={Ban} boxSize='3.5' mr='2' />
 									Block {activity.qname}

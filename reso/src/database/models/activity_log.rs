@@ -1,6 +1,7 @@
 use rusqlite::{params, types::Value};
 
 use crate::database::models::Page;
+use crate::database::query::WhereBuilder;
 use crate::database::{DatabaseError, MetricsDatabasePool};
 
 #[derive(Debug, Clone)]
@@ -36,47 +37,30 @@ pub struct ListFilter {
 }
 
 impl ListFilter {
-    fn escape_like(s: &str) -> String {
-        s.replace('\\', r"\\").replace('%', r"\%").replace('_', r"\_")
-    }
-
     fn build_where(&self, param_offset: usize) -> (String, Vec<Value>) {
-        let mut clauses: Vec<String> = Vec::new();
-        let mut params: Vec<Value> = Vec::new();
-
-        let mut push = |col: &str, val: Value, use_like: bool| {
-            params.push(val);
-            let operator = if use_like { "LIKE" } else { "=" };
-            let escape_clause = if use_like { " ESCAPE '\\'" } else { "" };
-            clauses.push(format!(
-                "AND {col} {operator} ?{}{escape_clause}",
-                param_offset + params.len(),
-            ));
-        };
-
+        let mut b = WhereBuilder::new(param_offset);
         if let Some(ref v) = self.client {
-            push("client", Value::Text(format!("%{}%", Self::escape_like(v))), true);
+            b.like("client", v);
         }
         if let Some(ref v) = self.qname {
-            push("qname", Value::Text(format!("%{}%", Self::escape_like(v))), true);
+            b.like("qname", v);
         }
         if let Some(v) = self.qtype {
-            push("qtype", Value::Integer(v), false);
+            b.eq("qtype", Value::Integer(v));
         }
         if let Some(v) = self.blocked {
-            push("blocked", Value::Integer(v as i64), false);
+            b.eq("blocked", Value::Integer(v as i64));
         }
         if let Some(v) = self.cache_hit {
-            push("cache_hit", Value::Integer(v as i64), false);
+            b.eq("cache_hit", Value::Integer(v as i64));
         }
         if let Some(v) = self.rate_limited {
-            push("rate_limited", Value::Integer(v as i64), false);
+            b.eq("rate_limited", Value::Integer(v as i64));
         }
         if self.error_only {
-            clauses.push("AND kind = 'error'".to_string());
+            b.raw("AND kind = 'error'");
         }
-
-        (clauses.join(" "), params)
+        b.build()
     }
 }
 

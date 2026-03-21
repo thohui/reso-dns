@@ -17,13 +17,12 @@ import {
 } from '@tanstack/react-table';
 import {
 	ChevronDown,
-	ChevronLeft,
-	ChevronRight,
 	ChevronsUpDown,
 	ChevronUp,
 	Clock,
 	Search,
 } from 'lucide-react';
+
 import { useCallback, useMemo, useState } from 'react';
 import {
 	type Activity,
@@ -34,7 +33,9 @@ import {
 } from '../../lib/api/activity';
 import { recordTypeName } from '../../lib/dns';
 import { getStatusInfo } from '../../lib/status-info';
+import { GridPage } from '../GridPage';
 import { ActivityDetailDrawer } from './ActivityDetailDrawer';
+import React from 'react';
 
 function formatTimestamp(ts: number): string {
 	const d = new Date(ts);
@@ -147,11 +148,10 @@ function buildColumns() {
 				</Table.Cell>
 			),
 		}),
-		columnHelper.display({
-			id: 'protocol',
+		columnHelper.accessor('transport', {
 			header: 'Protocol',
 			enableSorting: false,
-			cell: ({ row }) => (
+			cell: ({ getValue }) => (
 				<Table.Cell py='3' px='4'>
 					<Box
 						display='inline-block'
@@ -164,7 +164,7 @@ function buildColumns() {
 						bg='accent.muted'
 						color='accent.fg'
 					>
-						{getTransportLabel(row.original.transport)}
+						{getTransportLabel(getValue())}
 					</Box>
 				</Table.Cell>
 			),
@@ -227,32 +227,32 @@ const FILTER_PRESETS: {
 	color?: string;
 	filter: ActivityListFilter;
 }[] = [
-	{ key: 'all', label: 'All', filter: {} },
-	{
-		key: 'blocked',
-		label: 'Blocked',
-		color: 'status.blocked',
-		filter: { blocked: true },
-	},
-	{
-		key: 'cached',
-		label: 'Cached',
-		color: 'status.cached',
-		filter: { cache_hit: true },
-	},
-	{
-		key: 'rate_limited',
-		label: 'Rate Limited',
-		color: 'status.rate_limited',
-		filter: { rate_limited: true },
-	},
-	{
-		key: 'errors',
-		label: 'Errors',
-		color: 'status.error',
-		filter: { error_only: true },
-	},
-];
+		{ key: 'all', label: 'All', filter: {} },
+		{
+			key: 'blocked',
+			label: 'Blocked',
+			color: 'status.blocked',
+			filter: { blocked: true },
+		},
+		{
+			key: 'cached',
+			label: 'Cached',
+			color: 'status.cached',
+			filter: { cache_hit: true },
+		},
+		{
+			key: 'rate_limited',
+			label: 'Rate Limited',
+			color: 'status.rate_limited',
+			filter: { rate_limited: true },
+		},
+		{
+			key: 'errors',
+			label: 'Errors',
+			color: 'status.error',
+			filter: { error_only: true },
+		},
+	];
 
 function getActivePreset(filter: ActivityListFilter): FilterPreset {
 	if (filter.blocked) return 'blocked';
@@ -354,243 +354,207 @@ export function LogsGrid({
 		[],
 	);
 
-	return (
-		<Box>
-			<HStack gap='2' mb='4' justify='space-between' flexWrap='wrap'>
-				<HStack gap='2' flexWrap='wrap'>
-					{FILTER_PRESETS.map(({ key, label, color, filter }) => {
-						const active = activePreset === key;
-						return (
-							<Button
-								key={key}
-								variant='ghost'
-								onClick={() => onPresetChange(filter)}
-								px='3'
-								py='1.5'
-								minH='auto'
-								h='auto'
-								borderRadius='full'
-								fontSize='xs'
-								fontWeight='500'
-								cursor='pointer'
-								transition='all 0.15s ease'
-								borderWidth='1px'
-								borderColor={active ? (color ?? 'fg.subtle') : 'border'}
-								bg={active ? 'bg.subtle' : 'transparent'}
-								color={active ? (color ?? 'fg') : 'fg.muted'}
-								_hover={{ bg: 'bg.subtle', borderColor: color ?? 'fg.subtle' }}
-								aria-pressed={active}
-								aria-label={`${label} filter`}
-							>
-								<HStack gap='1.5'>
-									{color && (
-										<Box
-											w='1.5'
-											h='1.5'
-											borderRadius='full'
-											bg={color}
-											opacity={active ? 1 : 0.5}
-										/>
-									)}
-									<Text fontSize='xs' lineHeight='1'>
-										{label}
-									</Text>
-								</HStack>
-							</Button>
-						);
-					})}
-				</HStack>
-
-				<HStack
-					borderWidth='1px'
-					borderColor={searchValue ? 'fg.subtle' : 'border'}
-					borderRadius='full'
-					px='3'
-					py='1.5'
-					gap='1.5'
-					transition='border-color 0.15s'
-				>
-					<Icon as={Search} boxSize='3' color='fg.faint' flexShrink={0} />
-					<Input
-						variant='subtle'
-						value={searchValue}
-						onChange={(e) => onSearchChange(e.target.value)}
-						placeholder={`search ${SEARCH_FIELD_LABELS[searchField]}...`}
-						fontSize='xs'
-						lineHeight='1'
-						border='hidden'
-						p='0'
-						h='auto'
-						minW='32'
-						bg='transparent'
-						fontFamily="'Mozilla Text', sans-serif"
-					/>
-					<Box w='1px' h='3' bg='border' flexShrink={0} />
-					<Text
-						as='button'
-						fontSize='xs'
-						color='fg.muted'
-						cursor='pointer'
-						onClick={() =>
-							onSearchFieldChange(searchField === 'qname' ? 'client' : 'qname')
-						}
-						_hover={{ color: 'fg' }}
-						transition='color 0.15s'
-						whiteSpace='nowrap'
-						flexShrink={0}
-					>
-						{SEARCH_FIELD_LABELS[searchField]}
-					</Text>
-				</HStack>
+	const toolbar = (
+		<HStack gap='2' justify='space-between' flexWrap='wrap'>
+			<HStack gap='2' flexWrap='wrap'>
+				{FILTER_PRESETS.map(({ key, label, color, filter }) => {
+					const active = activePreset === key;
+					return (
+						<Button
+							key={key}
+							variant='ghost'
+							onClick={() => onPresetChange(filter)}
+							px='3'
+							py='1.5'
+							minH='auto'
+							h='auto'
+							borderRadius='full'
+							fontSize='xs'
+							fontWeight='500'
+							cursor='pointer'
+							transition='all 0.15s ease'
+							borderWidth='1px'
+							borderColor={active ? (color ?? 'fg.subtle') : 'border'}
+							bg={active ? 'bg.subtle' : 'transparent'}
+							color={active ? (color ?? 'fg') : 'fg.muted'}
+							_hover={{ bg: 'bg.subtle', borderColor: color ?? 'fg.subtle' }}
+							aria-pressed={active}
+							aria-label={`${label} filter`}
+						>
+							<HStack gap='1.5'>
+								{color && (
+									<Box
+										w='1.5'
+										h='1.5'
+										borderRadius='full'
+										bg={color}
+										opacity={active ? 1 : 0.5}
+									/>
+								)}
+								<Text fontSize='xs' lineHeight='1'>
+									{label}
+								</Text>
+							</HStack>
+						</Button>
+					);
+				})}
 			</HStack>
 
-			<Box
-				bg='bg.panel'
-				borderRadius='lg'
+			<HStack
 				borderWidth='1px'
-				borderColor='border'
-				overflow='hidden'
-				opacity={isLoading ? 0.6 : 1}
-				transition='opacity 0.15s'
+				borderColor={searchValue ? 'fg.subtle' : 'border'}
+				borderRadius='full'
+				px='3'
+				py='1.5'
+				gap='1.5'
+				transition='border-color 0.15s'
 			>
-				<Box overflowX='auto'>
-					<Table.Root size='sm'>
-						<Table.Header>
-							{table.getHeaderGroups().map((headerGroup) => (
-								<Table.Row key={headerGroup.id} bg='bg.subtle'>
-									{headerGroup.headers.map((header) => {
-										const canSort = header.column.getCanSort();
-										const sorted = header.column.getIsSorted();
-										const SortIcon =
-											sorted === 'desc'
-												? ChevronDown
-												: sorted === 'asc'
-													? ChevronUp
-													: ChevronsUpDown;
+				<Icon as={Search} boxSize='3' color='fg.faint' flexShrink={0} />
+				<Input
+					variant='subtle'
+					value={searchValue}
+					onChange={(e) => onSearchChange(e.target.value)}
+					placeholder={`search ${SEARCH_FIELD_LABELS[searchField]}...`}
+					fontSize='xs'
+					lineHeight='1'
+					border='hidden'
+					p='0'
+					h='auto'
+					minW='32'
+					bg='transparent'
+					fontFamily="'Mozilla Text', sans-serif"
+				/>
+				<Box w='1px' h='3' bg='border' flexShrink={0} />
+				<Text
+					as='button'
+					fontSize='xs'
+					color='fg.muted'
+					cursor='pointer'
+					onClick={() =>
+						onSearchFieldChange(searchField === 'qname' ? 'client' : 'qname')
+					}
+					_hover={{ color: 'fg' }}
+					transition='color 0.15s'
+					whiteSpace='nowrap'
+					flexShrink={0}
+				>
+					{SEARCH_FIELD_LABELS[searchField]}
+				</Text>
+			</HStack>
+		</HStack>
+	);
 
-										return (
-											<Table.ColumnHeader
-												key={header.id}
-												py='3'
-												px='4'
-												fontSize='xs'
-												textTransform='uppercase'
-												letterSpacing='wider'
-												color={sorted ? 'fg' : 'fg.muted'}
-												cursor={canSort ? 'pointer' : 'default'}
-												userSelect={canSort ? 'none' : undefined}
-												_hover={canSort ? { color: 'fg' } : undefined}
-												onClick={
-													canSort
-														? header.column.getToggleSortingHandler()
-														: undefined
-												}
-												textAlign={
-													header.column.id === 'duration' ? 'right' : undefined
+	return (
+		<Box>
+			<GridPage
+				toolbar={toolbar}
+				isLoading={isLoading}
+				page={page}
+				totalPages={totalPages}
+				total={total}
+				totalLabel='total entries'
+				hasMore={hasMore}
+				onPageChange={onPageChange}
+			>
+				<Table.Root size='sm'>
+					<Table.Header>
+						{table.getHeaderGroups().map((headerGroup) => (
+							<Table.Row key={headerGroup.id} bg='bg.subtle'>
+								{headerGroup.headers.map((header) => {
+									const canSort = header.column.getCanSort();
+									const sorted = header.column.getIsSorted();
+									const SortIcon =
+										sorted === 'desc'
+											? ChevronDown
+											: sorted === 'asc'
+												? ChevronUp
+												: ChevronsUpDown;
+
+									return (
+										<Table.ColumnHeader
+											key={header.id}
+											py='3'
+											px='4'
+											fontSize='xs'
+											textTransform='uppercase'
+											letterSpacing='wider'
+											color={sorted ? 'fg' : 'fg.muted'}
+											cursor={canSort ? 'pointer' : 'default'}
+											userSelect={canSort ? 'none' : undefined}
+											_hover={canSort ? { color: 'fg' } : undefined}
+											onClick={
+												canSort
+													? header.column.getToggleSortingHandler()
+													: undefined
+											}
+											textAlign={
+												header.column.id === 'duration' ? 'right' : undefined
+											}
+										>
+											<HStack
+												gap='1'
+												justify={
+													header.column.id === 'duration'
+														? 'flex-end'
+														: 'flex-start'
 												}
 											>
-												<HStack
-													gap='1'
-													justify={
-														header.column.id === 'duration'
-															? 'flex-end'
-															: 'flex-start'
-													}
-												>
-													<Text>
-														{flexRender(
-															header.column.columnDef.header,
-															header.getContext(),
-														)}
-													</Text>
-													{canSort && (
-														<Icon
-															as={SortIcon}
-															boxSize='3'
-															opacity={sorted ? 1 : 0.4}
-														/>
+												<Text>
+													{flexRender(
+														header.column.columnDef.header,
+														header.getContext(),
 													)}
-												</HStack>
-											</Table.ColumnHeader>
-										);
-									})}
-								</Table.Row>
-							))}
-						</Table.Header>
-						<Table.Body>
-							{table.getRowModel().rows.map((row) => (
-								<Table.Row
-									key={row.id}
-									bg='bg.panel'
-									borderColor='border'
-									_hover={{ bg: 'bg.subtle' }}
-									_focus={{ bg: 'bg.subtle', outline: 'none' }}
-									transition='background 0.15s'
-									cursor='pointer'
-									tabIndex={0}
-									onClick={() => setSelectedActivity(row.original)}
-									onKeyDown={(e) => handleRowKeyDown(e, row.original)}
+												</Text>
+												{canSort && (
+													<Icon
+														as={SortIcon}
+														boxSize='3'
+														opacity={sorted ? 1 : 0.4}
+													/>
+												)}
+											</HStack>
+										</Table.ColumnHeader>
+									);
+								})}
+							</Table.Row>
+						))}
+					</Table.Header>
+					<Table.Body>
+						{table.getRowModel().rows.map((row) => (
+							<Table.Row
+								key={row.id}
+								bg='bg.panel'
+								borderColor='border'
+								_hover={{ bg: 'bg.subtle' }}
+								_focus={{ bg: 'bg.subtle', outline: 'none' }}
+								transition='background 0.15s'
+								cursor='pointer'
+								tabIndex={0}
+								onClick={() => setSelectedActivity(row.original)}
+								onKeyDown={(e) => handleRowKeyDown(e, row.original)}
+							>
+								{row.getVisibleCells().map((cell) => (
+									<React.Fragment key={cell.id}>
+										{flexRender(cell.column.columnDef.cell, cell.getContext())}
+									</React.Fragment>
+								))}
+							</Table.Row>
+						))}
+						{table.getRowModel().rows.length === 0 && !isLoading && (
+							<Table.Row bg='bg.panel'>
+								<Table.Cell
+									colSpan={columns.length}
+									py='8'
+									textAlign='center'
+									color='fg.muted'
 								>
-									{row
-										.getVisibleCells()
-										.map((cell) =>
-											flexRender(cell.column.columnDef.cell, cell.getContext()),
-										)}
-								</Table.Row>
-							))}
-							{table.getRowModel().rows.length === 0 && !isLoading && (
-								<Table.Row bg='bg.panel'>
-									<Table.Cell
-										colSpan={columns.length}
-										py='8'
-										textAlign='center'
-										color='fg.muted'
-									>
-										No entries match this filter
-									</Table.Cell>
-								</Table.Row>
-							)}
-						</Table.Body>
-					</Table.Root>
-				</Box>
-			</Box>
-
-			{(totalPages == null || totalPages > 1) && (
-				<HStack justify='space-between' mt='4' px='1'>
-					<Text fontSize='xs' color='fg.muted'>
-						{total != null ? `${total.toLocaleString()} total entries` : ''}
-					</Text>
-					<HStack gap='2'>
-						<Button
-							size='xs'
-							variant='ghost'
-							color='fg.muted'
-							_hover={{ bg: 'bg.subtle' }}
-							disabled={page === 0}
-							onClick={() => onPageChange(page - 1)}
-						>
-							<Icon as={ChevronLeft} boxSize='3.5' />
-							Prev
-						</Button>
-						<Text fontSize='xs' color='fg.muted'>
-							{totalPages != null
-								? `${page + 1} / ${totalPages}`
-								: `${page + 1}`}
-						</Text>
-						<Button
-							size='xs'
-							variant='ghost'
-							color='fg.muted'
-							_hover={{ bg: 'bg.subtle' }}
-							disabled={totalPages != null ? page >= totalPages - 1 : !hasMore}
-							onClick={() => onPageChange(page + 1)}
-						>
-							Next
-							<Icon as={ChevronRight} boxSize='3.5' />
-						</Button>
-					</HStack>
-				</HStack>
-			)}
+									No entries match this filter
+								</Table.Cell>
+							</Table.Row>
+						)}
+					</Table.Body>
+				</Table.Root>
+			</GridPage>
 
 			<ActivityDetailDrawer
 				activity={selectedActivity}

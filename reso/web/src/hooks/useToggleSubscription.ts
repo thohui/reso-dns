@@ -1,9 +1,10 @@
 import { useMutation } from '@tanstack/react-query';
 import { useApiClient } from '../contexts/ApiClientContext';
 
-export function useToggleDomain() {
+export function useToggleSubscription() {
 	const apiClient = useApiClient();
+
 	return useMutation({
-		mutationFn: async (domain: string) => apiClient.blocklist.toggle(domain),
+		mutationFn: (id: string) => apiClient.listSubscriptions.toggle(id),
 	});
 }

@@ -1,10 +1,9 @@
 import { useMutation } from '@tanstack/react-query';
 import { useApiClient } from '../contexts/ApiClientContext';
 
-export function useBlockDomain() {
+export function useToggleDomainRule() {
 	const apiClient = useApiClient();
-
 	return useMutation({
-		mutationFn: (domain: string) => apiClient.blocklist.create(domain),
+		mutationFn: async (domain: string) => apiClient.domainRules.toggle(domain),
 	});
 }

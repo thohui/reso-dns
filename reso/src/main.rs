@@ -9,7 +9,10 @@ use global::{Global, SharedGlobal};
 use metrics::{service::MetricsService, truncation::run_metrics_truncation};
 use reso_cache::DnsMessageCache;
 use server_builder::{build_dns_server, update_server_state_on_config_changes};
-use services::{blocklist::BlocklistService, config::ConfigService};
+use services::{
+    config::ConfigService,
+    domain_rules::{DomainRulesService, run_subscription_sync},
+};
 use tokio::signal;
 use tracing::level_filters::LevelFilter;
 use tracing_appender::non_blocking;
@@ -65,7 +68,7 @@ async fn run() -> anyhow::Result<()> {
 
     let global: SharedGlobal = Arc::new(Global {
         cache: DnsMessageCache::new(50_000),
-        blocklist: BlocklistService::initialize(core_db_connection.clone()).await?,
+        domain_rules: DomainRulesService::initialize(core_db_connection.clone()).await?,
         local_records: LocalRecordService::initialize(core_db_connection.clone()).await?,
         config: ConfigService::initialize(core_db_connection.clone()).await?,
         metrics: handle,
@@ -116,6 +119,10 @@ async fn run() -> anyhow::Result<()> {
 
     let task_global = global.clone();
     let _ = tokio::spawn(async move { update_server_state_on_config_changes(task_global, server).await });
+
+    let subscription_sync_shutdown = shutdown.child_token();
+    let subscription_sync_global = global.clone();
+    tokio::spawn(async move { run_subscription_sync(subscription_sync_global, subscription_sync_shutdown).await });
 
     #[cfg(unix)]
     {

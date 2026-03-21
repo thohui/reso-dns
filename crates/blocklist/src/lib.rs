@@ -1,3 +1,5 @@
+pub mod list;
+
 /// Node in the trie structure, representing a blocklist entry.
 #[derive(Debug, Clone, Default)]
 struct Node {

@@ -1,0 +1,21 @@
+# localhost entries, should be filtered.
+127.0.0.1 localhost
+127.0.0.1 localhost.localdomain
+127.0.0.1 local
+255.255.255.255 broadcasthost
+::1 ip6-localhost
+::1 ip6-loopback
+
+# ads
+0.0.0.0 ads.example.com
+0.0.0.0 tracker.example.com
+127.0.0.1 telemetry.example.com
+
+0.0.0.0 metrics.example.com # this should be stripped!!!
+
+# Extra whitespace
+0.0.0.0    spacing.example.com
+
+# empty lines and comments mixed in
+
+0.0.0.0 another.example.com

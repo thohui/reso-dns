@@ -1,6 +1,7 @@
 import {
 	Box,
 	Button,
+	Dialog,
 	Field,
 	Heading,
 	HStack,
@@ -23,15 +24,13 @@ import {
 import { UpstreamSpecSchema } from '../../lib/config/schema';
 import { hexToRgba } from '../../lib/theme';
 
-export function UpstreamPicker({
-	existingUpstreams,
-	onAdd,
-	onClose,
-}: {
+interface Props {
 	existingUpstreams: Upstream[];
 	onAdd: (upstream: Upstream) => void;
 	onClose: () => void;
-}) {
+}
+
+export function UpstreamPicker({ existingUpstreams, onAdd, onClose }: Props) {
 	const [view, setView] = useState<'providers' | 'servers' | 'custom'>(
 		'providers',
 	);
@@ -63,101 +62,93 @@ export function UpstreamPicker({
 		} else if (view === 'custom') setView('providers');
 	};
 
+	let title = 'Custom Server';
+	if (view === 'providers') title = 'Add Upstream Server';
+	else if (view === 'servers' && selectedGroup) title = selectedGroup.name;
+
 	return (
-		<Box
-			position='fixed'
-			inset='0'
-			zIndex='1000'
-			display='flex'
-			alignItems='center'
-			justifyContent='center'
-		>
-			<Box
-				position='absolute'
-				inset='0'
-				bg='blackAlpha.800'
+		<Dialog.Root open onOpenChange={({ open }) => !open && onClose()}>
+			<Dialog.Backdrop
 				backdropFilter='blur(8px)'
-				onClick={onClose}
+				bg='blackAlpha.800'
 			/>
-			<Box
-				position='relative'
-				bg='bg.panel'
-				borderColor='border'
-				borderWidth='1px'
-				maxW='540px'
-				w='full'
-				mx='4'
-				borderRadius='xl'
-				boxShadow='0 25px 50px -12px rgba(0, 0, 0, 0.5)'
-				overflow='hidden'
-			>
-				<HStack
-					justify='space-between'
-					px='6'
-					py='4'
-					borderBottomWidth='1px'
+			<Dialog.Positioner>
+				<Dialog.Content
+					bg='bg.panel'
 					borderColor='border'
-					bg='bg.subtle'
+					borderWidth='1px'
+					maxW='540px'
+					borderRadius='xl'
+					boxShadow='0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+					overflow='hidden'
 				>
-					<HStack gap='3'>
-						{view !== 'providers' && (
+					<Dialog.Header
+						px='6'
+						py='4'
+						borderBottomWidth='1px'
+						borderColor='border'
+						bg='bg.subtle'
+					>
+						<HStack justify='space-between' w='full'>
+							<HStack gap='3'>
+								{view !== 'providers' && (
+									<IconButton
+										cursor='pointer'
+										size='xs'
+										variant='ghost'
+										p='1'
+										borderRadius='md'
+										_hover={{ bg: 'bg.elevated' }}
+										onClick={handleBack}
+										display='flex'
+										alignItems='center'
+										aria-label='Go back'
+									>
+										<Icon as={ArrowLeft} boxSize='4' color='fg.muted' />
+									</IconButton>
+								)}
+								<Heading size='sm' fontWeight='500'>
+									{title}
+								</Heading>
+							</HStack>
 							<IconButton
 								cursor='pointer'
-								size='xs'
 								variant='ghost'
+								size='xs'
 								p='1'
 								borderRadius='md'
 								_hover={{ bg: 'bg.elevated' }}
-								onClick={handleBack}
-								display='flex'
-								alignItems='center'
+								onClick={onClose}
+								aria-label='Close dialog'
 							>
-								<Icon as={ArrowLeft} boxSize='4' color='fg.muted' />
+								<Icon as={X} boxSize='4' color='fg.muted' />
 							</IconButton>
+						</HStack>
+					</Dialog.Header>
+
+					<Dialog.Body p='0' maxH='480px' overflowY='auto'>
+						{view === 'providers' && (
+							<ServersView
+								existingUpstreams={existingUpstreams}
+								handleSelectProvider={handleSelect}
+							/>
 						)}
-						<Heading size='sm' fontWeight='500'>
-							{view === 'providers'
-								? 'Add Upstream Server'
-								: view === 'servers' && selectedGroup
-									? selectedGroup.name
-									: 'Custom Server'}
-						</Heading>
-					</HStack>
-					<IconButton
-						cursor='pointer'
-						variant='ghost'
-						size='xs'
-						p='1'
-						borderRadius='md'
-						_hover={{ bg: 'bg.elevated' }}
-						onClick={onClose}
-					>
-						<Icon as={X} boxSize='4' color='fg.muted' />
-					</IconButton>
-				</HStack>
 
-				<Box maxH='480px' overflowY='auto'>
-					{view === 'providers' && (
-						<ServersView
-							existingUpstreams={existingUpstreams}
-							handleSelectProvider={handleSelect}
-						/>
-					)}
+						{selectedGroup && (
+							<ProviderGroupView
+								existingAddresses={existingUpstreams}
+								selectedGroup={selectedGroup}
+								onAdd={handleAddServer}
+							/>
+						)}
 
-					{selectedGroup && (
-						<ProviderGroupView
-							existingAddresses={existingUpstreams}
-							selectedGroup={selectedGroup}
-							onAdd={handleAddServer}
-						/>
-					)}
-
-					{view === 'custom' && (
-						<CustomView onClose={onClose} onAdd={handleAddServer} />
-					)}
-				</Box>
-			</Box>
-		</Box>
+						{view === 'custom' && (
+							<CustomView onClose={onClose} onAdd={handleAddServer} />
+						)}
+					</Dialog.Body>
+				</Dialog.Content>
+			</Dialog.Positioner>
+		</Dialog.Root>
 	);
 }
 

@@ -138,14 +138,14 @@ pub async fn timeline(
 }
 
 fn range_to_duration(range: &TopRange) -> i64 {
-    let now = chrono::Utc::now();
+    let now = crate::utils::now_millis();
     match range {
-        TopRange::FiveMinutes => (now - chrono::Duration::minutes(5)).timestamp_millis(),
-        TopRange::Hour => (now - chrono::Duration::hours(1)).timestamp_millis(),
-        TopRange::Day => (now - chrono::Duration::days(1)).timestamp_millis(),
-        TopRange::Week => (now - chrono::Duration::weeks(1)).timestamp_millis(),
-        TopRange::Month => (now - chrono::Duration::days(30)).timestamp_millis(),
-        TopRange::Year => (now - chrono::Duration::days(365)).timestamp_millis(),
+        TopRange::FiveMinutes => now - 5 * 60 * 1000,
+        TopRange::Hour => now - 60 * 60 * 1000,
+        TopRange::Day => now - 24 * 60 * 60 * 1000,
+        TopRange::Week => now - 7 * 24 * 60 * 60 * 1000,
+        TopRange::Month => now - 30 * 24 * 60 * 60 * 1000,
+        TopRange::Year => now - 365 * 24 * 60 * 60 * 1000,
         TopRange::All => 0,
     }
 }

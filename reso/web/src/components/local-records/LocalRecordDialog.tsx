@@ -1,9 +1,9 @@
 import {
-	Box,
 	Button,
+	Dialog,
 	Field,
-	Heading,
 	HStack,
+	Heading,
 	Icon,
 	IconButton,
 	Input,
@@ -78,163 +78,152 @@ export function LocalRecordDialog({
 	});
 
 	return (
-		<form onSubmit={onSubmitHandler}>
-			<Box
-				position='fixed'
-				inset='0'
-				zIndex='1000'
-				display='flex'
-				alignItems='center'
-				justifyContent='center'
-			>
-				<Box
-					position='absolute'
-					inset='0'
-					bg='blackAlpha.700'
-					backdropFilter='blur(4px)'
-					onClick={onClose}
-				/>
-
-				<Box
-					position='relative'
+		<Dialog.Root open onOpenChange={({ open }) => !open && onClose()}>
+			<Dialog.Backdrop backdropFilter='blur(4px)' bg='blackAlpha.700' />
+			<Dialog.Positioner>
+				<Dialog.Content
 					bg='bg.panel'
 					borderColor='border'
 					borderWidth='1px'
 					maxW='480px'
-					w='full'
-					mx='4'
 					borderRadius='xl'
 					boxShadow='dark-lg'
 				>
-					<HStack justify='space-between' pt='6' px='6' pb='0'>
-						<HStack gap='3'>
-							<Icon as={Plus} boxSize='5' color='accent.fg' />
-							<Heading size='md'>Add Record</Heading>
-						</HStack>
-						<IconButton
-							aria-label='Close dialog'
-							variant='ghost'
-							size='sm'
-							type='button'
-							onClick={onClose}
-							_hover={{ bg: 'bg.subtle' }}
-						>
-							<Icon as={X} boxSize='4' color='fg.muted' />
-						</IconButton>
-					</HStack>
+					<form onSubmit={onSubmitHandler}>
+						<Dialog.Header pt='6' px='6' pb='0'>
+							<HStack justify='space-between' w='full'>
+								<HStack gap='3'>
+									<Icon as={Plus} boxSize='5' color='accent.fg' />
+									<Heading size='md'>Add Record</Heading>
+								</HStack>
+								<IconButton
+									aria-label='Close dialog'
+									variant='ghost'
+									size='sm'
+									type='button'
+									onClick={onClose}
+									_hover={{ bg: 'bg.subtle' }}
+								>
+									<Icon as={X} boxSize='4' color='fg.muted' />
+								</IconButton>
+							</HStack>
+						</Dialog.Header>
 
-					<Box px='6' pb='6' pt='4'>
-						<Text color='fg.muted' fontSize='sm' mb='5'>
-							Add a local DNS record. Queries matching this record will be
-							answered directly by Reso.
-						</Text>
+						<Dialog.Body px='6' pb='0' pt='4'>
+							<Text color='fg.muted' fontSize='sm' mb='5'>
+								Add a local DNS record. Queries matching this record will be
+								answered directly by Reso.
+							</Text>
 
-						<HStack gap='3' mb='4' align='flex-start'>
-							<Field.Root invalid={!!errors.name} flex='1'>
-								<Field.Label color='fg.muted' fontSize='sm'>
-									Domain
-								</Field.Label>
-								<Input
-									placeholder='e.g. myapp.home'
-									bg='bg.input'
-									borderColor='border.input'
-									_placeholder={{ color: 'fg.subtle' }}
-									_focus={{ borderColor: 'accent.subtle' }}
-									autoFocus
-									{...register('name')}
-								/>
-								{errors.name?.message && (
-									<Field.ErrorText color='status.error' fontSize='xs' mt='1'>
-										{errors.name.message}
-									</Field.ErrorText>
-								)}
-							</Field.Root>
-
-							<Field.Root w='120px'>
-								<Field.Label color='fg.muted' fontSize='sm'>
-									Type
-								</Field.Label>
-								<NativeSelect.Root>
-									<NativeSelect.Field
+							<HStack gap='3' mb='4' align='flex-start'>
+								<Field.Root invalid={!!errors.name} flex='1'>
+									<Field.Label color='fg.muted' fontSize='sm'>
+										Domain
+									</Field.Label>
+									<Input
+										placeholder='e.g. myapp.home'
 										bg='bg.input'
 										borderColor='border.input'
-										{...register('record_type', { valueAsNumber: true })}
-									>
-										{LOCAL_RECORD_TYPES.map((t) => (
-											<option key={t.value} value={t.value}>
-												{t.label}
-											</option>
-										))}
-									</NativeSelect.Field>
-									<NativeSelect.Indicator />
-								</NativeSelect.Root>
-							</Field.Root>
-						</HStack>
+										_placeholder={{ color: 'fg.subtle' }}
+										_focus={{ borderColor: 'accent.subtle' }}
+										autoFocus
+										{...register('name')}
+									/>
+									{errors.name?.message && (
+										<Field.ErrorText color='status.error' fontSize='xs' mt='1'>
+											{errors.name.message}
+										</Field.ErrorText>
+									)}
+								</Field.Root>
 
-						<HStack gap='3' mb='6' align='flex-start'>
-							<Field.Root invalid={!!errors.value} flex='1'>
-								<Field.Label color='fg.muted' fontSize='sm'>
-									Value
-								</Field.Label>
-								<Input
-									placeholder={VALUE_PLACEHOLDERS[recordType] ?? ''}
-									bg='bg.input'
-									borderColor='border.input'
-									_placeholder={{ color: 'fg.subtle' }}
-									_focus={{ borderColor: 'accent.subtle' }}
-									{...register('value')}
-								/>
-								{errors.value?.message && (
-									<Field.ErrorText color='status.error' fontSize='xs' mt='1'>
-										{errors.value.message}
-									</Field.ErrorText>
-								)}
-							</Field.Root>
+								<Field.Root w='120px'>
+									<Field.Label color='fg.muted' fontSize='sm'>
+										Type
+									</Field.Label>
+									<NativeSelect.Root>
+										<NativeSelect.Field
+											bg='bg.input'
+											borderColor='border.input'
+											{...register('record_type', { valueAsNumber: true })}
+										>
+											{LOCAL_RECORD_TYPES.map((t) => (
+												<option key={t.value} value={t.value}>
+													{t.label}
+												</option>
+											))}
+										</NativeSelect.Field>
+										<NativeSelect.Indicator />
+									</NativeSelect.Root>
+								</Field.Root>
+							</HStack>
 
-							<Field.Root w='100px'>
-								<Field.Label color='fg.muted' fontSize='sm'>
-									TTL
-								</Field.Label>
-								<Input
-									type='number'
-									bg='bg.input'
-									borderColor='border.input'
-									{...register('ttl', { valueAsNumber: true })}
-								/>
-							</Field.Root>
-						</HStack>
+							<HStack gap='3' mb='6' align='flex-start'>
+								<Field.Root invalid={!!errors.value} flex='1'>
+									<Field.Label color='fg.muted' fontSize='sm'>
+										Value
+									</Field.Label>
+									<Input
+										placeholder={VALUE_PLACEHOLDERS[recordType] ?? ''}
+										bg='bg.input'
+										borderColor='border.input'
+										_placeholder={{ color: 'fg.subtle' }}
+										_focus={{ borderColor: 'accent.subtle' }}
+										{...register('value')}
+									/>
+									{errors.value?.message && (
+										<Field.ErrorText color='status.error' fontSize='xs' mt='1'>
+											{errors.value.message}
+										</Field.ErrorText>
+									)}
+								</Field.Root>
 
-						{errors.root?.message && (
-							<Text color='status.error' fontSize='xs' mb='4'>
-								{errors.root.message}
-							</Text>
-						)}
+								<Field.Root w='100px'>
+									<Field.Label color='fg.muted' fontSize='sm'>
+										TTL
+									</Field.Label>
+									<Input
+										type='number'
+										bg='bg.input'
+										borderColor='border.input'
+										{...register('ttl', { valueAsNumber: true })}
+									/>
+								</Field.Root>
+							</HStack>
 
-						<HStack justify='flex-end' gap='3'>
-							<Button
-								variant='ghost'
-								type='button'
-								color='fg.muted'
-								_hover={{ bg: 'bg.subtle' }}
-								onClick={onClose}
-								px='5'
-							>
-								Cancel
-							</Button>
-							<Button
-								type='submit'
-								bg='accent'
-								color='fg'
-								_hover={{ bg: 'accent.hover' }}
-								px='5'
-								loading={isSubmitting}
-							>
-								Add Record
-							</Button>
-						</HStack>
-					</Box>
-				</Box>
-			</Box>
-		</form>
+							{errors.root?.message && (
+								<Text color='status.error' fontSize='xs' mb='4'>
+									{errors.root.message}
+								</Text>
+							)}
+						</Dialog.Body>
+
+						<Dialog.Footer px='6' pb='6' pt='0' justifyContent='flex-end'>
+							<HStack gap='3'>
+								<Button
+									variant='ghost'
+									type='button'
+									color='fg.muted'
+									_hover={{ bg: 'bg.subtle' }}
+									onClick={onClose}
+									px='5'
+								>
+									Cancel
+								</Button>
+								<Button
+									type='submit'
+									bg='accent'
+									color='fg'
+									_hover={{ bg: 'accent.hover' }}
+									px='5'
+									loading={isSubmitting}
+								>
+									Add Record
+								</Button>
+							</HStack>
+						</Dialog.Footer>
+					</form>
+				</Dialog.Content>
+			</Dialog.Positioner>
+		</Dialog.Root>
 	);
 }

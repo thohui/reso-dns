@@ -1,5 +1,5 @@
 import { Box, HStack, Icon, Text } from '@chakra-ui/react';
-import { type Activity } from 'lucide-react';
+import type { Activity } from 'lucide-react';
 
 interface Props {
 	label: string;

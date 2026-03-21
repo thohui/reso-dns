@@ -1,4 +1,4 @@
-use chrono::Utc;
+use crate::utils::now_millis;
 use rusqlite::{OptionalExtension, params};
 use uuid::Uuid;
 
@@ -20,14 +20,14 @@ pub struct UserSession {
 }
 
 /// The amount of days that a session can be inactive before it is considered expired.
-const INACTIVE_SESSION_TIMEOUT: i64 = chrono::Duration::days(7).num_milliseconds();
+const INACTIVE_SESSION_TIMEOUT: i64 = 7 * 24 * 60 * 60 * 1000;
 
 /// The amount of days that must pass before a session's last active time is updated.
-pub const UPDATE_THRESHOLD: i64 = chrono::Duration::days(1).num_milliseconds();
+pub const UPDATE_THRESHOLD: i64 = 24 * 60 * 60 * 1000;
 
 impl UserSession {
     pub fn new(user_id: EntityId<User>) -> Self {
-        let now = Utc::now().timestamp_millis();
+        let now = now_millis();
 
         Self {
             id: EntityId::from(Uuid::now_v7()),
@@ -91,7 +91,7 @@ impl UserSession {
     }
 
     pub fn is_expired(&self) -> bool {
-        let now = Utc::now().timestamp_millis();
-        now.saturating_sub(self.expires_at) > INACTIVE_SESSION_TIMEOUT
+        let now = now_millis();
+        now > self.expires_at
     }
 }

@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow.workspace = true
 idna.workspace = true
+sha2 = "0.10.9"
 
 [lib]
 name = "reso_blocklist"

@@ -1,7 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 import { DashboardLayout } from '../layouts/DashboardLayout';
-import BlocklistPage from './pages/blocklist';
+import DomainRulesPage from './pages/domain-rules';
 import ConfigPage from './pages/config';
 import HomePage from './pages/home';
 import LocalRecordsPage from './pages/local-records';
@@ -21,7 +21,7 @@ export function AppRouter() {
 				<Route element={<ProtectedRoute requiresAuthentication />}>
 					<Route element={<DashboardLayout />}>
 						<Route path='/home' element={<HomePage />} />
-						<Route path='/blocklist' element={<BlocklistPage />} />
+						<Route path='/domain-rules' element={<DomainRulesPage />} />
 						<Route path='/local-records' element={<LocalRecordsPage />} />
 						<Route path='/logs' element={<LogsPage />} />
 						<Route path='/config' element={<ConfigPage />} />
