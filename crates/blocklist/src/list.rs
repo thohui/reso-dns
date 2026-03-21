@@ -43,7 +43,8 @@ pub fn detect_format(content: &str) -> Option<ListFormat> {
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        if line.starts_with("0.0.0.0 ") || line.starts_with("127.0.0.1 ") {
+        let mut parts = line.split_ascii_whitespace();
+        if matches!(parts.next(), Some("0.0.0.0" | "127.0.0.1")) {
             return Some(ListFormat::Hosts);
         }
         return Some(ListFormat::Plain);
@@ -85,9 +86,11 @@ fn parse_hosts_line(line: &str) -> Option<&str> {
     let mut parts = line.split_ascii_whitespace();
     parts.next()?; // skip ip addr
     let domain = parts.next()?;
-    if LOCAL_DOMAINS.contains(&domain) {
+
+    if LOCAL_DOMAINS.iter().any(|d| d.eq_ignore_ascii_case(domain)) {
         return None;
     }
+
     validate(domain)
 }
 
@@ -95,9 +98,11 @@ fn parse_plain_line(line: &str) -> Option<&str> {
     let line = strip_comment(line).trim();
     let mut parts = line.split_ascii_whitespace();
     let domain = parts.next()?;
-    if parts.next().is_some() {
+
+    if LOCAL_DOMAINS.iter().any(|d| d.eq_ignore_ascii_case(domain)) {
         return None;
     }
+
     validate(domain)
 }
 

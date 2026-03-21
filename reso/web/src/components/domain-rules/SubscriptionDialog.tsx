@@ -26,8 +26,8 @@ interface SubscriptionDialogProps {
 }
 
 const schema = z.object({
-	name: z.string().min(1, 'Name is required'),
-	url: z.url('Must be a valid URL'),
+	name: z.string().trim().min(1, 'Name is required'),
+	url: z.url('Must be a valid URL').trim(),
 	sync_enabled: z.boolean().optional().default(true),
 });
 
