@@ -22,6 +22,6 @@ reso-dns = { path = "crates/dns" }
 reso-server = { path = "crates/server" }
 reso-resolver = { path = "crates/resolver" }
 reso-cache = { path = "crates/cache" }
-reso-blocklist = { path = "crates/blocklist" }
+reso-list = { path = "crates/list" }
 reso-context = { path = "crates/context" }
 reso-inflight = { path = "crates/inflight" }

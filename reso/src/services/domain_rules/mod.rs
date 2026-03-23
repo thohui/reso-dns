@@ -5,8 +5,8 @@ const SUBSCRIPTION_FETCH_TIMEOUT_SECS: u64 = 30;
 const SUBSCRIPTION_MAX_RESPONSE_BYTES: u64 = 50 * 1024 * 1024; // 50 MB
 
 use arc_swap::ArcSwap;
-use reso_blocklist::BlocklistMatcher;
 use reso_dns::domain_name::DomainName;
+use reso_list::DomainListMatcher;
 use tokio::time::{self, MissedTickBehavior};
 
 use crate::{
@@ -25,6 +25,7 @@ const SUBSCRIPTION_SYNC_INTERVAL_SECS: u64 = 60 * 60 * 24; // 24 hours
 /// Validates and normalizes a domain pattern, supporting `*.example.com` wildcards.
 /// Returns the canonical stored form, e.g. `*.example.com` or `example.com`.
 fn normalize_domain_pattern(input: &str) -> Result<String, ServiceError> {
+    // what we are doing here is kinda hacky, because DomainName doesn't support wildcard patterns, but we want to reuse its validation and normalization logic.
     let (wildcard, base) = match input.strip_prefix("*.") {
         Some(rest) => (true, rest),
         None => (false, input),
@@ -43,7 +44,8 @@ fn normalize_domain_pattern(input: &str) -> Result<String, ServiceError> {
 }
 
 pub struct DomainRulesService {
-    blocklist_matcher: ArcSwap<BlocklistMatcher>,
+    blocklist_matcher: ArcSwap<DomainListMatcher>,
+    allow_list_matcher: ArcSwap<DomainListMatcher>,
     connection: Arc<CoreDatabasePool>,
     http_client: reqwest::Client,
 }
@@ -51,7 +53,7 @@ pub struct DomainRulesService {
 impl DomainRulesService {
     pub async fn initialize(connection: Arc<CoreDatabasePool>) -> anyhow::Result<Self> {
         let rules = DomainRule::list_all(&connection).await?;
-        let matcher = BlocklistMatcher::load(
+        let matcher = DomainListMatcher::load(
             rules
                 .iter()
                 .filter(|r| r.enabled && r.action == ListAction::Block)
@@ -60,6 +62,7 @@ impl DomainRulesService {
 
         Ok(Self {
             blocklist_matcher: ArcSwap::new(matcher.into()),
+            allow_list_matcher: ArcSwap::new(DomainListMatcher::default().into()),
             connection,
             http_client: reqwest::Client::builder()
                 .timeout(Duration::from_secs(SUBSCRIPTION_FETCH_TIMEOUT_SECS))
@@ -82,7 +85,13 @@ impl DomainRulesService {
             }
         })?;
 
-        self.load_matcher().await?;
+        let rules = DomainRule::list_all(&self.connection).await?;
+
+        match action {
+            ListAction::Block => self.load_blocklist_matcher(&rules).await?,
+            ListAction::Allow => self.load_allow_list_matcher(&rules).await?,
+        }
+
         Ok(())
     }
 
@@ -96,7 +105,7 @@ impl DomainRulesService {
             return Err(ServiceError::NotFound("Domain not found".into()));
         }
 
-        self.load_matcher().await?;
+        self.load_matchers().await?;
         Ok(())
     }
 
@@ -110,7 +119,7 @@ impl DomainRulesService {
             return Err(ServiceError::NotFound("Domain not found".into()));
         }
 
-        self.load_matcher().await?;
+        self.load_matchers().await?;
         Ok(())
     }
 
@@ -124,29 +133,58 @@ impl DomainRulesService {
             return Err(ServiceError::NotFound("Domain not found".into()));
         }
 
-        self.load_matcher().await?;
+        self.load_matchers().await?;
+
         Ok(())
     }
 
     /// Reloads the blocklist matcher from the database.
     /// Should be called after any changes to the rules.
-    async fn load_matcher(&self) -> Result<(), ServiceError> {
+    async fn load_matchers(&self) -> Result<(), ServiceError> {
         let rules = DomainRule::list_all(&self.connection).await?;
 
-        let updated_matcher = BlocklistMatcher::load(
-            rules
-                .iter()
-                .filter(|r| r.enabled && r.action == ListAction::Block)
-                .map(|r| r.domain.as_str()),
-        )
-        .map_err(|e| ServiceError::Internal(e.into()))?;
-        self.blocklist_matcher.swap(updated_matcher.into());
+        self.load_blocklist_matcher(&rules).await?;
+        self.load_allow_list_matcher(&rules).await?;
+
+        Ok(())
+    }
+
+    async fn load_blocklist_matcher(&self, rules: &Vec<DomainRule>) -> Result<(), ServiceError> {
+        self.blocklist_matcher.swap(
+            DomainListMatcher::load(
+                rules
+                    .iter()
+                    .filter(|r| r.enabled && r.action == ListAction::Block)
+                    .map(|r| r.domain.as_str()),
+            )
+            .map_err(|e| ServiceError::Internal(e.into()))?
+            .into(),
+        );
+
+        Ok(())
+    }
+
+    async fn load_allow_list_matcher(&self, rules: &Vec<DomainRule>) -> Result<(), ServiceError> {
+        self.allow_list_matcher.swap(
+            DomainListMatcher::load(
+                rules
+                    .iter()
+                    .filter(|r| r.enabled && r.action == ListAction::Allow)
+                    .map(|r| r.domain.as_str()),
+            )
+            .map_err(|e| ServiceError::Internal(e.into()))?
+            .into(),
+        );
+
         Ok(())
     }
 
     /// Checks if a given domain is blocked by the current rules.
     pub fn is_blocked(&self, name: &str) -> bool {
-        self.blocklist_matcher.load().is_blocked(name)
+        if self.blocklist_matcher.load().exists(name) {
+            return !self.allow_list_matcher.load().exists(name);
+        }
+        false
     }
 
     /// Lists all subscriptions.
@@ -160,7 +198,7 @@ impl DomainRulesService {
         if !changed {
             return Err(ServiceError::NotFound("Subscription not found".into()));
         }
-        self.load_matcher().await?;
+        self.load_matchers().await?;
         Ok(())
     }
 
@@ -171,7 +209,7 @@ impl DomainRulesService {
         if !changed {
             return Err(ServiceError::NotFound("Subscription not found".into()));
         }
-        self.load_matcher().await?;
+        self.load_matchers().await?;
         Ok(())
     }
 
@@ -217,7 +255,7 @@ impl DomainRulesService {
             return;
         }
 
-        if let Err(e) = self.load_matcher().await {
+        if let Err(e) = self.load_matchers().await {
             tracing::error!("failed to reload matcher after subscription sync: {}", e);
         }
     }
@@ -286,7 +324,7 @@ impl DomainRulesService {
             )));
         }
 
-        self.load_matcher().await?;
+        self.load_matchers().await?;
         Ok(())
     }
 }
@@ -362,14 +400,14 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
         Err(e) => anyhow::bail!("list subscription {} is not valid UTF-8: {:?}", subscription.url, e),
     };
 
-    let content_hash: String = reso_blocklist::list::calculate_hash(&text);
+    let content_hash: String = reso_list::parser::calculate_hash(&text);
 
     if subscription.hash.as_deref() == Some(&content_hash) {
         tracing::debug!("list subscription {} unchanged, skipping sync", subscription.url);
         return Ok(false);
     }
 
-    let domains: Vec<String> = reso_blocklist::list::ListParser::new(&text)
+    let domains: Vec<String> = reso_list::parser::ListParser::new(&text)
         .parse()
         .into_iter()
         .map(str::to_owned)

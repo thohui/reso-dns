@@ -37,6 +37,7 @@ impl DomainRule {
 }
 
 impl DomainRule {
+    /// Inserts this domain rule into the database. The id field must be set and unique. Returns an error if a rule with the same id already exists.
     pub async fn insert(self, db: &CoreDatabasePool) -> Result<(), DatabaseError> {
         db.interact(move |c| {
             c.execute(
@@ -56,6 +57,7 @@ impl DomainRule {
         Ok(())
     }
 
+    /// Deletes this domain rule from the database. Returns true if the rule was deleted, false if no matching rule was found.
     pub async fn delete(self, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
         let rows = db
             .interact(move |c| Ok(c.execute("DELETE FROM domain_rules WHERE domain = ?1", params![self.domain])?))
@@ -63,6 +65,7 @@ impl DomainRule {
         Ok(rows > 0)
     }
 
+    /// Deletes a domain rule by domain name. Returns true if a rule was deleted, false if no matching rule was found.
     pub async fn delete_by_domain(domain: &str, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
         let domain = domain.to_string();
         let rows = db
@@ -71,6 +74,7 @@ impl DomainRule {
         Ok(rows > 0)
     }
 
+    /// Lists domain rules with pagination and optional search by domain name.
     pub async fn list(
         db: &CoreDatabasePool,
         limit: i64,
@@ -113,6 +117,7 @@ impl DomainRule {
             .await?)
     }
 
+    /// Lists all domain rules without pagination. Used for loading matchers.
     pub async fn list_all(db: &CoreDatabasePool) -> Result<Vec<Self>, DatabaseError> {
         Ok(db
             .interact(move |c| {
@@ -138,6 +143,7 @@ impl DomainRule {
             .await?)
     }
 
+    /// Updates the action of a domain rule. It will also clear the subscription_id to disassociate it from any subscription.
     pub async fn update_action(domain: &str, action: ListAction, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
         let domain = domain.to_string();
         let rows = db
@@ -151,6 +157,7 @@ impl DomainRule {
         Ok(rows > 0)
     }
 
+    /// Toggles the enabled state of a domain rule. If the rule is enabled, it will be disabled, and vice versa.
     pub async fn toggle(domain: &str, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
         let domain = domain.to_string();
         let rows = db
@@ -164,6 +171,7 @@ impl DomainRule {
         Ok(rows > 0)
     }
 
+    /// Syncs a list of domains for a subscription. It will insert new domains, delete removed domains, and update existing ones.
     pub async fn sync_subscription(
         subscription_id: EntityId<ListSubscription>,
         action: ListAction,
@@ -226,6 +234,7 @@ impl DomainRule {
             .await?)
     }
 
+    /// Counts the total number of domain rules, optionally filtered by a search term.
     pub async fn row_count(db: &CoreDatabasePool, search: Option<String>) -> Result<i64, DatabaseError> {
         Ok(db
             .interact(move |c| {
@@ -236,6 +245,36 @@ impl DomainRule {
                 let (where_clause, filter_params) = b.build();
                 let sql = format!("SELECT COUNT(*) FROM domain_rules WHERE 1=1 {where_clause}");
                 c.query_row(&sql, rusqlite::params_from_iter(&filter_params), |r| r.get(0))
+            })
+            .await?)
+    }
+
+    /// Finds a domain rule by domain name.
+    pub async fn find_by_domain(domain: &str, db: &CoreDatabasePool) -> Result<Option<Self>, DatabaseError> {
+        let domain = domain.to_string();
+        Ok(db
+            .interact(move |c| {
+                let mut stmt = c.prepare(
+                    r#"
+                    SELECT id, domain, action, created_at, enabled, subscription_id
+                    FROM domain_rules
+                    WHERE domain = ?1
+                    LIMIT 1
+                    "#,
+                )?;
+                let mut rows = stmt.query(params![domain])?;
+                if let Some(row) = rows.next()? {
+                    Ok(Some(DomainRule {
+                        id: EntityId::from(row.get::<_, Uuid>(0)?),
+                        domain: row.get(1)?,
+                        action: row.get(2)?,
+                        created_at: row.get(3)?,
+                        enabled: row.get(4)?,
+                        subscription_id: row.get::<_, Option<Uuid>>(5)?.map(EntityId::from),
+                    }))
+                } else {
+                    Ok(None)
+                }
             })
             .await?)
     }

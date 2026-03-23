@@ -27,6 +27,7 @@ pub struct MetricsService {
     connection: Arc<MetricsDatabasePool>,
     rx: Receiver<MetricsMessage>,
     batch: Vec<ActivityLog>,
+    buffer_size: usize,
     live_stats: Arc<RwLock<LiveStats>>,
 }
 
@@ -115,11 +116,11 @@ impl Stats {
 impl MetricsService {
     pub async fn new(
         connection: Arc<MetricsDatabasePool>,
-        buffer: usize,
+        buffer_size: usize,
     ) -> anyhow::Result<(MetricsHandle, Stats, Self)> {
         let live = Stats::init(&connection).await?;
 
-        let (tx, rx) = mpsc::channel::<MetricsMessage>(buffer);
+        let (tx, rx) = mpsc::channel::<MetricsMessage>(buffer_size);
         Ok((
             MetricsHandle(tx),
             Stats {
@@ -128,7 +129,8 @@ impl MetricsService {
             Self {
                 connection,
                 rx,
-                batch: Vec::with_capacity(buffer),
+                batch: Vec::with_capacity(buffer_size),
+                buffer_size,
                 live_stats: live.query.clone(),
             },
         ))
@@ -259,5 +261,11 @@ impl MetricsService {
         }
 
         self.batch.clear();
+
+        // during high loads, it's possible for the batch to grow outside of the original buffer capacity.
+        // this is fine, but we want to shrink it back down to save memory once the load subsides.
+        if self.batch.capacity() >= self.buffer_size + (self.buffer_size / 2) {
+            self.batch.shrink_to(self.buffer_size);
+        }
     }
 }
