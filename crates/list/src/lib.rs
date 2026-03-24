@@ -5,7 +5,7 @@ pub mod parser;
 struct Node {
     label: Box<str>,
     wildcard: bool,
-    blocked: bool,
+    terminal: bool,
     children: Vec<Node>,
 }
 
@@ -14,7 +14,7 @@ impl Node {
         Self {
             label: label.into(),
             wildcard: false,
-            blocked: false,
+            terminal: false,
             children: Vec::new(),
         }
     }
@@ -57,7 +57,7 @@ impl DomainListMatcher {
             }
         }
 
-        node.blocked
+        node.terminal
     }
 
     /// Loads a list of domain patterns into the matcher.
@@ -92,7 +92,7 @@ impl DomainListMatcher {
             if is_wildcard {
                 node.wildcard = true;
             } else {
-                node.blocked = true;
+                node.terminal = true;
             }
         }
 
@@ -127,7 +127,7 @@ mod tests {
     use super::*;
 
     #[test]
-    pub fn test_blocked_patterns() {
+    pub fn test_patterns() {
         let patterns: Vec<&str> = vec!["google.com", "yahoo.com", "*.bla.com"];
         let matcher = DomainListMatcher::load(patterns).unwrap();
         assert!(matcher.exists("google.com"));
