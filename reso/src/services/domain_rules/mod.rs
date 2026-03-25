@@ -158,15 +158,19 @@ impl DomainRulesService {
 
     async fn reload_allow_list(&self) -> Result<(), ServiceError> {
         let rules = DomainRule::list_enabled_by_action(ListAction::Allow, &self.connection).await?;
+
         let new_matcher = Arc::new(
             DomainListMatcher::load(rules.iter().map(|r| r.domain.as_str()))
                 .map_err(|e| ServiceError::Internal(e.into()))?,
         );
-        let current = self.matchers.load();
-        self.matchers.swap(Arc::new(Matchers {
-            blocklist_matcher: Arc::clone(&current.blocklist_matcher),
-            allow_list_matcher: new_matcher,
-        }));
+
+        self.matchers.rcu(|current| {
+            Arc::new(Matchers {
+                allow_list_matcher: Arc::clone(&new_matcher),
+                blocklist_matcher: Arc::clone(&current.blocklist_matcher),
+            })
+        });
+
         Ok(())
     }
 
@@ -176,11 +180,14 @@ impl DomainRulesService {
             DomainListMatcher::load(rules.iter().map(|r| r.domain.as_str()))
                 .map_err(|e| ServiceError::Internal(e.into()))?,
         );
-        let current = self.matchers.load();
-        self.matchers.swap(Arc::new(Matchers {
-            blocklist_matcher: new_matcher,
-            allow_list_matcher: Arc::clone(&current.allow_list_matcher),
-        }));
+
+        self.matchers.rcu(|current| {
+            Arc::new(Matchers {
+                blocklist_matcher: Arc::clone(&new_matcher),
+                allow_list_matcher: Arc::clone(&current.allow_list_matcher),
+            })
+        });
+
         Ok(())
     }
 
