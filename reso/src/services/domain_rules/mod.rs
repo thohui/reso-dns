@@ -7,7 +7,10 @@ const SUBSCRIPTION_MAX_RESPONSE_BYTES: u64 = 5 * 1024 * 1024; // 5 MB
 use arc_swap::ArcSwap;
 use reso_dns::domain_name::DomainName;
 use reso_list::DomainListMatcher;
-use tokio::time::{self, MissedTickBehavior};
+use tokio::{
+    sync::Mutex,
+    time::{self, MissedTickBehavior},
+};
 
 use crate::{
     database::{
@@ -65,6 +68,7 @@ impl Matchers {
 
 pub struct DomainRulesService {
     matchers: ArcSwap<Matchers>,
+    write_lock: Mutex<()>,
     connection: Arc<CoreDatabasePool>,
     http_client: reqwest::Client,
 }
@@ -73,6 +77,7 @@ impl DomainRulesService {
     pub async fn initialize(connection: Arc<CoreDatabasePool>) -> anyhow::Result<Self> {
         Ok(Self {
             matchers: ArcSwap::new(Matchers::load(&connection).await?.into()),
+            write_lock: Mutex::new(()),
             connection,
             http_client: reqwest::Client::builder()
                 .timeout(Duration::from_secs(SUBSCRIPTION_FETCH_TIMEOUT_SECS))
@@ -147,6 +152,8 @@ impl DomainRulesService {
     }
 
     async fn reload_all(&self) -> Result<(), ServiceError> {
+        let _guard = self.write_lock.lock().await;
+
         self.matchers.swap(
             Matchers::load(&self.connection)
                 .await
@@ -157,6 +164,8 @@ impl DomainRulesService {
     }
 
     async fn reload_allow_list(&self) -> Result<(), ServiceError> {
+        let _guard = self.write_lock.lock().await;
+
         let rules = DomainRule::list_enabled_by_action(ListAction::Allow, &self.connection).await?;
 
         let new_matcher = Arc::new(
@@ -175,6 +184,7 @@ impl DomainRulesService {
     }
 
     async fn reload_blocklist(&self) -> Result<(), ServiceError> {
+        let _guard = self.write_lock.lock().await;
         let rules = DomainRule::list_enabled_by_action(ListAction::Block, &self.connection).await?;
         let new_matcher = Arc::new(
             DomainListMatcher::load(rules.iter().map(|r| r.domain.as_str()))
@@ -385,8 +395,22 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
 
     let content_length = response.content_length();
 
+    if let Some(len) = content_length {
+        if len > SUBSCRIPTION_MAX_RESPONSE_BYTES {
+            anyhow::bail!(
+                "list subscription {} response exceeded size limit before download ({} bytes)",
+                subscription.url,
+                len
+            );
+        }
+    }
+
     let mut stream = response.bytes_stream();
-    let initial_capacity: usize = content_length.map(|len| len as usize).unwrap_or(64 * 1024); // 64KB
+    let initial_capacity = content_length
+        .and_then(|len| usize::try_from(len).ok())
+        .map(|len| len.min(SUBSCRIPTION_MAX_RESPONSE_BYTES as usize))
+        .unwrap_or(64 * 1024); // 64KB
+
     let mut buf = Vec::with_capacity(initial_capacity);
 
     // read the response stream in chunks, so we can enforce the max size limit better
