@@ -53,8 +53,8 @@ pub struct Matchers {
 
 impl Matchers {
     pub async fn load(db: &CoreDatabasePool) -> anyhow::Result<Self> {
-        let domains = DomainRule::list_all(db).await?;
-        let (allow_list, block_list): (Vec<_>, Vec<_>) = domains.iter().partition(|d| d.action == ListAction::Allow);
+        let allow_list = DomainRule::list_enabled_by_action(ListAction::Allow, db).await?;
+        let block_list = DomainRule::list_enabled_by_action(ListAction::Block, db).await?;
         Ok(Self {
             blocklist_matcher: Arc::new(DomainListMatcher::load(
                 block_list.iter().filter(|d| d.enabled).map(|d| d.domain.as_str()),
