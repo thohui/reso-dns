@@ -264,7 +264,7 @@ impl MetricsService {
 
         // during high loads, it's possible for the batch to grow outside of the original buffer capacity.
         // this is fine, but we want to shrink it back down to save memory once the load subsides.
-        if self.batch.capacity() >= self.buffer_size * 2 {
+        if self.batch.capacity() >= self.buffer_size.saturating_mul(2) {
             self.batch.shrink_to(self.buffer_size);
         }
     }
