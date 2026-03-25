@@ -2,7 +2,7 @@ use futures::StreamExt;
 use std::{sync::Arc, time::Duration};
 
 const SUBSCRIPTION_FETCH_TIMEOUT_SECS: u64 = 30;
-const SUBSCRIPTION_MAX_RESPONSE_BYTES: u64 = 50 * 1024 * 1024; // 50 MB
+const SUBSCRIPTION_MAX_RESPONSE_BYTES: u64 = 5 * 1024 * 1024; // 5 MB
 
 use arc_swap::ArcSwap;
 use reso_dns::domain_name::DomainName;
@@ -150,7 +150,7 @@ impl DomainRulesService {
         self.matchers.swap(
             Matchers::load(&self.connection)
                 .await
-                .map_err(|e| ServiceError::Internal(e))?
+                .map_err(ServiceError::Internal)?
                 .into(),
         );
         Ok(())
@@ -385,15 +385,9 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
 
     let content_length = response.content_length();
 
-    if content_length.unwrap_or(0) > SUBSCRIPTION_MAX_RESPONSE_BYTES {
-        anyhow::bail!(
-            "list subscription {} response exceeded size limit ({} bytes)",
-            subscription.url,
-            content_length.unwrap()
-        );
-    }
     let mut stream = response.bytes_stream();
-    let mut buf = Vec::with_capacity(SUBSCRIPTION_MAX_RESPONSE_BYTES as usize);
+    let initial_capacity: usize = content_length.map(|len| len as usize).unwrap_or(64 * 1024); // 64KB
+    let mut buf = Vec::with_capacity(initial_capacity);
 
     // read the response stream in chunks, so we can enforce the max size limit better
     while let Some(chunk) = stream.next().await {
