@@ -1,5 +1,5 @@
 [package]
-name = "reso-blocklist"
+name = "reso-list"
 version = "0.1.0"
 edition = "2024"
 
@@ -9,5 +9,5 @@ idna.workspace = true
 sha2 = "0.10.9"
 
 [lib]
-name = "reso_blocklist"
+name = "reso_list"
 path = "src/lib.rs"

@@ -1726,10 +1726,10 @@ dependencies = [
  "once_cell",
  "rand",
  "reqwest",
- "reso-blocklist",
  "reso-cache",
  "reso-context",
  "reso-dns",
+ "reso-list",
  "reso-resolver",
  "reso-server",
  "rusqlite",
@@ -1750,15 +1750,6 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uuid",
-]
-
-[[package]]
-name = "reso-blocklist"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "idna",
- "sha2",
 ]
 
 [[package]]
@@ -1805,6 +1796,15 @@ dependencies = [
  "futures",
  "tokio",
  "tokio-util",
+]
+
+[[package]]
+name = "reso-list"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "idna",
+ "sha2",
 ]
 
 [[package]]

@@ -37,6 +37,7 @@ impl DomainRule {
 }
 
 impl DomainRule {
+    /// Inserts this domain rule into the database.
     pub async fn insert(self, db: &CoreDatabasePool) -> Result<(), DatabaseError> {
         db.interact(move |c| {
             c.execute(
@@ -56,6 +57,7 @@ impl DomainRule {
         Ok(())
     }
 
+    /// Deletes this domain rule from the database.
     pub async fn delete(self, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
         let rows = db
             .interact(move |c| Ok(c.execute("DELETE FROM domain_rules WHERE domain = ?1", params![self.domain])?))
@@ -63,6 +65,7 @@ impl DomainRule {
         Ok(rows > 0)
     }
 
+    /// Deletes a domain rule by domain name.
     pub async fn delete_by_domain(domain: &str, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
         let domain = domain.to_string();
         let rows = db
@@ -71,6 +74,7 @@ impl DomainRule {
         Ok(rows > 0)
     }
 
+    /// Lists domain rules with pagination and optional search by domain name.
     pub async fn list(
         db: &CoreDatabasePool,
         limit: i64,
@@ -113,6 +117,29 @@ impl DomainRule {
             .await?)
     }
 
+    /// Lists all enabled domain rules for a given action. Used for building matchers.
+    pub async fn list_enabled_by_action(action: ListAction, db: &CoreDatabasePool) -> Result<Vec<Self>, DatabaseError> {
+        db.interact(move |c| {
+            let mut stmt = c.prepare(
+                "SELECT id, domain, action, created_at, enabled, subscription_id \
+                 FROM domain_rules WHERE action = ?1 AND enabled = 1 ORDER BY created_at",
+            )?;
+            let iter = stmt.query_map(params![action], |r| {
+                Ok(DomainRule {
+                    id: EntityId::from(r.get::<_, Uuid>(0)?),
+                    domain: r.get(1)?,
+                    action: r.get(2)?,
+                    created_at: r.get(3)?,
+                    enabled: r.get(4)?,
+                    subscription_id: r.get::<_, Option<Uuid>>(5)?.map(EntityId::from),
+                })
+            })?;
+            iter.collect::<rusqlite::Result<Vec<_>>>()
+        })
+        .await
+    }
+
+    /// Lists all domain rules without pagination.
     pub async fn list_all(db: &CoreDatabasePool) -> Result<Vec<Self>, DatabaseError> {
         Ok(db
             .interact(move |c| {
@@ -138,6 +165,7 @@ impl DomainRule {
             .await?)
     }
 
+    /// Updates the action of a domain rule. It will also clear the subscription_id to disassociate it from any subscription.
     pub async fn update_action(domain: &str, action: ListAction, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
         let domain = domain.to_string();
         let rows = db
@@ -151,6 +179,7 @@ impl DomainRule {
         Ok(rows > 0)
     }
 
+    /// Toggles the enabled state of a domain rule. If the rule is enabled, it will be disabled, and vice versa.
     pub async fn toggle(domain: &str, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
         let domain = domain.to_string();
         let rows = db
@@ -164,6 +193,7 @@ impl DomainRule {
         Ok(rows > 0)
     }
 
+    /// Syncs a list of domains for a subscription. It will insert new domains, delete removed domains, and update existing ones.
     pub async fn sync_subscription(
         subscription_id: EntityId<ListSubscription>,
         action: ListAction,
@@ -226,6 +256,7 @@ impl DomainRule {
             .await?)
     }
 
+    /// Counts the total number of domain rules, optionally filtered by a search term.
     pub async fn row_count(db: &CoreDatabasePool, search: Option<String>) -> Result<i64, DatabaseError> {
         Ok(db
             .interact(move |c| {

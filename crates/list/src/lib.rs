@@ -1,11 +1,11 @@
-pub mod list;
+pub mod parser;
 
-/// Node in the trie structure, representing a blocklist entry.
+/// Node in the trie structure, representing a domain list entry.
 #[derive(Debug, Clone, Default)]
 struct Node {
     label: Box<str>,
     wildcard: bool,
-    blocked: bool,
+    terminal: bool,
     children: Vec<Node>,
 }
 
@@ -14,7 +14,7 @@ impl Node {
         Self {
             label: label.into(),
             wildcard: false,
-            blocked: false,
+            terminal: false,
             children: Vec::new(),
         }
     }
@@ -29,16 +29,16 @@ impl Node {
     }
 }
 
-/// Trie implementation of a blocklist matcher.
+/// Trie implementation of a domain list matcher. Used for allowlists and blocklists.
 /// The nodes are sorted to allow binary search for child nodes.
 #[derive(Debug, Clone, Default)]
-pub struct BlocklistMatcher {
+pub struct DomainListMatcher {
     root: Node,
 }
 
-impl BlocklistMatcher {
-    /// Check if a given domain name is blocked.
-    pub fn is_blocked(&self, name: &str) -> bool {
+impl DomainListMatcher {
+    /// Checks if a given domain matches any of the domain list patterns.
+    pub fn exists(&self, name: &str) -> bool {
         let labels = match normalize_to_rev_labels(name) {
             Ok(labels) => labels,
             Err(_) => return false,
@@ -57,10 +57,10 @@ impl BlocklistMatcher {
             }
         }
 
-        node.blocked
+        node.terminal
     }
 
-    /// Load blocklist patterns from an iterator of strings.
+    /// Loads a list of domain patterns into the matcher.
     pub fn load<'a, I>(patterns: I) -> anyhow::Result<Self>
     where
         I: IntoIterator<Item = &'a str>,
@@ -92,7 +92,7 @@ impl BlocklistMatcher {
             if is_wildcard {
                 node.wildcard = true;
             } else {
-                node.blocked = true;
+                node.terminal = true;
             }
         }
 
@@ -127,11 +127,11 @@ mod tests {
     use super::*;
 
     #[test]
-    pub fn test_blocked_patterns() {
+    pub fn test_patterns() {
         let patterns: Vec<&str> = vec!["google.com", "yahoo.com", "*.bla.com"];
-        let matcher = BlocklistMatcher::load(patterns).unwrap();
-        assert!(matcher.is_blocked("google.com"));
-        assert!(matcher.is_blocked("yahoo.com"));
-        assert!(matcher.is_blocked("a.bla.com"));
+        let matcher = DomainListMatcher::load(patterns).unwrap();
+        assert!(matcher.exists("google.com"));
+        assert!(matcher.exists("yahoo.com"));
+        assert!(matcher.exists("a.bla.com"));
     }
 }

@@ -2,12 +2,15 @@ use futures::StreamExt;
 use std::{sync::Arc, time::Duration};
 
 const SUBSCRIPTION_FETCH_TIMEOUT_SECS: u64 = 30;
-const SUBSCRIPTION_MAX_RESPONSE_BYTES: u64 = 50 * 1024 * 1024; // 50 MB
+const SUBSCRIPTION_MAX_RESPONSE_BYTES: u64 = 5 * 1024 * 1024; // 5 MB
 
 use arc_swap::ArcSwap;
-use reso_blocklist::BlocklistMatcher;
 use reso_dns::domain_name::DomainName;
-use tokio::time::{self, MissedTickBehavior};
+use reso_list::DomainListMatcher;
+use tokio::{
+    sync::Mutex,
+    time::{self, MissedTickBehavior},
+};
 
 use crate::{
     database::{
@@ -25,6 +28,7 @@ const SUBSCRIPTION_SYNC_INTERVAL_SECS: u64 = 60 * 60 * 24; // 24 hours
 /// Validates and normalizes a domain pattern, supporting `*.example.com` wildcards.
 /// Returns the canonical stored form, e.g. `*.example.com` or `example.com`.
 fn normalize_domain_pattern(input: &str) -> Result<String, ServiceError> {
+    // what we are doing here is kinda hacky, because DomainName doesn't support wildcard patterns, but we want to reuse its validation and normalization logic.
     let (wildcard, base) = match input.strip_prefix("*.") {
         Some(rest) => (true, rest),
         None => (false, input),
@@ -42,24 +46,38 @@ fn normalize_domain_pattern(input: &str) -> Result<String, ServiceError> {
     })
 }
 
+pub struct Matchers {
+    pub blocklist_matcher: Arc<DomainListMatcher>,
+    pub allow_list_matcher: Arc<DomainListMatcher>,
+}
+
+impl Matchers {
+    pub async fn load(db: &CoreDatabasePool) -> anyhow::Result<Self> {
+        let allow_list = DomainRule::list_enabled_by_action(ListAction::Allow, db).await?;
+        let block_list = DomainRule::list_enabled_by_action(ListAction::Block, db).await?;
+        Ok(Self {
+            blocklist_matcher: Arc::new(DomainListMatcher::load(
+                block_list.iter().filter(|d| d.enabled).map(|d| d.domain.as_str()),
+            )?),
+            allow_list_matcher: Arc::new(DomainListMatcher::load(
+                allow_list.iter().filter(|d| d.enabled).map(|d| d.domain.as_str()),
+            )?),
+        })
+    }
+}
+
 pub struct DomainRulesService {
-    blocklist_matcher: ArcSwap<BlocklistMatcher>,
+    matchers: ArcSwap<Matchers>,
+    write_lock: Mutex<()>,
     connection: Arc<CoreDatabasePool>,
     http_client: reqwest::Client,
 }
 
 impl DomainRulesService {
     pub async fn initialize(connection: Arc<CoreDatabasePool>) -> anyhow::Result<Self> {
-        let rules = DomainRule::list_all(&connection).await?;
-        let matcher = BlocklistMatcher::load(
-            rules
-                .iter()
-                .filter(|r| r.enabled && r.action == ListAction::Block)
-                .map(|r| r.domain.as_str()),
-        )?;
-
         Ok(Self {
-            blocklist_matcher: ArcSwap::new(matcher.into()),
+            matchers: ArcSwap::new(Matchers::load(&connection).await?.into()),
+            write_lock: Mutex::new(()),
             connection,
             http_client: reqwest::Client::builder()
                 .timeout(Duration::from_secs(SUBSCRIPTION_FETCH_TIMEOUT_SECS))
@@ -82,7 +100,11 @@ impl DomainRulesService {
             }
         })?;
 
-        self.load_matcher().await?;
+        match action {
+            ListAction::Allow => self.reload_allow_list().await?,
+            ListAction::Block => self.reload_blocklist().await?,
+        }
+
         Ok(())
     }
 
@@ -96,7 +118,7 @@ impl DomainRulesService {
             return Err(ServiceError::NotFound("Domain not found".into()));
         }
 
-        self.load_matcher().await?;
+        self.reload_all().await?;
         Ok(())
     }
 
@@ -110,7 +132,7 @@ impl DomainRulesService {
             return Err(ServiceError::NotFound("Domain not found".into()));
         }
 
-        self.load_matcher().await?;
+        self.reload_all().await?;
         Ok(())
     }
 
@@ -124,29 +146,68 @@ impl DomainRulesService {
             return Err(ServiceError::NotFound("Domain not found".into()));
         }
 
-        self.load_matcher().await?;
+        self.reload_all().await?;
+
         Ok(())
     }
 
-    /// Reloads the blocklist matcher from the database.
-    /// Should be called after any changes to the rules.
-    async fn load_matcher(&self) -> Result<(), ServiceError> {
-        let rules = DomainRule::list_all(&self.connection).await?;
+    async fn reload_all(&self) -> Result<(), ServiceError> {
+        let _guard = self.write_lock.lock().await;
 
-        let updated_matcher = BlocklistMatcher::load(
-            rules
-                .iter()
-                .filter(|r| r.enabled && r.action == ListAction::Block)
-                .map(|r| r.domain.as_str()),
-        )
-        .map_err(|e| ServiceError::Internal(e.into()))?;
-        self.blocklist_matcher.swap(updated_matcher.into());
+        self.matchers.swap(
+            Matchers::load(&self.connection)
+                .await
+                .map_err(ServiceError::Internal)?
+                .into(),
+        );
+        Ok(())
+    }
+
+    async fn reload_allow_list(&self) -> Result<(), ServiceError> {
+        let _guard = self.write_lock.lock().await;
+
+        let rules = DomainRule::list_enabled_by_action(ListAction::Allow, &self.connection).await?;
+
+        let new_matcher = Arc::new(
+            DomainListMatcher::load(rules.iter().map(|r| r.domain.as_str()))
+                .map_err(|e| ServiceError::Internal(e.into()))?,
+        );
+
+        self.matchers.rcu(|current| {
+            Arc::new(Matchers {
+                allow_list_matcher: Arc::clone(&new_matcher),
+                blocklist_matcher: Arc::clone(&current.blocklist_matcher),
+            })
+        });
+
+        Ok(())
+    }
+
+    async fn reload_blocklist(&self) -> Result<(), ServiceError> {
+        let _guard = self.write_lock.lock().await;
+        let rules = DomainRule::list_enabled_by_action(ListAction::Block, &self.connection).await?;
+        let new_matcher = Arc::new(
+            DomainListMatcher::load(rules.iter().map(|r| r.domain.as_str()))
+                .map_err(|e| ServiceError::Internal(e.into()))?,
+        );
+
+        self.matchers.rcu(|current| {
+            Arc::new(Matchers {
+                blocklist_matcher: Arc::clone(&new_matcher),
+                allow_list_matcher: Arc::clone(&current.allow_list_matcher),
+            })
+        });
+
         Ok(())
     }
 
     /// Checks if a given domain is blocked by the current rules.
     pub fn is_blocked(&self, name: &str) -> bool {
-        self.blocklist_matcher.load().is_blocked(name)
+        let matchers = self.matchers.load();
+        if matchers.blocklist_matcher.exists(name) {
+            return !matchers.allow_list_matcher.exists(name);
+        }
+        false
     }
 
     /// Lists all subscriptions.
@@ -160,7 +221,7 @@ impl DomainRulesService {
         if !changed {
             return Err(ServiceError::NotFound("Subscription not found".into()));
         }
-        self.load_matcher().await?;
+        self.reload_all().await?;
         Ok(())
     }
 
@@ -171,7 +232,7 @@ impl DomainRulesService {
         if !changed {
             return Err(ServiceError::NotFound("Subscription not found".into()));
         }
-        self.load_matcher().await?;
+        self.reload_all().await?;
         Ok(())
     }
 
@@ -217,8 +278,8 @@ impl DomainRulesService {
             return;
         }
 
-        if let Err(e) = self.load_matcher().await {
-            tracing::error!("failed to reload matcher after subscription sync: {}", e);
+        if let Err(e) = self.reload_all().await {
+            tracing::error!("failed to reload matchers after subscription sync: {}", e);
         }
     }
 
@@ -286,7 +347,7 @@ impl DomainRulesService {
             )));
         }
 
-        self.load_matcher().await?;
+        self.reload_all().await?;
         Ok(())
     }
 }
@@ -334,15 +395,23 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
 
     let content_length = response.content_length();
 
-    if content_length.unwrap_or(0) > SUBSCRIPTION_MAX_RESPONSE_BYTES {
-        anyhow::bail!(
-            "list subscription {} response exceeded size limit ({} bytes)",
-            subscription.url,
-            content_length.unwrap()
-        );
+    if let Some(len) = content_length {
+        if len > SUBSCRIPTION_MAX_RESPONSE_BYTES {
+            anyhow::bail!(
+                "list subscription {} response exceeded size limit before download ({} bytes)",
+                subscription.url,
+                len
+            );
+        }
     }
+
     let mut stream = response.bytes_stream();
-    let mut buf = Vec::with_capacity(SUBSCRIPTION_MAX_RESPONSE_BYTES as usize);
+    let initial_capacity = content_length
+        .and_then(|len| usize::try_from(len).ok())
+        .map(|len| len.min(SUBSCRIPTION_MAX_RESPONSE_BYTES as usize))
+        .unwrap_or(64 * 1024); // 64KB
+
+    let mut buf = Vec::with_capacity(initial_capacity);
 
     // read the response stream in chunks, so we can enforce the max size limit better
     while let Some(chunk) = stream.next().await {
@@ -362,14 +431,14 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
         Err(e) => anyhow::bail!("list subscription {} is not valid UTF-8: {:?}", subscription.url, e),
     };
 
-    let content_hash: String = reso_blocklist::list::calculate_hash(&text);
+    let content_hash: String = reso_list::parser::calculate_hash(&text);
 
     if subscription.hash.as_deref() == Some(&content_hash) {
         tracing::debug!("list subscription {} unchanged, skipping sync", subscription.url);
         return Ok(false);
     }
 
-    let domains: Vec<String> = reso_blocklist::list::ListParser::new(&text)
+    let domains: Vec<String> = reso_list::parser::ListParser::new(&text)
         .parse()
         .into_iter()
         .map(str::to_owned)
