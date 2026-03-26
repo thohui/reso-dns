@@ -13,7 +13,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import z from 'zod';
-import type { ListAction } from '../../lib/api/domain-rules';
+import type { ListAction } from '@/lib/api/domain-rules';
 
 interface SubscriptionDialogProps {
 	onClose: () => void;
@@ -35,10 +35,9 @@ export function SubscriptionDialog({
 	onClose,
 	onSubmit,
 }: SubscriptionDialogProps) {
-
 	const form = useForm({
 		resolver: zodResolver(schema),
-		defaultValues: { sync_enabled: true }
+		defaultValues: { sync_enabled: true },
 	});
 
 	const onSubmitHandler = form.handleSubmit(
@@ -127,11 +126,11 @@ export function SubscriptionDialog({
 								/>
 								{(form.formState.errors.url?.message ||
 									form.formState.errors.root?.message) && (
-										<Field.ErrorText color='status.error' fontSize='xs' mt='1'>
-											{form.formState.errors.url?.message ??
-												form.formState.errors.root?.message}
-										</Field.ErrorText>
-									)}
+									<Field.ErrorText color='status.error' fontSize='xs' mt='1'>
+										{form.formState.errors.url?.message ??
+											form.formState.errors.root?.message}
+									</Field.ErrorText>
+								)}
 							</Field.Root>
 
 							<Field.Root mb='6'>

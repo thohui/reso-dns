@@ -9,3 +9,18 @@ export function formatTimeAgo(timestamp: number | null): string {
 	const days = Math.floor(hours / 24);
 	return `${days}d ago`;
 }
+
+export function formatTimestamp(ts: number): string {
+	const d = new Date(ts);
+	return d.toLocaleTimeString('en-US', {
+		hour12: false,
+		hour: '2-digit',
+		minute: '2-digit',
+		second: '2-digit',
+	});
+}
+
+export function formatDuration(ms: number): string {
+	if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`;
+	return `${ms}ms`;
+}

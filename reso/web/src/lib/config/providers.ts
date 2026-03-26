@@ -1,4 +1,4 @@
-import type { Upstream } from '../api/config';
+import type { Upstream } from '@/lib/api/config';
 
 export interface ProviderGroup {
 	name: string;

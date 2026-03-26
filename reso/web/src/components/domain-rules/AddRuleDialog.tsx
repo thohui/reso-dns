@@ -10,11 +10,12 @@ import {
 	Text,
 } from '@chakra-ui/react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Ban, Plus, ShieldCheck, X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
+import { ActionBadge } from '@/components/ActionBadge';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import z from 'zod';
-import type { ListAction } from '../../lib/api/domain-rules';
+import type { ListAction } from '@/lib/api/domain-rules';
 
 interface AddRuleDialogProps {
 	onClose: () => void;
@@ -83,44 +84,16 @@ export function AddRuleDialog({ onClose, onSubmit }: AddRuleDialogProps) {
 									Action
 								</Field.Label>
 								<HStack gap='2'>
-									<Button
-										type='button'
-										size='sm'
-										flex='1'
-										variant='outline'
-										bg={action === 'block' ? 'status.errorMuted' : 'bg.panel'}
-										borderColor={
-											action === 'block' ? 'status.error' : 'border.input'
-										}
-										color={action === 'block' ? 'status.error' : 'fg.muted'}
-										_hover={{
-											borderColor: 'status.error',
-											color: 'status.error',
-										}}
+									<ActionBadge
+										action='block'
 										onClick={() => setAction('block')}
-									>
-										<Icon as={Ban} boxSize='3.5' mr='2' />
-										Block
-									</Button>
-									<Button
-										type='button'
-										size='sm'
-										flex='1'
-										variant='outline'
-										bg={action === 'allow' ? 'status.successMuted' : 'bg.panel'}
-										borderColor={
-											action === 'allow' ? 'status.success' : 'border.input'
-										}
-										color={action === 'allow' ? 'status.success' : 'fg.muted'}
-										_hover={{
-											borderColor: 'status.success',
-											color: 'status.success',
-										}}
+										selected={action === 'block'}
+									/>
+									<ActionBadge
+										action='allow'
 										onClick={() => setAction('allow')}
-									>
-										<Icon as={ShieldCheck} boxSize='3.5' mr='2' />
-										Allow
-									</Button>
+										selected={action === 'allow'}
+									/>
 								</HStack>
 							</Field.Root>
 

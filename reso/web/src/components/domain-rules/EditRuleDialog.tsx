@@ -8,9 +8,10 @@ import {
 	IconButton,
 	Text,
 } from '@chakra-ui/react';
-import { AlertTriangle, Ban, Pencil, ShieldCheck, X } from 'lucide-react';
+import { AlertTriangle, Pencil, X } from 'lucide-react';
 import { useState } from 'react';
-import type { DomainRule, ListAction } from '../../lib/api/domain-rules';
+import type { DomainRule, ListAction } from '@/lib/api/domain-rules';
+import { ActionBadge } from '@/components/ActionBadge';
 
 interface EditRuleDialogProps {
 	rule: DomainRule;
@@ -120,44 +121,16 @@ export function EditRuleDialog({
 									Action
 								</Field.Label>
 								<HStack gap='2'>
-									<Button
-										type='button'
-										size='sm'
-										flex='1'
-										variant='outline'
-										bg={action === 'block' ? 'status.errorMuted' : 'bg.panel'}
-										borderColor={
-											action === 'block' ? 'status.error' : 'border.input'
-										}
-										color={action === 'block' ? 'status.error' : 'fg.muted'}
-										_hover={{
-											borderColor: 'status.error',
-											color: 'status.error',
-										}}
+									<ActionBadge
+										action='block'
 										onClick={() => setAction('block')}
-									>
-										<Icon as={Ban} boxSize='3.5' mr='2' />
-										Block
-									</Button>
-									<Button
-										type='button'
-										size='sm'
-										flex='1'
-										variant='outline'
-										bg={action === 'allow' ? 'status.successMuted' : 'bg.panel'}
-										borderColor={
-											action === 'allow' ? 'status.success' : 'border.input'
-										}
-										color={action === 'allow' ? 'status.success' : 'fg.muted'}
-										_hover={{
-											borderColor: 'status.success',
-											color: 'status.success',
-										}}
+										selected={action === 'block'}
+									/>
+									<ActionBadge
+										action='allow'
 										onClick={() => setAction('allow')}
-									>
-										<Icon as={ShieldCheck} boxSize='3.5' mr='2' />
-										Allow
-									</Button>
+										selected={action === 'allow'}
+									/>
 								</HStack>
 							</Field.Root>
 

@@ -1,6 +1,6 @@
 import type React from 'react';
 import { useEffect, useState } from 'react';
-import { useApiClient } from '../contexts/ApiClientContext';
+import { useApiClient } from '@/contexts/ApiClientContext';
 import { PageLoader } from './PageLoader';
 
 export function Initializer({ children }: React.PropsWithChildren) {

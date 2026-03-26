@@ -16,9 +16,9 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import z from 'zod';
-import Logo from '../../assets/logo.svg?react';
-import { useApiClient } from '../../contexts/ApiClientContext';
-import { useIsSetupRequired } from '../../hooks/useIsSetupRequired';
+import Logo from '@/assets/logo.svg?react';
+import { useApiClient } from '@/contexts/ApiClientContext';
+import { useIsSetupRequired } from '@/hooks/useIsSetupRequired';
 
 const setupSchema = z
 	.object({

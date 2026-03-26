@@ -1,18 +1,17 @@
-import { Box, Table, Text, HStack, Icon } from '@chakra-ui/react';
+import { Box, Table, Text } from '@chakra-ui/react';
 import {
 	createColumnHelper,
 	flexRender,
 	getCoreRowModel,
 	useReactTable,
 } from '@tanstack/react-table';
-import { Globe, List } from 'lucide-react';
+import { Globe } from 'lucide-react';
 import React, { useMemo } from 'react';
-import { ConfirmDeleteButton } from '../ConfirmDeleteButton';
-import { ToggleButton } from '../ToggleButton';
-import { GridPage } from '../GridPage';
-import type { ListSubscription } from '../../lib/api/list-subscriptions';
-import { formatTimeAgo } from '../../lib/time';
-import { ActionBadge } from '../ActionBadge';
+import type { ListSubscription } from '@/lib/api/list-subscriptions';
+import { formatTimeAgo } from '@/lib/time';
+import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
+import { GridPage } from '@/components/GridPage';
+import { ToggleButton } from '@/components/ToggleButton';
 
 const columnHelper = createColumnHelper<ListSubscription>();
 
@@ -38,20 +37,14 @@ export function SubscriptionsGrid({
 					const sub = row.original;
 					return (
 						<Table.Cell py='3.5' px='4'>
-							<HStack gap='3'>
-								<Icon as={List} boxSize='3.5' color='fg.subtle' />
-								<Box>
-									<HStack gap='2'>
-										<Text fontSize='sm' fontWeight='500'>
-											{sub.name}
-										</Text>
-										<ActionBadge action={sub.list_type} />
-									</HStack>
-									<Text fontSize='xs' color='fg.subtle' maxW='300px' truncate>
-										{sub.url}
-									</Text>
-								</Box>
-							</HStack>
+							<Box>
+								<Text fontSize='sm' fontWeight='500'>
+									{sub.name}
+								</Text>
+								<Text fontSize='xs' color='fg.subtle' maxW='300px' truncate>
+									{sub.url}
+								</Text>
+							</Box>
 						</Table.Cell>
 					);
 				},
@@ -131,10 +124,7 @@ export function SubscriptionsGrid({
 			<Table.Root size='sm'>
 				<Table.Header>
 					{table.getHeaderGroups().map((headerGroup) => (
-						<Table.Row
-							key={headerGroup.id}
-							bg='bg.subtle'
-							borderColor='border'>
+						<Table.Row key={headerGroup.id} bg='bg.subtle' borderColor='border'>
 							{headerGroup.headers.map((header) => (
 								<Table.ColumnHeader
 									key={header.id}
@@ -147,7 +137,7 @@ export function SubscriptionsGrid({
 									fontWeight='600'
 									textAlign={
 										header.id === 'domain_count' ||
-											header.id === 'last_synced_at'
+										header.id === 'last_synced_at'
 											? 'right'
 											: header.id === 'status' || header.id === 'sync_status'
 												? 'center'

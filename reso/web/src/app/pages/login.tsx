@@ -15,8 +15,8 @@ import { Lock, User } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import z from 'zod';
-import Logo from '../../assets/logo.svg?react';
-import { useApiClient } from '../../contexts/ApiClientContext';
+import Logo from '@/assets/logo.svg?react';
+import { useApiClient } from '@/contexts/ApiClientContext';
 
 const loginSchema = z.object({
 	username: z.string().min(1),

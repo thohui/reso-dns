@@ -25,20 +25,20 @@ import {
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import z from 'zod';
-import { UpstreamSpecSchema } from '../..//lib/config/schema';
-import { ConfigField } from '../../components/config/ConfigField';
-import { ConfigSection } from '../../components/config/ConfigSection';
-import { DurationInput } from '../../components/config/DurationInput';
+import { UpstreamSpecSchema } from '@/lib/config/schema';
+import { ConfigField } from '@/components/config/ConfigField';
+import { ConfigSection } from '@/components/config/ConfigSection';
+import { DurationInput } from '@/components/config/DurationInput';
 import {
 	PROTOCOL_COLORS,
 	UpstreamPicker,
-} from '../../components/config/UpstreamPicker';
-import { toastError } from '../../components/Toaster';
-import { useConfig, useConfigQueryKey } from '../../hooks/useConfig';
-import { useUpdateConfig } from '../../hooks/useUpdateConfig';
-import type { ConfigModel, Upstream } from '../../lib/api/config';
-import { detectProtocol, getProviderGroup } from '../../lib/config/providers';
-import { hexToRgba } from '../../lib/theme';
+} from '@/components/config/UpstreamPicker';
+import { toastError } from '@/components/Toaster';
+import { useConfig, useConfigQueryKey } from '@/hooks/useConfig';
+import { useUpdateConfig } from '@/hooks/useUpdateConfig';
+import type { ConfigModel, Upstream } from '@/lib/api/config';
+import { detectProtocol, getProviderGroup } from '@/lib/config/providers';
+import { hexToRgba } from '@/lib/theme';
 
 const schema = z.object({
 	upstreams: z.array(UpstreamSpecSchema),

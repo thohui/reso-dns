@@ -1,8 +1,8 @@
 import { Box, HStack, Icon, Text, VStack } from '@chakra-ui/react';
 import { Zap } from 'lucide-react';
-import { useRecentActivity } from '../../hooks/useRecentActivity';
-import { type Activity, getTransportLabel } from '../../lib/api/activity';
-import { getStatusInfo } from '../../lib/status-info';
+import { useRecentActivity } from '@/hooks/useRecentActivity';
+import { type Activity, getTransportLabel } from '@/lib/api/activity';
+import { getStatusInfo } from '@/lib/status-info';
 
 export function RecentActivity() {
 	const activities = useRecentActivity();

@@ -1,5 +1,5 @@
 import { Text, VStack } from '@chakra-ui/react';
-import Logo from '../assets/logo.svg?react';
+import Logo from '@/assets/logo.svg?react';
 
 export function PageLoader() {
 	return (

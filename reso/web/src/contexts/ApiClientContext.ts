@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { ApiClient } from '../lib/api/client';
+import type { ApiClient } from '@/lib/api/client';
 
 export const ApiClientContext = createContext<ApiClient | null>(null);
 

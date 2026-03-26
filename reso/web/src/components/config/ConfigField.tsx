@@ -12,8 +12,7 @@ export function ConfigField({
 	description,
 	children,
 	align = 'flex-start',
-}: Props
-) {
+}: Props) {
 	return (
 		<Flex
 			direction={{ base: 'column', sm: 'row' }}

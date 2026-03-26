@@ -15,14 +15,14 @@ import { ArrowLeft, Check, ChevronRight, Plus, X } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import z from 'zod';
-import type { Upstream } from '../../lib/api/config';
+import type { Upstream } from '@/lib/api/config';
 import {
 	detectProtocol,
 	type ProviderGroup,
 	providerGroups,
-} from '../../lib/config/providers';
-import { UpstreamSpecSchema } from '../../lib/config/schema';
-import { hexToRgba } from '../../lib/theme';
+} from '@/lib/config/providers';
+import { UpstreamSpecSchema } from '@/lib/config/schema';
+import { hexToRgba } from '@/lib/theme';
 
 interface Props {
 	existingUpstreams: Upstream[];
@@ -68,10 +68,7 @@ export function UpstreamPicker({ existingUpstreams, onAdd, onClose }: Props) {
 
 	return (
 		<Dialog.Root open onOpenChange={({ open }) => !open && onClose()}>
-			<Dialog.Backdrop
-				backdropFilter='blur(8px)'
-				bg='blackAlpha.800'
-			/>
+			<Dialog.Backdrop backdropFilter='blur(8px)' bg='blackAlpha.800' />
 			<Dialog.Positioner>
 				<Dialog.Content
 					bg='bg.panel'
