@@ -21,9 +21,9 @@ import {
 } from 'lucide-react';
 import { Suspense, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import Logo from '../assets/logo.svg?react';
-import { PageLoader } from '../components/PageLoader';
-import { useLogout } from '../hooks/useLogout';
+import Logo from '@/assets/logo.svg?react';
+import { PageLoader } from '@/components/PageLoader';
+import { useLogout } from '@/hooks/useLogout';
 
 interface MenuItem {
 	path: string;
@@ -209,7 +209,6 @@ export function DashboardLayout() {
 				overflowY='auto'
 				maxH={{ base: 'auto', md: '100vh' }}
 			>
-
 				<Box maxW='1400px' mx='auto'>
 					<Suspense fallback={<PageLoader />}>
 						<Box key={location.pathname} className='animate-fade-in'>

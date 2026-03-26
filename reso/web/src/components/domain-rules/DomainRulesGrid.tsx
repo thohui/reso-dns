@@ -1,18 +1,18 @@
-import { Box, HStack, Icon, IconButton, Input, Table, Text } from '@chakra-ui/react';
+import { ActionBadge } from '@/components/ActionBadge';
+import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
+import { GridPage } from '@/components/GridPage';
+import { ToggleButton } from '@/components/ToggleButton';
+import type { DomainRule } from '@/lib/api/domain-rules';
+import { formatTimeAgo } from '@/lib/time';
+import { Box, Icon, IconButton, Input, Table, Text } from '@chakra-ui/react';
 import {
 	createColumnHelper,
 	flexRender,
 	getCoreRowModel,
 	useReactTable,
 } from '@tanstack/react-table';
-import { Ban, Globe, Pencil, Search, ShieldCheck } from 'lucide-react';
+import { Globe, Pencil, Search } from 'lucide-react';
 import React, { useMemo } from 'react';
-import { ActionBadge } from '../ActionBadge';
-import { ConfirmDeleteButton } from '../ConfirmDeleteButton';
-import { ToggleButton } from '../ToggleButton';
-import { GridPage } from '../GridPage';
-import type { DomainRule } from '../../lib/api/domain-rules';
-import { formatTimeAgo } from '../../lib/time';
 
 const columnHelper = createColumnHelper<DomainRule>();
 
@@ -47,29 +47,18 @@ export function DomainRulesGrid({
 		() => [
 			columnHelper.accessor('domain', {
 				header: 'Domain',
-				cell: ({ row, getValue }) => (
+				cell: ({ getValue }) => (
 					<Table.Cell py='3.5' px='4'>
-						<HStack gap='3'>
-							<Icon
-								as={row.original.action === 'block' ? Ban : ShieldCheck}
-								boxSize='3.5'
-								color={
-									// TODO: this is ugly, should refactor later.
-									!row.original.enabled
-										? 'fg.subtle'
-										: row.original.action === 'block'
-											? 'status.error'
-											: 'status.success'
-								}
-							/>
-							<Text
-								fontFamily="'Mozilla Text', sans-serif"
-								fontSize='sm'
-								fontWeight='500'
-							>
-								{getValue()}
-							</Text>
-						</HStack>
+						<Text
+							fontFamily="'Mozilla Text', sans-serif"
+							fontSize='sm'
+							fontWeight='500'
+							whiteSpace='nowrap'
+							overflow='hidden'
+							textOverflow='ellipsis'
+						>
+							{getValue()}
+						</Text>
 					</Table.Cell>
 				),
 			}),
@@ -95,11 +84,7 @@ export function DomainRulesGrid({
 				id: 'status',
 				header: 'Status',
 				cell: ({ row }) => (
-					<Table.Cell
-						py='3.5'
-						px='4'
-						textAlign='center'
-					>
+					<Table.Cell py='3.5' px='4' textAlign='center'>
 						<ToggleButton
 							enabled={row.original.enabled}
 							label='rule'

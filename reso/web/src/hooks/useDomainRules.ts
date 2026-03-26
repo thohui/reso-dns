@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useApiClient } from '../contexts/ApiClientContext';
+import { useApiClient } from '@/contexts/ApiClientContext';
 
 export const DOMAIN_RULES_PAGE_SIZE = 50;
 

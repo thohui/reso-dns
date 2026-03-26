@@ -1,3 +1,17 @@
+import { ConfigField } from '@/components/config/ConfigField';
+import { ConfigSection } from '@/components/config/ConfigSection';
+import { DurationInput } from '@/components/config/DurationInput';
+import {
+	PROTOCOL_COLORS,
+	UpstreamPicker,
+} from '@/components/config/UpstreamPicker';
+import { toastError } from '@/components/Toaster';
+import { useConfig, useConfigQueryKey } from '@/hooks/useConfig';
+import { useUpdateConfig } from '@/hooks/useUpdateConfig';
+import type { ConfigModel, Upstream } from '@/lib/api/config';
+import { detectProtocol, getProviderGroup } from '@/lib/config/providers';
+import { UpstreamSpecSchema } from '@/lib/config/schema';
+import { hexToRgba } from '@/lib/theme';
 import {
 	Box,
 	Button,
@@ -25,20 +39,6 @@ import {
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import z from 'zod';
-import { UpstreamSpecSchema } from '../..//lib/config/schema';
-import { ConfigField } from '../../components/config/ConfigField';
-import { ConfigSection } from '../../components/config/ConfigSection';
-import { DurationInput } from '../../components/config/DurationInput';
-import {
-	PROTOCOL_COLORS,
-	UpstreamPicker,
-} from '../../components/config/UpstreamPicker';
-import { toastError } from '../../components/Toaster';
-import { useConfig, useConfigQueryKey } from '../../hooks/useConfig';
-import { useUpdateConfig } from '../../hooks/useUpdateConfig';
-import type { ConfigModel, Upstream } from '../../lib/api/config';
-import { detectProtocol, getProviderGroup } from '../../lib/config/providers';
-import { hexToRgba } from '../../lib/theme';
 
 const schema = z.object({
 	upstreams: z.array(UpstreamSpecSchema),
@@ -159,6 +159,10 @@ export default function ConfigPage() {
 
 	const upstreams = form.watch('upstreams');
 	const rateLimitEnabled = form.watch('rate_limit_enabled');
+	const rateLimitSeconds = form.watch('rate_limit_window') as number;
+
+	const timeout = form.watch('timeout') as number;
+
 	const logsEnabled = form.watch('logs_enabled');
 	const logsRetentionSecs = form.watch('logs_retention_secs') as number;
 	const logsTruncateIntervalSecs = form.watch(
@@ -173,6 +177,7 @@ export default function ConfigPage() {
 		'block_designated_resolver',
 	);
 
+	const { errors } = form.formState;
 	const hasChanges = form.formState.isDirty;
 
 	return (
@@ -367,19 +372,23 @@ export default function ConfigPage() {
 			<ConfigSection title='Timeout' icon={Timer}>
 				<ConfigField
 					label='Timeout'
-					description='Maximum upstream response wait time per query (ms).'
+					description='Maximum upstream response wait time per query'
 				>
-					<Field.Root invalid={!!form.formState.errors.timeout}>
-						<Input
-							type='number'
-							{...form.register('timeout', { valueAsNumber: true })}
-						/>
-						{form.formState.errors.timeout?.message && (
-							<Field.ErrorText color='status.error'>
-								{form.formState.errors.timeout.message}
-							</Field.ErrorText>
-						)}
-					</Field.Root>
+					<DurationInput
+						allowedUnits={['seconds', 'milliseconds']}
+						conversion='milliseconds'
+						value={timeout}
+						min={1}
+						onChange={(value) =>
+							form.setValue('timeout', value, {
+								shouldValidate: true,
+								shouldDirty: true,
+								shouldTouch: true,
+							})
+						}
+						invalid={!!errors.timeout}
+						errorText={errors.timeout?.message}
+					/>
 				</ConfigField>
 			</ConfigSection>
 
@@ -511,36 +520,37 @@ export default function ConfigPage() {
 				</ConfigField>
 				<ConfigField
 					label='Window Duration'
-					description='Length of each rate limit window (seconds).'
+					description='Length of each rate limit window.'
 				>
-					<Field.Root invalid={!!form.formState.errors.rate_limit_window}>
-						<Input
-							type='number'
-							min={1}
-							step={1}
-							{...form.register('rate_limit_window', { valueAsNumber: true })}
-						/>
-						{form.formState.errors.rate_limit_window?.message && (
-							<Field.ErrorText color='status.error'>
-								{form.formState.errors.rate_limit_window.message}
-							</Field.ErrorText>
-						)}
-					</Field.Root>
+					<DurationInput
+						allowedUnits={['seconds', 'minutes']}
+						conversion='seconds'
+						value={rateLimitSeconds}
+						onChange={(value) =>
+							form.setValue('rate_limit_window', value, {
+								shouldDirty: true,
+								shouldValidate: true,
+							})
+						}
+						min={1}
+						invalid={!!errors.rate_limit_window}
+						errorText={errors.rate_limit_window?.message}
+					/>
 				</ConfigField>
 				<ConfigField
 					label='Max Queries'
 					description='Maximum queries allowed per client per window.'
 				>
-					<Field.Root invalid={!!form.formState.errors.rate_limit_max}>
+					<Field.Root invalid={!!errors.rate_limit_max}>
 						<Input
 							type='number'
 							min={1}
 							step={1}
 							{...form.register('rate_limit_max', { valueAsNumber: true })}
 						/>
-						{form.formState.errors.rate_limit_max?.message && (
+						{errors.rate_limit_max?.message && (
 							<Field.ErrorText color='status.error'>
-								{form.formState.errors.rate_limit_max.message}
+								{errors.rate_limit_max.message}
 							</Field.ErrorText>
 						)}
 					</Field.Root>
@@ -584,14 +594,19 @@ export default function ConfigPage() {
 					description='How long to keep activity logs before cleanup.'
 				>
 					<DurationInput
+						allowedUnits={['seconds', 'minutes', 'hours', 'days']}
+						conversion='seconds'
 						value={logsRetentionSecs}
 						onChange={(v) =>
 							form.setValue('logs_retention_secs', v, {
+								shouldTouch: true,
 								shouldDirty: true,
 								shouldValidate: true,
 							})
 						}
 						min={60}
+						invalid={!!errors.logs_retention_secs}
+						errorText={errors.logs_retention_secs?.message}
 					/>
 				</ConfigField>
 				<ConfigField
@@ -599,14 +614,19 @@ export default function ConfigPage() {
 					description='How often to run log cleanup.'
 				>
 					<DurationInput
+						allowedUnits={['minutes', 'hours', 'days']}
+						conversion='seconds'
 						value={logsTruncateIntervalSecs}
 						onChange={(v) =>
 							form.setValue('logs_truncate_interval_secs', v, {
 								shouldDirty: true,
+								shouldTouch: true,
 								shouldValidate: true,
 							})
 						}
 						min={60}
+						invalid={!!errors.logs_truncate_interval_secs}
+						errorText={errors.logs_truncate_interval_secs?.message}
 					/>
 				</ConfigField>
 			</ConfigSection>

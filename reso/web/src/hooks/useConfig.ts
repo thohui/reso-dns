@@ -1,5 +1,5 @@
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { useApiClient } from '../contexts/ApiClientContext';
+import { useApiClient } from '@/contexts/ApiClientContext';
 
 export const useConfigQueryKey = ['config'];
 

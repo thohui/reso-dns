@@ -2,19 +2,16 @@ import { Box, Button, Grid, Heading, HStack, Icon } from '@chakra-ui/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Globe, Plus, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useState } from 'react';
-import { StatCard } from '../../components/dashboard/StatCard';
-import { LocalRecordDialog } from '../../components/local-records/LocalRecordDialog';
-import { LocalRecordsGrid } from '../../components/local-records/LocalRecordsGrid';
-import { toastError } from '../../components/Toaster';
-import type { LocalRecord } from '../../lib/api/local-records';
-import type { PagedResponse } from '../../lib/api/pagination';
-import {
-	localRecordsQueryKey,
-	useLocalRecords,
-} from '../../hooks/useLocalRecords';
-import { useCreateLocalRecord } from '../../hooks/useCreateLocalRecord';
-import { useRemoveLocalRecord } from '../../hooks/useRemoveLocalRecord';
-import { useToggleLocalRecord } from '../../hooks/useToggleLocalRecord';
+import { StatCard } from '@/components/dashboard/StatCard';
+import { LocalRecordDialog } from '@/components/local-records/LocalRecordDialog';
+import { LocalRecordsGrid } from '@/components/local-records/LocalRecordsGrid';
+import { toastError } from '@/components/Toaster';
+import type { LocalRecord } from '@/lib/api/local-records';
+import type { PagedResponse } from '@/lib/api/pagination';
+import { localRecordsQueryKey, useLocalRecords } from '@/hooks/useLocalRecords';
+import { useCreateLocalRecord } from '@/hooks/useCreateLocalRecord';
+import { useRemoveLocalRecord } from '@/hooks/useRemoveLocalRecord';
+import { useToggleLocalRecord } from '@/hooks/useToggleLocalRecord';
 
 export default function LocalRecordsPage() {
 	const { data, refetch } = useLocalRecords();

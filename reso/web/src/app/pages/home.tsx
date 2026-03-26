@@ -2,13 +2,13 @@ import { Box, Button, Heading, HStack, Text } from '@chakra-ui/react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, Ban, Clock, DatabaseBackup, Globe } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { QueryTimeline } from '../../components/dashboard/QueryTimeline';
-import { RecentActivity } from '../../components/dashboard/RecentActivity';
-import { StatCard } from '../../components/dashboard/StatCard';
-import { TopDonutChart } from '../../components/dashboard/TopDonutChart';
-import { useApiClient } from '../../contexts/ApiClientContext';
-import { useUptime } from '../../hooks/useUptime';
-import type { TopRange } from '../../lib/api/stats';
+import { QueryTimeline } from '@/components/dashboard/QueryTimeline';
+import { RecentActivity } from '@/components/dashboard/RecentActivity';
+import { StatCard } from '@/components/dashboard/StatCard';
+import { TopDonutChart } from '@/components/dashboard/TopDonutChart';
+import { useApiClient } from '@/contexts/ApiClientContext';
+import { useUptime } from '@/hooks/useUptime';
+import type { TopRange } from '@/lib/api/stats';
 
 const RANGE_OPTIONS: { value: TopRange; label: string }[] = [
 	{ value: '5min', label: '5M' },

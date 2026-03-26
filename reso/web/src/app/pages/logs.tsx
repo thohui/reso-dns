@@ -1,13 +1,13 @@
 import { Heading } from '@chakra-ui/react';
 import { useRef, useState } from 'react';
-import { LogsGrid, type SearchField } from '../../components/logs/LogsGrid';
-import { useActivities } from '../../hooks/useActivities';
-import { useDebounce } from '../../hooks/useDebounce';
+import { LogsGrid, type SearchField } from '@/components/logs/LogsGrid';
+import { useActivities } from '@/hooks/useActivities';
+import { useDebounce } from '@/hooks/useDebounce';
 import type {
 	ActivityListFilter,
 	SortColumn,
 	SortDir,
-} from '../../lib/api/activity';
+} from '@/lib/api/activity';
 
 const PAGE_SIZE = 50;
 

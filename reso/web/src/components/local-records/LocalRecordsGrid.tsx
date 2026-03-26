@@ -7,12 +7,12 @@ import {
 } from '@tanstack/react-table';
 import { Globe, Search } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
-import { ConfirmDeleteButton } from '../ConfirmDeleteButton';
-import { ToggleButton } from '../ToggleButton';
-import { GridPage } from '../GridPage';
-import type { LocalRecord } from '../../lib/api/local-records';
-import { recordTypeName } from '../../lib/dns';
-import { formatTimeAgo } from '../../lib/time';
+import type { LocalRecord } from '@/lib/api/local-records';
+import { formatTimeAgo } from '@/lib/time';
+import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
+import { GridPage } from '@/components/GridPage';
+import { RecordTypeBadge } from '@/components/RecordTypeBadge';
+import { ToggleButton } from '@/components/ToggleButton';
 
 const TYPE_COLORS: Record<number, string> = {
 	1: '#60a5fa', // A
@@ -35,6 +35,7 @@ export function LocalRecordsGrid({
 }: LocalRecordsGridProps) {
 	const [search, setSearch] = useState('');
 
+	// TODO: move this to the server.
 	const filtered = useMemo(
 		() =>
 			records.filter(
@@ -61,24 +62,9 @@ export function LocalRecordsGrid({
 			columnHelper.accessor('record_type', {
 				header: 'Type',
 				cell: ({ getValue }) => {
-					const typeColor = TYPE_COLORS[getValue()] ?? '#71717a';
 					return (
 						<Table.Cell py='3.5' px='4'>
-							<Box
-								as='span'
-								px='1.5'
-								py='0.5'
-								borderRadius='md'
-								bg={`${typeColor}15`}
-								borderWidth='1px'
-								borderColor={`${typeColor}30`}
-								fontSize='2xs'
-								fontWeight='600'
-								color={typeColor}
-								letterSpacing='0.02em'
-							>
-								{recordTypeName(getValue())}
-							</Box>
+							<RecordTypeBadge recordType={getValue()} size='md' />
 						</Table.Cell>
 					);
 				},

@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
-import { useApiClient } from '../contexts/ApiClientContext';
-import type { ListAction } from '../lib/api/domain-rules';
+import { useApiClient } from '@/contexts/ApiClientContext';
+import type { ListAction } from '@/lib/api/domain-rules';
 
 export function useAddDomainRule() {
 	const apiClient = useApiClient();

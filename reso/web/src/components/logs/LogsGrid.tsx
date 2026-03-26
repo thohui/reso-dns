@@ -23,34 +23,20 @@ import {
 	Search,
 } from 'lucide-react';
 
-import { useCallback, useMemo, useState } from 'react';
+import { GridPage } from '@/components/GridPage';
+import { ProtocolBadge } from '@/components/ProtocolBadge';
+import { RecordTypeBadge } from '@/components/RecordTypeBadge';
+import { StatusBadge } from '@/components/StatusBadge';
 import {
 	type Activity,
 	type ActivityListFilter,
-	getTransportLabel,
 	type SortColumn,
 	type SortDir,
-} from '../../lib/api/activity';
-import { recordTypeName } from '../../lib/dns';
-import { getStatusInfo } from '../../lib/status-info';
-import { GridPage } from '../GridPage';
+} from '@/lib/api/activity';
+import { getStatusInfo } from '@/lib/status-info';
+import { formatDuration, formatTimestamp } from '@/lib/time';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityDetailDrawer } from './ActivityDetailDrawer';
-import React from 'react';
-
-function formatTimestamp(ts: number): string {
-	const d = new Date(ts);
-	return d.toLocaleTimeString('en-US', {
-		hour12: false,
-		hour: '2-digit',
-		minute: '2-digit',
-		second: '2-digit',
-	});
-}
-
-function formatDuration(ms: number): string {
-	if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`;
-	return `${ms}ms`;
-}
 
 const columnHelper = createColumnHelper<Activity>();
 
@@ -67,7 +53,7 @@ function buildColumns() {
 					fontSize='sm'
 					color='fg.muted'
 				>
-					{formatTimestamp(info.getValue() as number)}
+					{formatTimestamp(info.getValue())}
 				</Table.Cell>
 			),
 		}),
@@ -79,26 +65,7 @@ function buildColumns() {
 				const statusInfo = getStatusInfo(row.original);
 				return (
 					<Table.Cell py='3' px='4'>
-						<HStack gap='2'>
-							<Icon
-								as={statusInfo.icon}
-								boxSize='3.5'
-								color={statusInfo.color}
-							/>
-							<Box
-								px='2.5'
-								py='0.5'
-								borderRadius='md'
-								fontSize='xs'
-								fontWeight='600'
-								textTransform='uppercase'
-								letterSpacing='0.03em'
-								bg={statusInfo.bg}
-								color={statusInfo.color}
-							>
-								{statusInfo.label}
-							</Box>
-						</HStack>
+						<StatusBadge statusInfo={statusInfo} size='sm' />
 					</Table.Cell>
 				);
 			},
@@ -111,22 +78,17 @@ function buildColumns() {
 				return (
 					<Table.Cell py='3' px='4'>
 						<HStack gap='2'>
-							<Text fontFamily="'Mozilla Text', sans-serif" fontSize='sm'>
+							<Text
+								fontFamily="'Mozilla Text', sans-serif"
+								fontSize='sm'
+								whiteSpace='nowrap'
+								overflow='hidden'
+								textOverflow='ellipsis'
+							>
 								{activity.qname || '-'}
 							</Text>
 							{activity.qtype !== null && (
-								<Box
-									px='2'
-									py='0.5'
-									borderRadius='md'
-									fontSize='xs'
-									fontWeight='500'
-									fontFamily="'Mozilla Text', sans-serif"
-									bg='accent.muted'
-									color='accent.fg'
-								>
-									{recordTypeName(activity.qtype)}
-								</Box>
+								<RecordTypeBadge recordType={activity.qtype} size='md' />
 							)}
 						</HStack>
 					</Table.Cell>
@@ -153,19 +115,7 @@ function buildColumns() {
 			enableSorting: false,
 			cell: ({ getValue }) => (
 				<Table.Cell py='3' px='4'>
-					<Box
-						display='inline-block'
-						px='2'
-						py='0.5'
-						borderRadius='md'
-						fontSize='xs'
-						fontWeight='500'
-						fontFamily="'Mozilla Text', sans-serif"
-						bg='accent.muted'
-						color='accent.fg'
-					>
-						{getTransportLabel(getValue())}
-					</Box>
+					<ProtocolBadge protocol={getValue()} size='md' />
 				</Table.Cell>
 			),
 		}),
@@ -194,6 +144,12 @@ function buildColumns() {
 			enableSorting: true,
 			cell: (info) => {
 				const ms = info.getValue() as number;
+
+				let color = 'fg.muted';
+
+				if (ms > 1000) color = 'status.error';
+				else if (ms > 100) color = 'status.warn';
+
 				return (
 					<Table.Cell py='3' px='4' textAlign='right'>
 						<HStack gap='1' justify='flex-end'>
@@ -201,13 +157,7 @@ function buildColumns() {
 							<Text
 								fontFamily="'Mozilla Text', sans-serif"
 								fontSize='sm'
-								color={
-									ms > 1000
-										? 'status.error'
-										: ms > 100
-											? 'status.warn'
-											: 'fg.muted'
-								}
+								color={color}
 							>
 								{formatDuration(ms)}
 							</Text>
@@ -227,32 +177,32 @@ const FILTER_PRESETS: {
 	color?: string;
 	filter: ActivityListFilter;
 }[] = [
-		{ key: 'all', label: 'All', filter: {} },
-		{
-			key: 'blocked',
-			label: 'Blocked',
-			color: 'status.blocked',
-			filter: { blocked: true },
-		},
-		{
-			key: 'cached',
-			label: 'Cached',
-			color: 'status.cached',
-			filter: { cache_hit: true },
-		},
-		{
-			key: 'rate_limited',
-			label: 'Rate Limited',
-			color: 'status.rate_limited',
-			filter: { rate_limited: true },
-		},
-		{
-			key: 'errors',
-			label: 'Errors',
-			color: 'status.error',
-			filter: { error_only: true },
-		},
-	];
+	{ key: 'all', label: 'All', filter: {} },
+	{
+		key: 'blocked',
+		label: 'Blocked',
+		color: 'status.blocked',
+		filter: { blocked: true },
+	},
+	{
+		key: 'cached',
+		label: 'Cached',
+		color: 'status.cached',
+		filter: { cache_hit: true },
+	},
+	{
+		key: 'rate_limited',
+		label: 'Rate Limited',
+		color: 'status.rate_limited',
+		filter: { rate_limited: true },
+	},
+	{
+		key: 'errors',
+		label: 'Errors',
+		color: 'status.error',
+		filter: { error_only: true },
+	},
+];
 
 function getActivePreset(filter: ActivityListFilter): FilterPreset {
 	if (filter.blocked) return 'blocked';

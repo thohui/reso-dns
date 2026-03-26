@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useApiClient } from '../contexts/ApiClientContext';
-import type { ActivityListRequest } from '../lib/api/activity';
+import { useApiClient } from '@/contexts/ApiClientContext';
+import type { ActivityListRequest } from '@/lib/api/activity';
 
 export function useActivities(req: ActivityListRequest) {
 	const apiClient = useApiClient();

@@ -1,7 +1,7 @@
 import { Chart, useChart } from '@chakra-ui/charts';
 import { Box, Text } from '@chakra-ui/react';
 import { Pie, PieChart, Sector, Tooltip } from 'recharts';
-import type { TopEntry } from '../../lib/api/stats';
+import type { TopEntry } from '@/lib/api/stats';
 
 const COLORS = [
 	'pink.solid',

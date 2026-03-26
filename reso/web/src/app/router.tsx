@@ -1,6 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
-import { ProtectedRoute } from '../components/ProtectedRoute';
-import { DashboardLayout } from '../layouts/DashboardLayout';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { DashboardLayout } from '@/layouts/DashboardLayout';
 import DomainRulesPage from './pages/domain-rules';
 import ConfigPage from './pages/config';
 import HomePage from './pages/home';

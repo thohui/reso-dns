@@ -1,5 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react';
-import { useApiClient } from '../contexts/ApiClientContext';
+import { useApiClient } from '@/contexts/ApiClientContext';
 
 export function useIsAuthenticated() {
 	const apiClient = useApiClient();

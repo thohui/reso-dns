@@ -8,7 +8,7 @@ import {
 	XAxis,
 	YAxis,
 } from 'recharts';
-import type { TimelineBucket, TopRange } from '../../lib/api/stats';
+import type { TimelineBucket, TopRange } from '@/lib/api/stats';
 
 interface Props {
 	data: TimelineBucket[];

@@ -14,7 +14,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import z from 'zod';
-import { LOCAL_RECORD_TYPES } from '../../lib/dns';
+import { LOCAL_RECORD_TYPES } from '@/lib/dns';
 
 interface LocalRecordDialogProps {
 	onClose: () => void;
