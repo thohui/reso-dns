@@ -24,11 +24,10 @@ const sharedStyles = {
 	transition: 'all 0.15s',
 } as const;
 
-function ActionBadgeContent({ action }: { action: ListAction }) {
-	const isBlock = action === 'block';
+function ActionBadgeContent({ action }: { action: ListAction; }) {
 	return (
 		<>
-			<Icon as={isBlock ? Ban : ShieldCheck} boxSize='3' />
+			<Icon as={action === 'block' ? Ban : ShieldCheck} boxSize='3' />
 			{action}
 		</>
 	);
@@ -40,28 +39,23 @@ export function ActionBadge({ action, onClick, selected }: Props) {
 	const isClickable = onClick !== undefined;
 	const isActive = !isClickable || selected;
 
-	const colorStyles = {
-		bg: isActive
-			? isBlock
-				? 'status.errorMuted'
-				: 'status.successMuted'
-			: 'bg.subtle',
-		color: isActive
-			? isBlock
-				? 'status.error'
-				: 'status.success'
-			: 'fg.muted',
-		borderColor: isActive
-			? isBlock
-				? 'status.error'
-				: 'status.success'
-			: 'border.input',
-	};
+	const colorStyles = isActive
+		? {
+			bg: isBlock ? 'status.errorMuted' : 'status.successMuted',
+			color: isBlock ? 'status.error' : 'status.success',
+			borderColor: isBlock ? 'status.error' : 'status.success',
+		}
+		: {
+			bg: 'bg.subtle',
+			color: 'fg.muted',
+			borderColor: 'border.input',
+		};
 
 	if (isClickable) {
 		return (
 			<chakra.button
 				type='button'
+				aria-pressed={selected === true}
 				onClick={onClick}
 				{...sharedStyles}
 				{...colorStyles}

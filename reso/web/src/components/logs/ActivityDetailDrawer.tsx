@@ -1,3 +1,16 @@
+import { StatusBadge } from '@/components/StatusBadge';
+import { toastError } from '@/components/Toaster';
+import { useAddDomainRule } from '@/hooks/useAddDomainRule';
+import {
+	type Activity,
+	type ErrorActivity,
+	getErrorTypeLabel,
+	getResponseCodeLabel,
+	getTransportLabel,
+	type QueryActivity,
+} from '@/lib/api/activity';
+import { recordTypeName } from '@/lib/dns';
+import { getStatusInfo } from '@/lib/status-info';
 import {
 	Box,
 	Button,
@@ -10,58 +23,33 @@ import {
 	VStack,
 } from '@chakra-ui/react';
 import { Ban } from 'lucide-react';
-import { useAddDomainRule } from '@/hooks/useAddDomainRule';
-import {
-	type Activity,
-	type ErrorActivity,
-	getErrorTypeLabel,
-	getResponseCodeLabel,
-	getTransportLabel,
-	type QueryActivity,
-} from '@/lib/api/activity';
-import { recordTypeName } from '@/lib/dns';
-import { getStatusInfo } from '@/lib/status-info';
-import { StatusBadge } from '@/components/StatusBadge';
-import { toastError } from '@/components/Toaster';
 
 function DetailRow({ label, value }: { label: string; value: string }) {
 	return (
 		<HStack justify='space-between' py='2'>
-			<Text fontSize='xs' color='fg.faint' textTransform='uppercase'>
+			<Text
+				fontSize='xs'
+				color='fg.faint'
+				textTransform='uppercase'
+				whiteSpace='nowrap'
+				overflow='hidden'
+				textOverflow='ellipsis'
+			>
 				{label}
 			</Text>
-			<Text fontSize='sm' fontFamily="'Mozilla Text', sans-serif" color='fg'>
+			<Text
+				fontSize='sm'
+				fontFamily="'Mozilla Text', sans-serif"
+				whiteSpace='nowrap'
+				overflow='hidden'
+				textOverflow='ellipsis'
+				color='fg'
+			>
 				{value}
 			</Text>
 		</HStack>
 	);
 }
-
-// function StyledBadge({
-// bg,
-// 	color,
-// 	children,
-// }: {
-// 	bg: string;
-// 	color: string;
-// 	children: React.ReactNode;
-// }) {
-// 	return (
-// 		<Box
-// 			px='2.5'
-// 			py='0.5'
-// 			borderRadius='md'
-// 			fontSize='xs'
-// 			fontWeight='600'
-// 			textTransform='uppercase'
-// 			letterSpacing='0.03em'
-// 			bg={bg}
-// 			color={color}
-// 		>
-// 			{children}
-// 		</Box>
-// 	);
-// }
 
 interface ActivityDetailDrawerProps {
 	activity: Activity | null;

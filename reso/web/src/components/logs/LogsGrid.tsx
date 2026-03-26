@@ -23,7 +23,10 @@ import {
 	Search,
 } from 'lucide-react';
 
-import React, { useCallback, useMemo, useState } from 'react';
+import { GridPage } from '@/components/GridPage';
+import { ProtocolBadge } from '@/components/ProtocolBadge';
+import { RecordTypeBadge } from '@/components/RecordTypeBadge';
+import { StatusBadge } from '@/components/StatusBadge';
 import {
 	type Activity,
 	type ActivityListFilter,
@@ -32,10 +35,7 @@ import {
 } from '@/lib/api/activity';
 import { getStatusInfo } from '@/lib/status-info';
 import { formatDuration, formatTimestamp } from '@/lib/time';
-import { GridPage } from '@/components/GridPage';
-import { ProtocolBadge } from '@/components/ProtocolBadge';
-import { RecordTypeBadge } from '@/components/RecordTypeBadge';
-import { StatusBadge } from '@/components/StatusBadge';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityDetailDrawer } from './ActivityDetailDrawer';
 
 const columnHelper = createColumnHelper<Activity>();
@@ -78,7 +78,13 @@ function buildColumns() {
 				return (
 					<Table.Cell py='3' px='4'>
 						<HStack gap='2'>
-							<Text fontFamily="'Mozilla Text', sans-serif" fontSize='sm'>
+							<Text
+								fontFamily="'Mozilla Text', sans-serif"
+								fontSize='sm'
+								whiteSpace='nowrap'
+								overflow='hidden'
+								textOverflow='ellipsis'
+							>
 								{activity.qname || '-'}
 							</Text>
 							{activity.qtype !== null && (

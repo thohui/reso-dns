@@ -1,3 +1,9 @@
+import { ActionBadge } from '@/components/ActionBadge';
+import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
+import { GridPage } from '@/components/GridPage';
+import { ToggleButton } from '@/components/ToggleButton';
+import type { DomainRule } from '@/lib/api/domain-rules';
+import { formatTimeAgo } from '@/lib/time';
 import { Box, Icon, IconButton, Input, Table, Text } from '@chakra-ui/react';
 import {
 	createColumnHelper,
@@ -7,12 +13,6 @@ import {
 } from '@tanstack/react-table';
 import { Globe, Pencil, Search } from 'lucide-react';
 import React, { useMemo } from 'react';
-import { ActionBadge } from '@/components/ActionBadge';
-import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
-import { ToggleButton } from '@/components/ToggleButton';
-import { GridPage } from '@/components/GridPage';
-import type { DomainRule } from '@/lib/api/domain-rules';
-import { formatTimeAgo } from '@/lib/time';
 
 const columnHelper = createColumnHelper<DomainRule>();
 
@@ -53,6 +53,9 @@ export function DomainRulesGrid({
 							fontFamily="'Mozilla Text', sans-serif"
 							fontSize='sm'
 							fontWeight='500'
+							whiteSpace='nowrap'
+							overflow='hidden'
+							textOverflow='ellipsis'
 						>
 							{getValue()}
 						</Text>
