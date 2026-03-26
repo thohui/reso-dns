@@ -7,7 +7,7 @@ use rusqlite_migration::MigrationsBuilder;
 pub mod models;
 pub mod query;
 
-const DB_POOL_SIZE: usize = 5;
+const DB_POOL_SIZE: usize = 3;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DatabaseError {
