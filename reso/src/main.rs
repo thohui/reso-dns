@@ -67,7 +67,7 @@ async fn run() -> anyhow::Result<()> {
     let (handle, stats, metrics_service) = MetricsService::new(metrics_db_connection.clone(), 1000).await?;
 
     let global: SharedGlobal = Arc::new(Global {
-        cache: DnsMessageCache::new(50_000),
+        cache: DnsMessageCache::default(),
         domain_rules: DomainRulesService::initialize(core_db_connection.clone()).await?,
         local_records: LocalRecordService::initialize(core_db_connection.clone()).await?,
         config: ConfigService::initialize(core_db_connection.clone()).await?,

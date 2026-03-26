@@ -119,7 +119,7 @@ pub struct DnsMessageCache {
 
 impl Default for DnsMessageCache {
     fn default() -> Self {
-        Self::new(50_000)
+        Self::new(8192)
     }
 }
 
@@ -127,11 +127,8 @@ impl DnsMessageCache {
     /// Create a new `DnsMessageCache`
     pub fn new(max_entries: u64) -> Self {
         Self {
-            cache: CacheBuilder::new(max_entries)
-                .initial_capacity(max_entries as usize)
-                .expire_after(CacheExpiry)
-                .build(),
-            negative_cache: CacheBuilder::new(8192).expire_after(CacheExpiry).build(),
+            cache: CacheBuilder::new(max_entries).expire_after(CacheExpiry).build(),
+            negative_cache: CacheBuilder::new(max_entries).expire_after(CacheExpiry).build(),
         }
     }
 
@@ -284,9 +281,11 @@ impl DnsMessageCache {
         // Cache the full answer under the query key so CNAME chains get cache hits.
         if let Ok(query_key) = CacheKey::try_from(query_msg) {
             let answers = resp_msg.answers();
+
             let is_cname_chain = query_key.record_type != RecordType::ANY
                 && answers.first().is_some_and(|r| r.record_type == RecordType::CNAME)
                 && answers.iter().any(|r| r.record_type == query_key.record_type);
+
             let is_positive = matches!(resp_msg.response_code(), Ok(DnsResponseCode::NoError));
 
             if is_cname_chain && is_positive {
@@ -383,17 +382,17 @@ impl DnsMessageCache {
     }
 }
 
-trait Livable {
+trait Expirable {
     fn expires_at(&self) -> Instant;
 }
 
-impl Livable for CacheEntry {
+impl Expirable for CacheEntry {
     fn expires_at(&self) -> Instant {
         self.expires_at
     }
 }
 
-impl Livable for NegativeEntry {
+impl Expirable for NegativeEntry {
     fn expires_at(&self) -> Instant {
         self.expires_at
     }
@@ -402,7 +401,7 @@ struct CacheExpiry;
 
 impl<K, V> Expiry<K, V> for CacheExpiry
 where
-    V: Livable,
+    V: Expirable,
 {
     fn expire_after_create(&self, _: &K, value: &V, _: std::time::Instant) -> Option<Duration> {
         Some(value.expires_at().saturating_duration_since(Instant::now()))
