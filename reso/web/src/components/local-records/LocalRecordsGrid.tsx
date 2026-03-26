@@ -1,3 +1,9 @@
+import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
+import { GridPage } from '@/components/GridPage';
+import { RecordTypeBadge } from '@/components/RecordTypeBadge';
+import { ToggleButton } from '@/components/ToggleButton';
+import type { LocalRecord } from '@/lib/api/local-records';
+import { formatTimeAgo } from '@/lib/time';
 import { Box, Icon, Input, Table, Text } from '@chakra-ui/react';
 import {
 	createColumnHelper,
@@ -7,18 +13,6 @@ import {
 } from '@tanstack/react-table';
 import { Globe, Search } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
-import type { LocalRecord } from '@/lib/api/local-records';
-import { formatTimeAgo } from '@/lib/time';
-import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
-import { GridPage } from '@/components/GridPage';
-import { RecordTypeBadge } from '@/components/RecordTypeBadge';
-import { ToggleButton } from '@/components/ToggleButton';
-
-const TYPE_COLORS: Record<number, string> = {
-	1: '#60a5fa', // A
-	28: '#a78bfa', // AAAA
-	5: '#34d399', // CNAME
-};
 
 const columnHelper = createColumnHelper<LocalRecord>();
 
