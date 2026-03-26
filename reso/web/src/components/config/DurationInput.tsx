@@ -15,7 +15,7 @@ type AllowedUnit = (typeof UNITS)[number]['label'];
 function decompose(
 	totalSeconds: number,
 	allowed: (typeof UNITS)[number][],
-): { amount: number; unit: Unit } {
+): { amount: number; unit: Unit; } {
 	for (let i = allowed.length - 1; i >= 0; i--) {
 		const u = allowed[i];
 		if (
@@ -56,9 +56,15 @@ export function DurationInput({
 	invalid,
 	errorText,
 }: Props) {
-	const conversionFactor = UNITS.find((u) => u.label === conversion)!.value;
-	const allowedUnitsFull = UNITS.filter((u) => allowedUnits.includes(u.label));
+
+	const { conversionFactor, allowedUnitsFull } = useMemo(() => {
+		const conversionFactor = UNITS.find((u) => u.label === conversion)!.value;
+		const allowedUnitsFull = UNITS.filter((u) => allowedUnits.includes(u.label));
+		return { conversionFactor, allowedUnitsFull };
+	}, [conversion, allowedUnits]);
+
 	const totalSeconds = value * conversionFactor;
+
 	const { amount, unit } = useMemo(
 		() => decompose(totalSeconds, allowedUnitsFull),
 		[totalSeconds, allowedUnitsFull],
