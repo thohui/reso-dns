@@ -16,7 +16,7 @@ tracing-subscriber = { version = "0.3.20", features = ["fmt", "serde", "json"] }
 idna = "1.1.0"
 futures = "0.3.31"
 thiserror = "2.0.17"
-rand = { version = "0.9.2" }
+rand = { version = "0.9.3" }
 dashmap = "6.1.0"
 reso-dns = { path = "crates/dns" }
 reso-server = { path = "crates/server" }
