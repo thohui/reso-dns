@@ -22,9 +22,9 @@ jobs:
       SKIP_FRONTEND_BUILD: true
       CARGO_TERM_COLOR: always
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.93
+        uses: dtolnay/rust-toolchain@1.95
       - name: Run tests
         run: cargo test --no-default-features
 
@@ -43,13 +43,13 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -57,13 +57,13 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
 
       - name: Build and push by digest
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: ${{ matrix.platform }}
@@ -98,10 +98,10 @@ jobs:
           merge-multiple: true
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -109,7 +109,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
