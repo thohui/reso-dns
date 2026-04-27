@@ -1,7 +1,7 @@
 use std::{
     hash::Hash,
     net::{Ipv4Addr, Ipv6Addr},
-    sync::Arc,
+    sync::LazyLock,
 };
 
 use anyhow::anyhow;
@@ -14,7 +14,7 @@ use crate::{
 };
 
 /// Represents a DNS message.
-/// This struct encapsulates the various components of a DNS messag and doesn not represent the full wire structure.
+/// This struct encapsulates the various components of a DNS message and does not represent the full wire structure.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DnsMessage {
     /// Transaction id
@@ -89,17 +89,18 @@ impl DnsMessage {
         let mut edns: Option<Edns> = None;
 
         for _ in 0..number_of_additional_records {
-            let start = reader.position();
-            let _ = reader.read_qname()?;
+            let name = reader.read_qname()?;
             let rtype = RecordType::try_from(reader.read_u16()?)?;
 
             // Handle EDNS
             if rtype == RecordType::OPT {
-                edns = Some(Edns::read_from(&mut reader)?)
+                edns = Some(Edns::read_from(&mut reader)?);
             } else {
-                // Not OPT: handle as normal record.
-                reader.seek(start)?;
-                additional_records.push(DnsRecord::read_from(&mut reader)?);
+                let class = ClassType::try_from(reader.read_u16()?)?;
+                let ttl = reader.read_u32()?;
+                let data_length = reader.read_u16()? as usize;
+                let data = DnsRecordData::read_from_record_type(&mut reader, &rtype, data_length)?;
+                additional_records.push(DnsRecord::new(name, rtype, class, ttl, data));
             }
         }
 
@@ -650,7 +651,7 @@ pub enum DnsRecordData {
     Raw(Vec<u8>),
     Ipv4(std::net::Ipv4Addr),
     Ipv6(std::net::Ipv6Addr),
-    Text(Vec<Arc<str>>),
+    Text(Vec<Box<str>>),
 
     SOA {
         /// Primary nameserver.
@@ -767,7 +768,7 @@ impl DnsRecordData {
             }
             RecordType::TXT | RecordType::SPF => {
                 let mut remaining = data_length;
-                let mut chunks: Vec<Arc<str>> = Vec::new();
+                let mut chunks: Vec<Box<str>> = Vec::new();
 
                 while remaining > 0 {
                     anyhow::ensure!(remaining >= 1, "TXT RDATA truncated (missing length byte)");
@@ -985,10 +986,13 @@ impl DnsReadable for Edns {
     }
 }
 
+static ROOT: LazyLock<DomainName> = LazyLock::new(DomainName::root);
+
 impl DnsWritable for Edns {
     fn write_to(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
-        // NAME = root, TYPE = OPT
-        writer.write_qname(&DomainName::root())?;
+        // NAME = root
+        writer.write_qname(&ROOT)?;
+        // TYPE = OPT
         writer.write_u16(RecordType::OPT.to_u16())?;
 
         // CLASS = UDP payload size
@@ -1623,7 +1627,7 @@ mod tests {
 
     #[test]
     fn test_dns_record_data_text() {
-        let chunks = vec![Arc::from("hello"), Arc::from("world")];
+        let chunks = vec![Box::from("hello"), Box::from("world")];
         let data = DnsRecordData::Text(chunks);
 
         let mut writer = DnsMessageWriter::new();
@@ -2167,8 +2171,8 @@ mod tests {
             class: ClassType::IN,
             ttl: 300,
             data: DnsRecordData::Text(vec![
-                Arc::from("v=spf1 include:_spf.google.com ~all"),
-                Arc::from("another chunk"),
+                Box::from("v=spf1 include:_spf.google.com ~all"),
+                Box::from("another chunk"),
             ]),
         };
 

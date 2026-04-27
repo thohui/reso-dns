@@ -45,7 +45,7 @@ impl DnsMessageWriter {
 
     /// Create a new DNS message writer.
     pub fn new() -> Self {
-        Self::new_with_max(65535)
+        Self::new_with_max(1232)
     }
 
     #[inline]
