@@ -1,4 +1,4 @@
-use crate::error::{DnsWriteError, WriteResult};
+use crate::error::{DnsWriteError, Result, WriteResult};
 use std::collections::HashMap;
 
 use bytes::{BufMut, Bytes, BytesMut};
@@ -207,5 +207,5 @@ impl DnsMessageWriter {
 
 /// Trait for types that can be serialized into DNS wire format
 pub trait DnsWritable {
-    fn write_to(&self, writer: &mut DnsMessageWriter) -> WriteResult<()>;
+    fn write_to(&self, writer: &mut DnsMessageWriter) -> Result<()>;
 }

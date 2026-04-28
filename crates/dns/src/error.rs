@@ -33,23 +33,11 @@ pub enum DnsReadError {
     #[error("unterminated name: no root label within {len} bytes")]
     UnterminatedName { len: usize },
 
-    #[error("invalid opcode {0}")]
-    InvalidOpcode(u8),
-
     #[error("multiple OPT records in additional section")]
     MultipleOpt,
 
-    #[error("OPT record outside additional section")]
-    OptMisplaced,
-
-    #[error("EDNS version {0} not supported")]
-    UnsupportedEdnsVersion(u8),
-
-    #[error("ECS prefix {prefix} exceeds max {max} for family {family}")]
-    EcsPrefixTooLarge { family: u16, prefix: u8, max: u8 },
-
-    #[error("invalid IDNA domain: {input}")]
-    InvalidIdna { input: String },
+    #[error("invalid IDNA domain: {input}: {cause}")]
+    InvalidIdna { input: String, cause: idna::Errors },
 }
 
 /// Error that can occur during DNS message writing.
@@ -64,9 +52,6 @@ pub enum DnsWriteError {
 
     #[error("overwrite out of bounds: pos {pos}, len {len}, buf len {buf_len}")]
     OverwriteOutOfBounds { pos: usize, len: usize, buf_len: usize },
-
-    #[error("RDATA length overflow: {len} bytes exceeds u16")]
-    RdataLengthOverflow { len: usize },
 }
 
 /// General error type for DNS processing errors.
@@ -85,8 +70,18 @@ pub enum DnsError {
     #[error("unknown address family: {family}")]
     UnknownAddressFamily { family: u16 },
 
+    #[error("RDATA length overflow: {len} bytes exceeds u16")]
+    RdataLengthOverflow { len: usize },
+
+    #[error("EDNS version {0} not supported")]
+    UnsupportedEdnsVersion(u8),
+
+    #[error("ECS prefix {prefix} exceeds max {max} for family {family}")]
+    EcsPrefixTooLarge { family: u16, prefix: u8, max: u8 },
+
     #[error(transparent)]
     Read(#[from] DnsReadError),
+
     #[error(transparent)]
     Write(#[from] DnsWriteError),
 }
@@ -100,6 +95,9 @@ impl DnsError {
             DnsError::UnknownAddressFamily { .. } => DnsResponseCode::FormatError,
             DnsError::Read(_) => DnsResponseCode::FormatError,
             DnsError::Write(_) => DnsResponseCode::ServerFailure,
+            DnsError::RdataLengthOverflow { .. } => DnsResponseCode::FormatError,
+            DnsError::UnsupportedEdnsVersion(_) => DnsResponseCode::FormatError,
+            DnsError::EcsPrefixTooLarge { .. } => DnsResponseCode::FormatError,
         }
     }
 }

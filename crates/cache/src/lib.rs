@@ -221,8 +221,8 @@ impl DnsMessageCache {
 
         // Negative caching: trust the upstream recursive resolver regardless of AA bit.
         let neg_kind = match resp_msg.response_code() {
-            Ok(DnsResponseCode::NxDomain) => Some(NegKind::NxDomain),
-            Ok(DnsResponseCode::NoError)
+            DnsResponseCode::NxDomain => Some(NegKind::NxDomain),
+            DnsResponseCode::NoError
                 if resp_msg.answers().is_empty()
                     && resp_msg
                         .authority_records()
@@ -286,7 +286,7 @@ impl DnsMessageCache {
                 && answers.first().is_some_and(|r| r.record_type == RecordType::CNAME)
                 && answers.iter().any(|r| r.record_type == query_key.record_type);
 
-            let is_positive = matches!(resp_msg.response_code(), Ok(DnsResponseCode::NoError));
+            let is_positive = matches!(resp_msg.response_code(), DnsResponseCode::NoError);
 
             if is_cname_chain && is_positive {
                 let cacheable: Vec<_> = answers

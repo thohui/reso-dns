@@ -205,7 +205,7 @@ impl DomainName {
         let raw_labels: Vec<Vec<u8>> = s.split('.').map(unescape_label).collect();
 
         // Validate no empty labels
-        for (i, label) in raw_labels.iter().enumerate() {
+        for label in raw_labels.iter() {
             if label.is_empty() {
                 return Err(DnsReadError::EmptyLabel);
             }
@@ -231,8 +231,9 @@ impl DomainName {
 
         // IDNA to ASCII
         let ascii =
-            idna::domain_to_ascii_cow(name.as_bytes(), AsciiDenyList::URL).map_err(|_| DnsReadError::InvalidIdna {
+            idna::domain_to_ascii_cow(name.as_bytes(), AsciiDenyList::URL).map_err(|e| DnsReadError::InvalidIdna {
                 input: input.to_string(),
+                cause: e,
             })?;
 
         Self::from_ascii(&ascii)

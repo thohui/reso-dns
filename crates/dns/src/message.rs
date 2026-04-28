@@ -8,7 +8,7 @@ use bytes::Bytes;
 
 use crate::{
     domain_name::DomainName,
-    error::{DnsError, DnsReadError, DnsWriteError, ReadResult, Result, WriteResult},
+    error::{DnsError, DnsReadError, ReadResult, Result, WriteResult},
     reader::{DnsMessageReader, DnsReadable},
     writer::{DnsMessageWriter, DnsWritable},
 };
@@ -211,11 +211,11 @@ impl DnsMessage {
     }
 
     /// Response code
-    pub fn response_code(&self) -> std::result::Result<DnsResponseCode, DnsError> {
+    pub fn response_code(&self) -> DnsResponseCode {
         let low = self.flags.rcode_low as u16;
         let high = self.edns.as_ref().map(|e| e.extended_rcode).unwrap_or(0) as u16;
         let code = DnsResponseCode::from((high << 4) | low);
-        Ok(code)
+        code
     }
 }
 
@@ -307,7 +307,7 @@ impl DnsReadable for DnsFlags {
 }
 
 impl DnsWritable for DnsFlags {
-    fn write_to(&self, writer: &mut DnsMessageWriter) -> WriteResult<()> {
+    fn write_to(&self, writer: &mut DnsMessageWriter) -> Result<()> {
         let opcode: u8 = self.opcode as u8;
         writer.write_u16(
             ((self.response as u16) << 15)
@@ -430,7 +430,7 @@ impl DnsReadable for DnsQuestion {
 }
 
 impl DnsWritable for DnsQuestion {
-    fn write_to(&self, writer: &mut DnsMessageWriter) -> WriteResult<()> {
+    fn write_to(&self, writer: &mut DnsMessageWriter) -> Result<()> {
         writer.write_qname(&self.qname)?;
         writer.write_u16(self.qtype.to_u16())?;
         writer.write_u16(self.qclass.to_u16())?;
@@ -883,7 +883,7 @@ impl DnsReadable for DnsRecord {
 }
 
 impl DnsWritable for DnsRecord {
-    fn write_to(&self, writer: &mut DnsMessageWriter) -> WriteResult<()> {
+    fn write_to(&self, writer: &mut DnsMessageWriter) -> Result<()> {
         writer.write_qname(&self.name)?;
         writer.write_u16(self.record_type.to_u16())?;
         writer.write_u16(self.class.to_u16())?;
@@ -993,7 +993,7 @@ impl DnsReadable for Edns {
 static ROOT: LazyLock<DomainName> = LazyLock::new(DomainName::root);
 
 impl DnsWritable for Edns {
-    fn write_to(&self, writer: &mut DnsMessageWriter) -> WriteResult<()> {
+    fn write_to(&self, writer: &mut DnsMessageWriter) -> Result<()> {
         // NAME = root
         writer.write_qname(&ROOT)?;
         // TYPE = OPT
@@ -1010,7 +1010,7 @@ impl DnsWritable for Edns {
         let rdlen: usize = self.options.iter().map(|opt| 4 + opt.wire_len() as usize).sum();
         let rdlen: u16 = rdlen
             .try_into()
-            .map_err(|_| DnsWriteError::RdataLengthOverflow { len: rdlen })?;
+            .map_err(|_| DnsError::RdataLengthOverflow { len: rdlen })?;
         writer.write_u16(rdlen)?;
 
         for opt in &self.options {
@@ -1140,7 +1140,7 @@ pub enum EdnsOptionData {
 }
 
 impl DnsWritable for EdnsOptionData {
-    fn write_to(&self, writer: &mut DnsMessageWriter) -> WriteResult<()> {
+    fn write_to(&self, writer: &mut DnsMessageWriter) -> Result<()> {
         match &self {
             EdnsOptionData::Lease { lease, key_lease } => {
                 writer.write_u32(*lease)?;
@@ -1161,9 +1161,9 @@ impl DnsWritable for EdnsOptionData {
                 writer.write_bytes(address)?;
                 Ok(())
             }
-            EdnsOptionData::Timeout(timeout) => writer.write_u16(*timeout),
-            EdnsOptionData::Padding(padding) => writer.write_u16(*padding),
-            EdnsOptionData::DomainName(domain_name) => writer.write_qname_uncompressed(domain_name),
+            EdnsOptionData::Timeout(timeout) => writer.write_u16(*timeout).map_err(Into::into),
+            EdnsOptionData::Padding(padding) => writer.write_u16(*padding).map_err(Into::into),
+            EdnsOptionData::DomainName(domain_name) => writer.write_qname_uncompressed(domain_name).map_err(Into::into),
             EdnsOptionData::ExtendedError { info_code, extra_text } => {
                 writer.write_u16(info_code.to_u16())?;
                 if let Some(extra_text) = extra_text {
@@ -1181,7 +1181,7 @@ impl DnsWritable for EdnsOptionData {
                 writer.write_bytes(version)?;
                 Ok(())
             }
-            EdnsOptionData::Raw(items) => writer.write_bytes(items),
+            EdnsOptionData::Raw(items) => writer.write_bytes(items).map_err(Into::into),
         }
     }
 }
@@ -1229,7 +1229,7 @@ impl EdnsOptionData {
                     _ => return Err(DnsError::UnknownAddressFamily { family }),
                 };
                 if source_prefix_length > max_prefix {
-                    return Err(DnsReadError::EcsPrefixTooLarge {
+                    return Err(DnsError::EcsPrefixTooLarge {
                         family,
                         prefix: source_prefix_length,
                         max: max_prefix,
@@ -1366,7 +1366,7 @@ impl DnsReadable for EdnsOption {
 }
 
 impl DnsWritable for EdnsOption {
-    fn write_to(&self, writer: &mut DnsMessageWriter) -> WriteResult<()> {
+    fn write_to(&self, writer: &mut DnsMessageWriter) -> Result<()> {
         writer.write_u16(self.code.to_u16())?;
         writer.write_u16(self.wire_len())?;
         if let Some(data) = &self.data {
@@ -1604,14 +1604,14 @@ mod tests {
 
         // Test low response code (fits in 4 bits)
         message.set_response_code(DnsResponseCode::NoError);
-        assert_eq!(message.response_code().unwrap(), DnsResponseCode::NoError);
+        assert_eq!(message.response_code(), DnsResponseCode::NoError);
 
         message.set_response_code(DnsResponseCode::NxDomain);
-        assert_eq!(message.response_code().unwrap(), DnsResponseCode::NxDomain);
+        assert_eq!(message.response_code(), DnsResponseCode::NxDomain);
 
         // Test extended response code (requires EDNS)
         message.set_response_code(DnsResponseCode::BADVERS);
-        assert_eq!(message.response_code().unwrap(), DnsResponseCode::BADVERS);
+        assert_eq!(message.response_code(), DnsResponseCode::BADVERS);
         assert!(message.edns.is_some());
     }
 
@@ -1990,7 +1990,7 @@ mod tests {
         let encoded = message.encode().unwrap();
         let decoded = DnsMessage::decode(&encoded).unwrap();
 
-        assert_eq!(decoded.response_code().unwrap(), DnsResponseCode::BADVERS);
+        assert_eq!(decoded.response_code(), DnsResponseCode::BADVERS);
         assert!(decoded.edns().is_some());
     }
 
@@ -2301,7 +2301,7 @@ mod tests {
         let encoded = message.encode().unwrap();
         let decoded = DnsMessage::decode(&encoded).unwrap();
 
-        assert_eq!(decoded.response_code().unwrap(), DnsResponseCode::NxDomain);
+        assert_eq!(decoded.response_code(), DnsResponseCode::NxDomain);
         assert!(decoded.flags.response);
         assert!(decoded.flags.recursion_desired);
         assert!(decoded.flags.recursion_available);
