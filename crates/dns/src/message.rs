@@ -4,16 +4,17 @@ use std::{
     sync::LazyLock,
 };
 
-use anyhow::anyhow;
 use bytes::Bytes;
 
 use crate::{
     domain_name::DomainName,
+    error::{DnsError, DnsReadError, DnsWriteError, ReadResult, Result, WriteResult},
     reader::{DnsMessageReader, DnsReadable},
     writer::{DnsMessageWriter, DnsWritable},
 };
 
-/// Represents a DNS message.
+/// DNS Message struct representing a DNS message.
+///
 /// This struct encapsulates the various components of a DNS message and does not represent the full wire structure.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DnsMessage {
@@ -53,7 +54,8 @@ impl DnsMessage {
         }
     }
 
-    pub fn decode(data: &[u8]) -> anyhow::Result<Self> {
+    /// Decode a DNS message from raw bytes.
+    pub fn decode(data: &[u8]) -> crate::error::Result<Self> {
         let mut reader = DnsMessageReader::new(data);
 
         let id = reader.read_u16()?;
@@ -90,13 +92,13 @@ impl DnsMessage {
 
         for _ in 0..number_of_additional_records {
             let name = reader.read_qname()?;
-            let rtype = RecordType::try_from(reader.read_u16()?)?;
+            let rtype = RecordType::from(reader.read_u16()?);
 
             // Handle EDNS
             if rtype == RecordType::OPT {
                 edns = Some(Edns::read_from(&mut reader)?);
             } else {
-                let class = ClassType::try_from(reader.read_u16()?)?;
+                let class = ClassType::from(reader.read_u16()?);
                 let ttl = reader.read_u32()?;
                 let data_length = reader.read_u16()? as usize;
                 let data = DnsRecordData::read_from_record_type(&mut reader, &rtype, data_length)?;
@@ -115,7 +117,8 @@ impl DnsMessage {
         })
     }
 
-    pub fn encode(&self) -> anyhow::Result<Bytes> {
+    /// Encode the DNS message into raw bytes.
+    pub fn encode(&self) -> std::result::Result<Bytes, DnsError> {
         let mut writer = DnsMessageWriter::new();
 
         // ID
@@ -208,10 +211,10 @@ impl DnsMessage {
     }
 
     /// Response code
-    pub fn response_code(&self) -> anyhow::Result<DnsResponseCode> {
+    pub fn response_code(&self) -> std::result::Result<DnsResponseCode, DnsError> {
         let low = self.flags.rcode_low as u16;
         let high = self.edns.as_ref().map(|e| e.extended_rcode).unwrap_or(0) as u16;
-        let code = DnsResponseCode::try_from((high << 4) | low)?;
+        let code = DnsResponseCode::from((high << 4) | low);
         Ok(code)
     }
 }
@@ -241,9 +244,9 @@ pub struct DnsFlags {
 }
 
 impl TryFrom<u16> for DnsFlags {
-    type Error = anyhow::Error;
+    type Error = DnsError;
 
-    fn try_from(bytes: u16) -> Result<Self, Self::Error> {
+    fn try_from(bytes: u16) -> std::result::Result<Self, Self::Error> {
         Ok(Self {
             response: (bytes >> 15) & 0x1 != 0,
             opcode: DnsOpcode::try_from(((bytes >> 11) & 0xF) as u8)?,
@@ -286,7 +289,7 @@ impl DnsFlags {
 }
 
 impl DnsReadable for DnsFlags {
-    fn read_from(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
+    fn read_from(reader: &mut DnsMessageReader) -> Result<Self> {
         let bytes = reader.read_u16()?;
         Ok(Self {
             response: (bytes >> 15) & 0x1 != 0,
@@ -304,7 +307,7 @@ impl DnsReadable for DnsFlags {
 }
 
 impl DnsWritable for DnsFlags {
-    fn write_to(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
+    fn write_to(&self, writer: &mut DnsMessageWriter) -> WriteResult<()> {
         let opcode: u8 = self.opcode as u8;
         writer.write_u16(
             ((self.response as u16) << 15)
@@ -323,9 +326,9 @@ impl DnsWritable for DnsFlags {
 }
 
 u16_enum_with_unknown! {
-/// Dns response code
-///
-/// Based on: https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml#dns-parameters-6
+    /// Dns response code
+    ///
+    /// Based on: https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml#dns-parameters-6
     pub enum DnsResponseCode {
         /// No error, the request was successful
         NoError = 0,
@@ -387,14 +390,14 @@ pub enum DnsOpcode {
 }
 
 impl TryFrom<u8> for DnsOpcode {
-    type Error = anyhow::Error;
+    type Error = DnsError;
 
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
         match value {
             0 => Ok(Self::Query),
             1 => Ok(Self::IQuery),
             2 => Ok(Self::Status),
-            _ => Err(anyhow!("invalid opcode: {}", value)),
+            _ => Err(DnsError::InvalidOpcode(value)),
         }
     }
 }
@@ -417,17 +420,17 @@ impl DnsQuestion {
 }
 
 impl DnsReadable for DnsQuestion {
-    fn read_from(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
+    fn read_from(reader: &mut DnsMessageReader) -> crate::error::Result<Self> {
         let qname = reader.read_qname()?;
-        let qtype = RecordType::try_from(reader.read_u16()?)?;
-        let qclass = ClassType::try_from(reader.read_u16()?)?;
+        let qtype = RecordType::from(reader.read_u16()?);
+        let qclass = ClassType::from(reader.read_u16()?);
 
         Ok(Self { qname, qtype, qclass })
     }
 }
 
 impl DnsWritable for DnsQuestion {
-    fn write_to(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
+    fn write_to(&self, writer: &mut DnsMessageWriter) -> WriteResult<()> {
         writer.write_qname(&self.qname)?;
         writer.write_u16(self.qtype.to_u16())?;
         writer.write_u16(self.qclass.to_u16())?;
@@ -684,7 +687,7 @@ pub enum DnsRecordData {
 
 impl DnsRecordData {
     /// Write the DNS record data to the DNS message.
-    pub fn write(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
+    pub fn write(&self, writer: &mut DnsMessageWriter) -> WriteResult<()> {
         match self {
             DnsRecordData::Raw(data) => writer.write_bytes(data),
             DnsRecordData::Ipv4(addr) => writer.write_bytes(&addr.octets()),
@@ -741,7 +744,7 @@ impl DnsRecordData {
         reader: &mut DnsMessageReader,
         record_type: &RecordType,
         data_length: usize,
-    ) -> anyhow::Result<DnsRecordData> {
+    ) -> ReadResult<DnsRecordData> {
         Ok(match *record_type {
             RecordType::CNAME | RecordType::PTR | RecordType::NS => {
                 let domain_name = reader.read_qname()?;
@@ -771,16 +774,17 @@ impl DnsRecordData {
                 let mut chunks: Vec<Box<str>> = Vec::new();
 
                 while remaining > 0 {
-                    anyhow::ensure!(remaining >= 1, "TXT RDATA truncated (missing length byte)");
                     let len = reader.read_u8()? as usize;
                     remaining -= 1;
 
-                    anyhow::ensure!(
-                        len <= remaining,
-                        "TXT chunk len {} exceeds remaining {}",
-                        len,
-                        remaining
-                    );
+                    if len > remaining {
+                        return Err(DnsReadError::BufferUnderflow {
+                            pos: reader.position(),
+                            need: len,
+                            have: remaining,
+                        }
+                        .into());
+                    }
                     let bytes = reader.read_bytes(len)?;
                     remaining -= len;
                     let chunk = String::from_utf8_lossy(bytes).into_owned();
@@ -816,7 +820,7 @@ impl DnsRecordData {
     }
 }
 
-/// Represents a DNS record in a DNS message.
+/// Record in the answer, authority, and additional sections of a DNS message.
 #[derive(Debug, Clone, Eq)]
 pub struct DnsRecord {
     pub name: DomainName,
@@ -859,10 +863,10 @@ impl DnsRecord {
 }
 
 impl DnsReadable for DnsRecord {
-    fn read_from(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
+    fn read_from(reader: &mut DnsMessageReader) -> crate::error::Result<Self> {
         let name = reader.read_qname()?;
-        let record_type = RecordType::try_from(reader.read_u16()?)?;
-        let class = ClassType::try_from(reader.read_u16()?)?;
+        let record_type = RecordType::from(reader.read_u16()?);
+        let class = ClassType::from(reader.read_u16()?);
         let ttl = reader.read_u32()?;
         let data_length = reader.read_u16()? as usize;
 
@@ -879,7 +883,7 @@ impl DnsReadable for DnsRecord {
 }
 
 impl DnsWritable for DnsRecord {
-    fn write_to(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
+    fn write_to(&self, writer: &mut DnsMessageWriter) -> WriteResult<()> {
         writer.write_qname(&self.name)?;
         writer.write_u16(self.record_type.to_u16())?;
         writer.write_u16(self.class.to_u16())?;
@@ -912,7 +916,7 @@ impl PartialEq for DnsRecord {
     }
 }
 
-/// Represents EDNS (Extension Mechanisms for DNS) information in a DNS message.
+/// Special record type used in the additional section of a DNS message to indicate EDNS options.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Edns {
     /// Max UDP payload size sender can handle
@@ -956,7 +960,7 @@ impl Edns {
 }
 
 impl DnsReadable for Edns {
-    fn read_from(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
+    fn read_from(reader: &mut DnsMessageReader) -> crate::error::Result<Self> {
         let udp_payload_size = reader.read_u16()?;
 
         // TTL packed: ext_rcode | version | z_flags
@@ -989,7 +993,7 @@ impl DnsReadable for Edns {
 static ROOT: LazyLock<DomainName> = LazyLock::new(DomainName::root);
 
 impl DnsWritable for Edns {
-    fn write_to(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
+    fn write_to(&self, writer: &mut DnsMessageWriter) -> WriteResult<()> {
         // NAME = root
         writer.write_qname(&ROOT)?;
         // TYPE = OPT
@@ -1006,7 +1010,7 @@ impl DnsWritable for Edns {
         let rdlen: usize = self.options.iter().map(|opt| 4 + opt.wire_len() as usize).sum();
         let rdlen: u16 = rdlen
             .try_into()
-            .map_err(|_| anyhow::anyhow!("EDNS OPT RDATA length overflow: {}", rdlen))?;
+            .map_err(|_| DnsWriteError::RdataLengthOverflow { len: rdlen })?;
         writer.write_u16(rdlen)?;
 
         for opt in &self.options {
@@ -1096,6 +1100,7 @@ pub struct ClientSubnet {
     pub address: Vec<u8>,
 }
 
+/// Data for an EDNS option.
 #[derive(Debug, Clone, PartialEq)]
 pub enum EdnsOptionData {
     /// Lease
@@ -1135,7 +1140,7 @@ pub enum EdnsOptionData {
 }
 
 impl DnsWritable for EdnsOptionData {
-    fn write_to(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
+    fn write_to(&self, writer: &mut DnsMessageWriter) -> WriteResult<()> {
         match &self {
             EdnsOptionData::Lease { lease, key_lease } => {
                 writer.write_u32(*lease)?;
@@ -1202,10 +1207,17 @@ impl EdnsOptionData {
         }
     }
 
-    pub fn read(reader: &mut DnsMessageReader, code: &EdnsOptionCode, len: u16) -> anyhow::Result<Self> {
+    /// Read an `EdnsOptionData` from the reader based on the provided option code and length.
+    pub fn read(reader: &mut DnsMessageReader, code: &EdnsOptionCode, len: u16) -> crate::error::Result<Self> {
         Ok(match *code {
             EdnsOptionCode::ClientSubnet => {
-                anyhow::ensure!(len >= 4, "ECS option too short (must be at least 4 bytes)");
+                if len < 4 {
+                    return Err(DnsError::InvalidOptionLength {
+                        option: "ECS".to_string(),
+                        expected: 4,
+                        actual: len as usize,
+                    });
+                }
                 let family_bytes = reader.read_bytes(2)?;
                 let family = u16::from_be_bytes([family_bytes[0], family_bytes[1]]);
                 let source_prefix_length = reader.read_u8()?;
@@ -1214,23 +1226,27 @@ impl EdnsOptionData {
                 let max_prefix: u8 = match family {
                     1 => 32,
                     2 => 128,
-                    _ => anyhow::bail!("ECS unknown address family {}", family),
+                    _ => return Err(DnsError::UnknownAddressFamily { family }),
                 };
-                anyhow::ensure!(
-                    source_prefix_length <= max_prefix,
-                    "ECS source prefix {} exceeds max {} for family {}",
-                    source_prefix_length,
-                    max_prefix,
-                    family
-                );
+                if source_prefix_length > max_prefix {
+                    return Err(DnsReadError::EcsPrefixTooLarge {
+                        family,
+                        prefix: source_prefix_length,
+                        max: max_prefix,
+                    }
+                    .into());
+                }
 
                 let address_size = (source_prefix_length as usize).div_ceil(8);
-                anyhow::ensure!(
-                    len == 4 + address_size as u16,
-                    "ECS option length {} does not match expected {}",
-                    len,
-                    4 + address_size
-                );
+                let expected_len = 4 + address_size as u16;
+
+                if len != expected_len {
+                    return Err(DnsError::InvalidOptionLength {
+                        option: "ECS".to_string(),
+                        expected: expected_len as usize,
+                        actual: len as usize,
+                    });
+                }
 
                 let mut address = reader.read_bytes(address_size)?.to_vec();
 
@@ -1251,7 +1267,13 @@ impl EdnsOptionData {
             }
             EdnsOptionCode::Cookie => Self::Raw(reader.read_bytes(len as usize)?.to_vec()),
             EdnsOptionCode::UpdateLease => {
-                anyhow::ensure!(len == 4 || len == 8, "invalid UPDATE-LEASE option length: {}", len);
+                if len != 4 && len != 8 {
+                    return Err(DnsError::InvalidOptionLength {
+                        option: "UPDATE-LEASE".to_string(),
+                        expected: 4,
+                        actual: len as usize,
+                    });
+                }
                 let lease = reader.read_u32()?;
                 let key_lease: Option<u32> = if len == 8 { Some(reader.read_u32()?) } else { None };
                 Self::Lease { lease, key_lease }
@@ -1260,7 +1282,13 @@ impl EdnsOptionData {
                 Self::Raw(reader.read_bytes(len as usize)?.to_vec())
             }
             EdnsOptionCode::TcpKeepAlive => {
-                anyhow::ensure!(len == 2, "invalid TCP Keepalive option length: {}", len);
+                if len != 2 {
+                    return Err(DnsError::InvalidOptionLength {
+                        option: "TCP-Keepalive".to_string(),
+                        expected: 2,
+                        actual: len as usize,
+                    });
+                }
                 Self::Timeout(reader.read_u16()?)
             }
             EdnsOptionCode::Padding => {
@@ -1272,11 +1300,14 @@ impl EdnsOptionData {
             }
             EdnsOptionCode::ExtendedDnsError => {
                 let len_usize = usize::from(len);
-                anyhow::ensure!(
-                    len_usize >= std::mem::size_of::<u16>(),
-                    "extended dns error length too short"
-                );
-                let info_code = ExtendedDnsErrorInfoCode::try_from(reader.read_u16()?)?;
+                if len_usize < std::mem::size_of::<u16>() {
+                    return Err(DnsError::InvalidOptionLength {
+                        option: "ExtendedDnsError".to_string(),
+                        expected: 2,
+                        actual: len_usize,
+                    });
+                }
+                let info_code = ExtendedDnsErrorInfoCode::from(reader.read_u16()?);
 
                 let remaining_length = len_usize - std::mem::size_of::<u16>();
 
@@ -1291,7 +1322,13 @@ impl EdnsOptionData {
                 Self::ExtendedError { info_code, extra_text }
             }
             EdnsOptionCode::ZONEVERSION => {
-                anyhow::ensure!(len >= 2, "ZONEVERSION option too short: len={} (need at least 2)", len);
+                if len < 2 {
+                    return Err(DnsError::InvalidOptionLength {
+                        option: "ZONEVERSION".to_string(),
+                        expected: 2,
+                        actual: len as usize,
+                    });
+                }
 
                 let label_count = reader.read_u8()?;
                 let typ = reader.read_u8()?;
@@ -1316,8 +1353,8 @@ impl EdnsOptionData {
 }
 
 impl DnsReadable for EdnsOption {
-    fn read_from(reader: &mut DnsMessageReader) -> anyhow::Result<Self> {
-        let code = EdnsOptionCode::try_from(reader.read_u16()?)?;
+    fn read_from(reader: &mut DnsMessageReader) -> crate::error::Result<Self> {
+        let code = EdnsOptionCode::from(reader.read_u16()?);
         let len = reader.read_u16()?;
         let data: Option<EdnsOptionData> = if len == 0 {
             None
@@ -1329,7 +1366,7 @@ impl DnsReadable for EdnsOption {
 }
 
 impl DnsWritable for EdnsOption {
-    fn write_to(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()> {
+    fn write_to(&self, writer: &mut DnsMessageWriter) -> WriteResult<()> {
         writer.write_u16(self.code.to_u16())?;
         writer.write_u16(self.wire_len())?;
         if let Some(data) = &self.data {
@@ -2101,12 +2138,7 @@ mod tests {
     }
 
     // Craft raw EDNS option bytes and parse them directly to test rejection paths.
-    fn parse_ecs_option(
-        family: u16,
-        source_prefix: u8,
-        scope_prefix: u8,
-        address: &[u8],
-    ) -> anyhow::Result<EdnsOptionData> {
+    fn parse_ecs_option(family: u16, source_prefix: u8, scope_prefix: u8, address: &[u8]) -> Result<EdnsOptionData> {
         let mut bytes = Vec::new();
         bytes.extend_from_slice(&family.to_be_bytes());
         bytes.push(source_prefix);

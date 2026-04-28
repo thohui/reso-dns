@@ -1,6 +1,6 @@
+use crate::error::{DnsWriteError, WriteResult};
 use std::collections::HashMap;
 
-use anyhow::ensure;
 use bytes::{BufMut, Bytes, BytesMut};
 use once_cell::sync::OnceCell;
 
@@ -48,57 +48,58 @@ impl DnsMessageWriter {
         Self::new_with_max(65535)
     }
 
+    /// Helper function to ensure there is enough space in the buffer for writing.
     #[inline]
-    fn ensure_space(&mut self, need: usize, what: &str) -> anyhow::Result<()> {
+    fn ensure_space(&mut self, need: usize) -> WriteResult<()> {
         let cur = self.buf.len();
-        let new_len = cur
-            .checked_add(need)
-            .ok_or_else(|| anyhow::anyhow!("length overflow"))?;
-        ensure!(
-            new_len <= self.max_len,
-            "buffer overflow while writing {}: need={} current_len={} max_len={}",
-            what,
+        let new_len = cur.checked_add(need).ok_or(DnsWriteError::BufferOverflow {
             need,
-            cur,
-            self.max_len
-        );
+            current_len: cur,
+            max_len: self.max_len,
+        })?;
+        if new_len > self.max_len {
+            return Err(DnsWriteError::BufferOverflow {
+                need,
+                current_len: cur,
+                max_len: self.max_len,
+            });
+        }
         if new_len > self.buf.capacity() {
-            // grow but never beyond max_len
             self.buf.reserve(new_len - self.buf.capacity());
         }
         Ok(())
     }
 
     /// Write a u8 to the buffer.
-    pub fn write_u8(&mut self, value: u8) -> anyhow::Result<()> {
-        self.ensure_space(std::mem::size_of::<u8>(), "u8")?;
+    pub fn write_u8(&mut self, value: u8) -> WriteResult<()> {
+        self.ensure_space(std::mem::size_of::<u8>())?;
         self.buf.put_u8(value);
         Ok(())
     }
 
     /// Write a u16 to the buffer.
-    pub fn write_u16(&mut self, value: u16) -> anyhow::Result<()> {
-        self.ensure_space(std::mem::size_of::<u16>(), "u16")?;
+    pub fn write_u16(&mut self, value: u16) -> WriteResult<()> {
+        self.ensure_space(std::mem::size_of::<u16>())?;
         self.buf.put_u16(value);
         Ok(())
     }
 
     /// Write a u32 to the buffer.
-    pub fn write_u32(&mut self, value: u32) -> anyhow::Result<()> {
-        self.ensure_space(std::mem::size_of::<u32>(), "u32")?;
+    pub fn write_u32(&mut self, value: u32) -> WriteResult<()> {
+        self.ensure_space(std::mem::size_of::<u32>())?;
         self.buf.put_u32(value);
         Ok(())
     }
 
     // Write a compressed qname to the buffer.
-    pub fn write_qname(&mut self, name: &DomainName) -> anyhow::Result<()> {
+    pub fn write_qname(&mut self, name: &DomainName) -> WriteResult<()> {
         if name.is_root() {
             return self.write_u8(0);
         }
 
         let labels: Vec<&[u8]> = name.label_iter().collect();
 
-        self.ensure_space(name.wire_len(), "qname")?;
+        self.ensure_space(name.wire_len())?;
 
         for i in 0..labels.len() {
             let suffix_key = wire_suffix_key(&labels[i..]);
@@ -112,10 +113,7 @@ impl DnsMessageWriter {
 
             let pos = self.position();
 
-            let ptrs = self
-                .label_pointers
-                .get_mut()
-                .ok_or(anyhow::anyhow!("expected label_pointers to be initialized"))?;
+            let ptrs = self.label_pointers.get_mut().expect("label_pointers initialized above");
 
             if pos <= 0x3FFF {
                 ptrs.insert(suffix_key, pos as u16);
@@ -134,12 +132,12 @@ impl DnsMessageWriter {
     /// Write an uncompressed qname to the buffer.
     ///
     /// This function is mainly intended for EDNS where compression is forbidden.
-    pub fn write_qname_uncompressed(&mut self, name: &DomainName) -> anyhow::Result<()> {
+    pub fn write_qname_uncompressed(&mut self, name: &DomainName) -> WriteResult<()> {
         if name.is_root() {
             return self.write_u8(0);
         }
 
-        self.ensure_space(name.wire_len(), "qname")?;
+        self.ensure_space(name.wire_len())?;
 
         for label in name.label_iter() {
             self.buf.put_u8(label.len() as u8);
@@ -150,32 +148,35 @@ impl DnsMessageWriter {
     }
 
     /// Write raw bytes to the buffer.
-    pub fn write_bytes(&mut self, data: &[u8]) -> anyhow::Result<()> {
-        self.ensure_space(data.len(), "raw bytes")?;
+    pub fn write_bytes(&mut self, data: &[u8]) -> WriteResult<()> {
+        self.ensure_space(data.len())?;
         self.buf.extend_from_slice(data);
         Ok(())
     }
 
     /// Overwrite bytes at a defined position.
-    pub fn overwrite_bytes(&mut self, position: usize, data: &[u8]) -> anyhow::Result<()> {
+    pub fn overwrite_bytes(&mut self, position: usize, data: &[u8]) -> WriteResult<()> {
         let end = position
             .checked_add(data.len())
-            .ok_or_else(|| anyhow::anyhow!("overwrite overflow"))?;
-        anyhow::ensure!(
-            end <= self.buf.len(),
-            "overwrite_bytes OOB: pos={} len={} buf_len={}",
-            position,
-            data.len(),
-            self.buf.len()
-        );
+            .ok_or(DnsWriteError::OverwriteOutOfBounds {
+                pos: position,
+                len: data.len(),
+                buf_len: self.buf.len(),
+            })?;
+        if end > self.buf.len() {
+            return Err(DnsWriteError::OverwriteOutOfBounds {
+                pos: position,
+                len: data.len(),
+                buf_len: self.buf.len(),
+            });
+        }
         self.buf[position..end].copy_from_slice(data);
-
         Ok(())
     }
 
     /// Write a `String` to the buffer.
-    pub fn write_string(&mut self, str: &String) -> anyhow::Result<()> {
-        self.ensure_space(str.len(), "str")?;
+    pub fn write_string(&mut self, str: &String) -> WriteResult<()> {
+        self.ensure_space(str.len())?;
         self.buf.extend_from_slice(str.as_bytes());
         Ok(())
     }
@@ -185,16 +186,19 @@ impl DnsMessageWriter {
         self.buf.freeze()
     }
 
+    /// Get the length of the buffer.
     #[inline]
     pub fn len(&self) -> usize {
         self.buf.len()
     }
 
+    /// Check if the buffer is empty.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    /// Get the current write position in the buffer.
     #[inline]
     pub fn position(&self) -> usize {
         self.buf.len()
@@ -203,5 +207,5 @@ impl DnsMessageWriter {
 
 /// Trait for types that can be serialized into DNS wire format
 pub trait DnsWritable {
-    fn write_to(&self, writer: &mut DnsMessageWriter) -> anyhow::Result<()>;
+    fn write_to(&self, writer: &mut DnsMessageWriter) -> WriteResult<()>;
 }

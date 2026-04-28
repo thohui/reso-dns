@@ -79,7 +79,7 @@ impl<G, L> DnsRequestCtx<G, L> {
 
     /// Attempt to decode and get the DNS message
     /// This also caches the decoded message for future calls.
-    pub fn message(&self) -> anyhow::Result<&DnsMessage> {
+    pub fn message(&self) -> reso_dns::Result<&DnsMessage> {
         self.message.get_or_try_init(|| DnsMessage::decode(&self.raw))
     }
 
@@ -129,7 +129,7 @@ impl DnsResponse {
         self.bytes.clone()
     }
 
-    pub fn message(&self) -> anyhow::Result<&DnsMessage> {
+    pub fn message(&self) -> reso_dns::Result<&DnsMessage> {
         self.message.get_or_try_init(|| DnsMessage::decode(&self.bytes))
     }
 }

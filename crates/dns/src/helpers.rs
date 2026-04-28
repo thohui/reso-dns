@@ -1,4 +1,4 @@
-/// Extracts the transaction ID from a DNS message.
+/// Extract the transaction ID from a DNS message.
 pub fn extract_transaction_id(data: &[u8]) -> Option<u16> {
     if data.len() < 2 {
         return None;
