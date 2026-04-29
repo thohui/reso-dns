@@ -1,8 +1,7 @@
-use std::collections::HashSet;
-
-use anyhow::{bail, ensure};
-
-use crate::domain_name::DomainName;
+use crate::{
+    domain_name::DomainName,
+    error::{DnsReadError, ReadResult, Result},
+};
 
 /// A reader for DNS messages that allows reading various components
 pub struct DnsMessageReader<'a> {
@@ -18,51 +17,51 @@ impl<'a> DnsMessageReader<'a> {
     }
 
     /// Seek the a position inside the buffer.
-    pub fn seek(&mut self, pos: usize) -> anyhow::Result<()> {
+    pub fn seek(&mut self, pos: usize) -> ReadResult<()> {
         let len = self.buffer.len();
-        ensure!(pos <= len, "seek out of bounds: pos={} len={}", pos, len);
+        if pos > len {
+            return Err(DnsReadError::SeekOutOfBounds { pos, len });
+        }
         self.position = pos;
         Ok(())
     }
 
     #[inline]
-    fn need(&self, need: usize, what: &str) -> anyhow::Result<()> {
-        let rem = self.remaining();
-        ensure!(
-            need <= rem,
-            "buffer underflow at pos {} while reading {}: need {} bytes, have {}",
-            self.position,
-            what,
-            need,
-            rem
-        );
+    fn need(&self, need: usize) -> ReadResult<()> {
+        let have = self.remaining();
+        if need > have {
+            return Err(DnsReadError::BufferUnderflow {
+                pos: self.position,
+                need,
+                have,
+            });
+        }
         Ok(())
     }
 
     #[inline]
-    fn need_at(&self, upto_exclusive: usize, what: &str) -> anyhow::Result<()> {
-        ensure!(
-            upto_exclusive <= self.buffer.len(),
-            "buffer underflow while reading {}: need bytes up to {}, len {} (pos {})",
-            what,
-            upto_exclusive,
-            self.buffer.len(),
-            self.position
-        );
+    fn need_at(&self, upto_exclusive: usize) -> ReadResult<()> {
+        if upto_exclusive > self.buffer.len() {
+            return Err(DnsReadError::BufferUnderflow {
+                pos: self.position,
+                need: upto_exclusive - self.position,
+                have: self.buffer.len() - self.position,
+            });
+        }
         Ok(())
     }
 
     /// Read a single byte from the DNS message.
-    pub fn read_u8(&mut self) -> anyhow::Result<u8> {
-        self.need(std::mem::size_of::<u8>(), "u8")?;
+    pub fn read_u8(&mut self) -> ReadResult<u8> {
+        self.need(std::mem::size_of::<u8>())?;
         let byte = self.buffer[self.position];
         self.position += 1;
         Ok(byte)
     }
 
     /// Read a u16 from the DNS message.
-    pub fn read_u16(&mut self) -> anyhow::Result<u16> {
-        self.need(std::mem::size_of::<u16>(), "u16")?;
+    pub fn read_u16(&mut self) -> ReadResult<u16> {
+        self.need(std::mem::size_of::<u16>())?;
 
         let bytes = &self.buffer[self.position..self.position + 2];
         let word = u16::from_be_bytes([bytes[0], bytes[1]]);
@@ -73,8 +72,8 @@ impl<'a> DnsMessageReader<'a> {
     }
 
     /// Read a u32 from the DNS message.
-    pub fn read_u32(&mut self) -> anyhow::Result<u32> {
-        self.need(std::mem::size_of::<u32>(), "u32")?;
+    pub fn read_u32(&mut self) -> ReadResult<u32> {
+        self.need(std::mem::size_of::<u32>())?;
 
         let data = &self.buffer[self.position..self.position + 4];
         let qword = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
@@ -84,38 +83,43 @@ impl<'a> DnsMessageReader<'a> {
     }
 
     /// Read a DNS name (qname) from the message.
-    pub fn read_qname(&mut self) -> anyhow::Result<DomainName> {
+    pub fn read_qname(&mut self) -> ReadResult<DomainName> {
         let mut pos = self.position;
         let mut jumped = false;
-        let mut seen = HashSet::new();
+        let mut seen = Vec::new();
         let mut labels: Vec<Vec<u8>> = Vec::new();
 
         loop {
             if pos >= self.buffer.len() {
-                bail!("qname of out bounds at pos {} (buf len {})", pos, self.buffer.len())
+                return Err(DnsReadError::BufferUnderflow {
+                    pos,
+                    need: 1,
+                    have: self.buffer.len().saturating_sub(pos),
+                });
             }
 
             // Check for loops
-            if !seen.insert(pos) {
-                bail!("qname compression pointer loop detected at pos {}", pos);
+            if seen.contains(&pos) {
+                return Err(DnsReadError::CompressionLoop { offset: pos });
             }
+
+            seen.push(pos);
 
             let length = self.buffer[pos];
 
             // Check if it's a pointer (two most significant bits are 1)
             if length & 0xC0 == 0xC0 {
                 // Must have two bytes for pointer
-                self.need_at(pos + 2, "compression pointer")?;
+                self.need_at(pos + 2)?;
 
                 let b2 = self.buffer[pos + 1];
                 let offset = (((length as usize) & 0x3F) << 8) | (b2 as usize);
 
                 if offset >= self.buffer.len() {
-                    bail!(
-                        "compression pointer offset {} out of bounds (buf len {})",
+                    return Err(DnsReadError::CompressionOutOfBounds {
                         offset,
-                        self.buffer.len()
-                    );
+                        len: self.buffer.len(),
+                    });
                 }
 
                 if !jumped {
@@ -136,12 +140,11 @@ impl<'a> DnsMessageReader<'a> {
                 pos += 1;
 
                 if pos + label_len > self.buffer.len() {
-                    bail!(
-                        "label overruns buffer at pos {}: need {} bytes, have {}",
+                    return Err(DnsReadError::BufferUnderflow {
                         pos,
-                        label_len,
-                        self.buffer.len().saturating_sub(pos)
-                    );
+                        need: label_len,
+                        have: self.buffer.len().saturating_sub(pos),
+                    });
                 }
 
                 labels.push(self.buffer[pos..pos + label_len].to_vec());
@@ -164,10 +167,16 @@ impl<'a> DnsMessageReader<'a> {
     /// Read an uncompressed dns name from the next `len` bytes.
     ///
     /// This function is mainly intended for EDNS where compression is forbidden.
-    pub fn read_qname_uncompressed(&mut self, len: usize) -> anyhow::Result<DomainName> {
-        ensure!(len > 0, "read_qname_uncompressed called with len = 0");
+    pub fn read_qname_uncompressed(&mut self, len: usize) -> ReadResult<DomainName> {
+        if len == 0 {
+            return Err(DnsReadError::BufferUnderflow {
+                pos: self.position,
+                need: 1,
+                have: 0,
+            });
+        }
 
-        self.need(len, "uncompressed qname")?;
+        self.need(len)?;
 
         let start = self.position;
         let end = start + len;
@@ -176,10 +185,7 @@ impl<'a> DnsMessageReader<'a> {
 
         loop {
             if pos >= end {
-                bail!(
-                    "unterminated qname in uncompressed name (no root label within len = {})",
-                    len
-                );
+                return Err(DnsReadError::UnterminatedName { len: end - start });
             }
 
             let length = self.buffer[pos];
@@ -192,33 +198,26 @@ impl<'a> DnsMessageReader<'a> {
 
             // Compression not allowed in EDNS qnames
             if length & 0xC0 != 0 {
-                bail!(
-                    "compression pointer (0x{:02x}) not allowed in uncompressed qname",
-                    length
-                );
+                return Err(DnsReadError::CompressionNotAllowed { byte: length });
             }
 
             let label_len = length as usize;
 
             if pos + label_len > end {
-                bail!(
-                    "label overruns option boundary in uncompressed qname: pos={} label_len={} end={}",
+                return Err(DnsReadError::BufferUnderflow {
                     pos,
-                    label_len,
-                    end
-                );
+                    need: label_len,
+                    have: end - pos,
+                });
             }
 
             labels.push(self.buffer[pos..pos + label_len].to_vec());
             pos += label_len;
         }
 
-        ensure!(
-            pos == end,
-            "extra bytes after qname in uncompressed name: pos={} end={}",
-            pos,
-            end
-        );
+        if pos != end {
+            return Err(DnsReadError::TrailingBytes { pos, end });
+        }
 
         self.position = end;
 
@@ -226,8 +225,8 @@ impl<'a> DnsMessageReader<'a> {
     }
 
     /// Read a specified number of bytes from the DNS message.
-    pub fn read_bytes(&mut self, length: usize) -> anyhow::Result<&'a [u8]> {
-        self.need(length, "raw bytes")?;
+    pub fn read_bytes(&mut self, length: usize) -> ReadResult<&'a [u8]> {
+        self.need(length)?;
         let data = &self.buffer[self.position..self.position + length];
         self.position += length;
         Ok(data)
@@ -248,7 +247,7 @@ impl<'a> DnsMessageReader<'a> {
 
 /// Trait for types that can be directly parsed from a DNS message.
 pub trait DnsReadable: Sized {
-    fn read_from(reader: &mut DnsMessageReader) -> anyhow::Result<Self>;
+    fn read_from(reader: &mut DnsMessageReader) -> Result<Self>;
 }
 
 #[cfg(test)]

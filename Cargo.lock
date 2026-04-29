@@ -1781,10 +1781,10 @@ dependencies = [
 name = "reso-dns"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "bytes",
  "idna",
  "once_cell",
+ "thiserror 2.0.17",
 ]
 
 [[package]]

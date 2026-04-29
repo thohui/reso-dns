@@ -29,7 +29,7 @@ impl MetricsMiddleware {
             client: ctx.request_address().to_string(),
             qname: question.qname.clone(),
             qtype: question.qtype,
-            rcode: response.message()?.response_code()?,
+            rcode: response.message()?.response_code(),
             dur_ms: local.time_elapsed().as_millis() as u64,
             cache_hit: local.cache_hit,
             blocked: local.blocked,
