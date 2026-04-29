@@ -67,6 +67,9 @@ pub enum DnsError {
         actual: usize,
     },
 
+    #[error("multiple OPT records in additional section")]
+    MultipleOptRecords,
+
     #[error("unknown address family: {family}")]
     UnknownAddressFamily { family: u16 },
 
@@ -98,6 +101,7 @@ impl DnsError {
             DnsError::RdataLengthOverflow { .. } => DnsResponseCode::FormatError,
             DnsError::UnsupportedEdnsVersion(_) => DnsResponseCode::FormatError,
             DnsError::EcsPrefixTooLarge { .. } => DnsResponseCode::FormatError,
+            DnsError::MultipleOptRecords => DnsResponseCode::FormatError,
         }
     }
 }

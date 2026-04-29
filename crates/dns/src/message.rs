@@ -96,6 +96,9 @@ impl DnsMessage {
 
             // Handle EDNS
             if rtype == RecordType::OPT {
+                if edns.is_some() {
+                    return Err(DnsError::MultipleOptRecords);
+                }
                 edns = Some(Edns::read_from(&mut reader)?);
             } else {
                 let class = ClassType::from(reader.read_u16()?);
@@ -968,6 +971,11 @@ impl DnsReadable for Edns {
 
         let extended_rcode = ((ttl >> 24) & 0xFF) as u8;
         let version = ((ttl >> 16) & 0xFF) as u8;
+
+        if version != 0 {
+            return Err(DnsError::UnsupportedEdnsVersion(version));
+        }
+
         let z_flags = (ttl & 0xFFFF) as u16;
 
         // RDLEN + options;
@@ -1162,7 +1170,12 @@ impl DnsWritable for EdnsOptionData {
                 Ok(())
             }
             EdnsOptionData::Timeout(timeout) => writer.write_u16(*timeout).map_err(Into::into),
-            EdnsOptionData::Padding(padding) => writer.write_u16(*padding).map_err(Into::into),
+            EdnsOptionData::Padding(padding) => {
+                for _ in 0..*padding {
+                    writer.write_u8(0)?;
+                }
+                Ok(())
+            }
             EdnsOptionData::DomainName(domain_name) => writer.write_qname_uncompressed(domain_name).map_err(Into::into),
             EdnsOptionData::ExtendedError { info_code, extra_text } => {
                 writer.write_u16(info_code.to_u16())?;
@@ -2524,5 +2537,41 @@ mod tests {
             }
             _ => panic!("expected ExtendedError option data"),
         }
+    }
+
+    #[test]
+    fn test_edns_multiple_opt() {
+        let message = DnsMessage {
+            id: 0,
+            flags: DnsFlags::default(),
+            questions: vec![],
+            answers: vec![],
+            authority_records: vec![],
+            edns: None,
+            additional_records: vec![
+                DnsRecord {
+                    name: DomainName::from_ascii("opt.example.com").unwrap(),
+                    record_type: RecordType::OPT,
+                    class: ClassType::IN,
+                    ttl: 0,
+                    data: DnsRecordData::Raw(vec![]),
+                },
+                DnsRecord {
+                    name: DomainName::from_ascii("opt2.example.com").unwrap(),
+                    record_type: RecordType::OPT,
+                    class: ClassType::IN,
+                    ttl: 0,
+                    data: DnsRecordData::Raw(vec![]),
+                },
+            ],
+        };
+
+        let bytes = message.encode().unwrap();
+
+        let decoded = DnsMessage::decode(&bytes);
+        assert!(
+            matches!(decoded, Err(DnsError::MultipleOptRecords)),
+            "expected error when multiple OPT records are present"
+        );
     }
 }
