@@ -6,7 +6,7 @@ use api::serve_web;
 use database::{connect_core_db, run_core_db_migrations};
 use env_config::EnvConfig;
 use global::{Global, SharedGlobal};
-use metrics::{service::MetricsService, truncation::run_metrics_truncation};
+use metrics::{service::MetricsService, task::run_metrics_truncation};
 use reso_cache::DnsMessageCache;
 use server_builder::{build_dns_server, update_server_state_on_config_changes};
 use services::{
@@ -20,6 +20,7 @@ use tracing_subscriber::{Layer, fmt, layer::SubscriberExt, util::SubscriberInitE
 
 use crate::{
     database::{connect_metrics_db, run_metrics_db_migrations},
+    metrics::task::run_metrics_compression,
     services::local_records::LocalRecordService,
 };
 
@@ -111,6 +112,11 @@ async fn run() -> anyhow::Result<()> {
         truncate_config_rx,
         truncate_shutdown,
     ));
+
+    let compression_shutdown = shutdown.child_token();
+    let compression_db = metrics_db_connection.clone();
+    let compression_handle = tokio::spawn(run_metrics_compression(compression_db, compression_shutdown));
+
     let web_handle = tokio::spawn(serve_web(
         config.http_server_address,
         global.clone(),
@@ -145,6 +151,7 @@ async fn run() -> anyhow::Result<()> {
         let _ = dns_tcp_handle.await;
         let _ = web_handle.await;
         let _ = truncate_handle.await;
+        let _ = compression_handle.await;
     };
 
     match tokio::time::timeout(Duration::from_secs(10), drain).await {

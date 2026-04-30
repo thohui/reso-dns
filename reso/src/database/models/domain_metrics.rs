@@ -14,6 +14,7 @@ pub struct DomainMetrics {
 }
 
 impl DomainMetrics {
+    /// Batch upsert a list of domain metrics. On conflict of (bucket_ts, qname), the counts will be summed.
     pub async fn batch_upsert(db: &MetricsDatabasePool, rows: &[Self]) -> Result<(), DatabaseError> {
         if rows.is_empty() {
             return Ok(());
@@ -45,6 +46,7 @@ impl DomainMetrics {
         Ok(())
     }
 
+    /// List all domain metrics buckets whose timestamp is in the range start_ts to end_ts
     pub async fn list_range(db: &MetricsDatabasePool, start_ts: i64, end_ts: i64) -> Result<Vec<Self>, DatabaseError> {
         Ok(db
             .interact(move |c| {
@@ -67,6 +69,7 @@ impl DomainMetrics {
             .await?)
     }
 
+    /// List the top domains by total query count since the given timestamp, ordered by count desc.
     pub async fn top_domains(
         db: &MetricsDatabasePool,
         since: i64,
@@ -88,6 +91,7 @@ impl DomainMetrics {
             .await?)
     }
 
+    /// List the top domains by blocked query count since the given timestamp, ordered by count desc.
     pub async fn top_blocked(
         db: &MetricsDatabasePool,
         since: i64,
@@ -107,6 +111,64 @@ impl DomainMetrics {
                 iter.collect()
             })
             .await?)
+    }
+
+    /// Compress old metric buckets into larger ones to save space.
+    /// `cutoff` is a unix timestamp in ms, all buckets with a timestamp older than the cutoff will be compressed.
+    pub async fn compress_before(db: &MetricsDatabasePool, cutoff: i64) -> Result<(), DatabaseError> {
+        const HOUR_MS: i64 = 3_600_000; // 1 hour in ms.
+        db.interact(move |c| {
+            // find all < hour rows older than the cutoff and sum them into
+            // hour aligned buckets. rows whose bucket_ts is already divisible
+            // by HOUR_MS are already compressed, so we skip those.
+
+            // (bucket_ts / HOUR_MS) * HOUR_MS floors the timestamp to the start of the hour.
+            let hourly: Vec<DomainMetrics> = {
+                let mut q = c.prepare(&format!(
+                    "SELECT (bucket_ts / {HOUR_MS}) * {HOUR_MS} AS hour_ts, qname,
+                            SUM(total_count), SUM(blocked_count)
+                     FROM metrics_by_domain
+                     WHERE bucket_ts < ?1
+                       AND bucket_ts % {HOUR_MS} != 0
+                     GROUP BY hour_ts, qname",
+                ))?;
+                q.query_map(params![cutoff], |r| {
+                    Ok(DomainMetrics {
+                        bucket_ts: r.get(0)?,
+                        qname: r.get(1)?,
+                        total_count: r.get(2)?,
+                        blocked_count: r.get(3)?,
+                    })
+                })?
+                .collect::<rusqlite::Result<_>>()?
+            };
+
+            if hourly.is_empty() {
+                return Ok(());
+            }
+
+            let tx = c.transaction()?;
+            {
+                let mut upsert = tx.prepare(
+                    "INSERT INTO metrics_by_domain (bucket_ts, qname, total_count, blocked_count)
+                     VALUES (?1, ?2, ?3, ?4)
+                     ON CONFLICT(bucket_ts, qname) DO UPDATE SET
+                         total_count   = total_count   + excluded.total_count,
+                         blocked_count = blocked_count + excluded.blocked_count",
+                )?;
+                for row in &hourly {
+                    upsert.execute(params![row.bucket_ts, row.qname, row.total_count, row.blocked_count])?;
+                }
+            }
+            tx.execute(
+                &format!("DELETE FROM metrics_by_domain WHERE bucket_ts < ?1 AND bucket_ts % {HOUR_MS} != 0"),
+                params![cutoff],
+            )?;
+            tx.commit()?;
+            Ok(())
+        })
+        .await?;
+        Ok(())
     }
 
     pub fn merge(&mut self, other: &Self) {
@@ -205,5 +267,41 @@ mod tests {
         assert_eq!(result[0].1, 8);
         assert_eq!(result[1].0, "some-blocked.com");
         assert_eq!(result[1].1, 2);
+    }
+
+    const HOUR_MS: i64 = 3_600_000;
+    const MINUTE_MS: i64 = 60_000;
+
+    #[tokio::test]
+    async fn compress_before_rolls_up_minute_buckets() {
+        let db = setup_metrics_test_db().await.unwrap();
+
+        let rows = vec![
+            make_domain_metrics(HOUR_MS + MINUTE_MS, "a.com", 10, 3),
+            make_domain_metrics(HOUR_MS + 2 * MINUTE_MS, "a.com", 5, 2),
+        ];
+        DomainMetrics::batch_upsert(&db.conn, &rows).await.unwrap();
+
+        DomainMetrics::compress_before(&db.conn, HOUR_MS * 3).await.unwrap();
+
+        let result = DomainMetrics::list_range(&db.conn, 0, HOUR_MS * 5).await.unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].bucket_ts, HOUR_MS);
+        assert_eq!(result[0].total_count, 15);
+    }
+
+    #[tokio::test]
+    async fn compress_before_is_idempotent() {
+        let db = setup_metrics_test_db().await.unwrap();
+
+        let rows = vec![make_domain_metrics(HOUR_MS + MINUTE_MS, "a.com", 10, 3)];
+        DomainMetrics::batch_upsert(&db.conn, &rows).await.unwrap();
+
+        DomainMetrics::compress_before(&db.conn, HOUR_MS * 3).await.unwrap();
+        DomainMetrics::compress_before(&db.conn, HOUR_MS * 3).await.unwrap();
+
+        let result = DomainMetrics::list_range(&db.conn, 0, HOUR_MS * 5).await.unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].total_count, 10);
     }
 }
