@@ -16,7 +16,7 @@ use crate::database::{
 };
 
 pub enum MetricsMessage {
-    #[allow(clippy::code)]
+    #[allow(dead_code)]
     Shutdown,
     Query(QueryLogEvent),
     Error(ErrorLogEvent),

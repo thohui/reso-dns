@@ -37,6 +37,7 @@ pub struct ClientMetrics {
 }
 
 impl ClientMetrics {
+    /// Batch upsert client metrics. On conflict, the counts and duration will be accumulated.
     pub async fn batch_upsert(db: &MetricsDatabasePool, rows: &[Self]) -> Result<(), DatabaseError> {
         if rows.is_empty() {
             return Ok(());
@@ -81,6 +82,7 @@ impl ClientMetrics {
         Ok(())
     }
 
+    /// List client metrics buckets in the given time range, ordered by timestamp ascending.
     pub async fn list_range(db: &MetricsDatabasePool, start_ts: i64, end_ts: i64) -> Result<Vec<Self>, DatabaseError> {
         Ok(db
             .interact(move |c| {
@@ -106,6 +108,7 @@ impl ClientMetrics {
             .await?)
     }
 
+    /// List top clients by total count since the given timestamp, ordered by count descending.
     pub async fn top_clients(
         db: &MetricsDatabasePool,
         since: i64,
@@ -127,6 +130,7 @@ impl ClientMetrics {
             .await?)
     }
 
+    /// Get timeline of total counts, blocked counts, cached counts, error counts, and sum duration, grouped by bucket_ts.
     pub async fn timeline(db: &MetricsDatabasePool, since: i64) -> Result<Vec<TimelineBucket>, DatabaseError> {
         Ok(db
             .interact(move |c| {
@@ -150,6 +154,81 @@ impl ClientMetrics {
                 iter.collect()
             })
             .await?)
+    }
+
+    /// Compress old metric buckets into larger ones to save space.
+    /// `cutoff` is a unix timestamp in ms, all buckets with a timestamp older than the cutoff will be compressed.
+    pub async fn compress_before(db: &MetricsDatabasePool, cutoff: i64) -> Result<(), DatabaseError> {
+        const HOUR_MS: i64 = 3_600_000; // 1 hour in ms.
+        db.interact(move |c| {
+            // find all < hour rows older than the cutoff and sum them into
+            // hour aligned buckets. rows whose bucket_ts is already divisible
+            // by HOUR_MS are already compressed, so we skip those.
+
+            // (bucket_ts / HOUR_MS) * HOUR_MS floors the timestamp to the start of the hour.
+
+            let hourly: Vec<ClientMetrics> = {
+                let mut q = c.prepare(&format!(
+                    "SELECT (bucket_ts / {HOUR_MS}) * {HOUR_MS} AS hour_ts, client,
+                            SUM(total_count), SUM(blocked_count), SUM(cached_count),
+                            SUM(error_count), SUM(sum_duration)
+                     FROM metrics_by_client
+                     WHERE bucket_ts < ?1
+                       AND bucket_ts % {HOUR_MS} != 0
+                     GROUP BY hour_ts, client",
+                ))?;
+                q.query_map(params![cutoff], |r| {
+                    Ok(ClientMetrics {
+                        bucket_ts: r.get(0)?,
+                        client: r.get(1)?,
+                        total_count: r.get(2)?,
+                        blocked_count: r.get(3)?,
+                        cached_count: r.get(4)?,
+                        error_count: r.get(5)?,
+                        sum_duration: r.get(6)?,
+                    })
+                })?
+                .collect::<rusqlite::Result<_>>()?
+            };
+
+            if hourly.is_empty() {
+                return Ok(());
+            }
+
+            let tx = c.transaction()?;
+            {
+                let mut upsert = tx.prepare(
+                    "INSERT INTO metrics_by_client
+                         (bucket_ts, client, total_count, blocked_count, cached_count, error_count, sum_duration)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                     ON CONFLICT(bucket_ts, client) DO UPDATE SET
+                         total_count   = total_count   + excluded.total_count,
+                         blocked_count = blocked_count + excluded.blocked_count,
+                         cached_count  = cached_count  + excluded.cached_count,
+                         error_count   = error_count   + excluded.error_count,
+                         sum_duration  = sum_duration  + excluded.sum_duration",
+                )?;
+                for row in &hourly {
+                    upsert.execute(params![
+                        row.bucket_ts,
+                        row.client,
+                        row.total_count,
+                        row.blocked_count,
+                        row.cached_count,
+                        row.error_count,
+                        row.sum_duration,
+                    ])?;
+                }
+            }
+            tx.execute(
+                &format!("DELETE FROM metrics_by_client WHERE bucket_ts < ?1 AND bucket_ts % {HOUR_MS} != 0"),
+                params![cutoff],
+            )?;
+            tx.commit()?;
+            Ok(())
+        })
+        .await?;
+        Ok(())
     }
 
     pub fn merge(&mut self, other: &Self) {
@@ -284,5 +363,41 @@ mod tests {
 
         assert_eq!(result[1].ts, 2000);
         assert_eq!(result[1].total, 3);
+    }
+
+    const HOUR_MS: i64 = 3_600_000;
+    const MINUTE_MS: i64 = 60_000;
+
+    #[tokio::test]
+    async fn compress_before_rolls_up_minute_buckets() {
+        let db = setup_metrics_test_db().await.unwrap();
+
+        let rows = vec![
+            make_client_metrics(HOUR_MS + MINUTE_MS, "a", 10, 2, 3, 1, 100),
+            make_client_metrics(HOUR_MS + 2 * MINUTE_MS, "a", 5, 1, 1, 0, 50),
+        ];
+        ClientMetrics::batch_upsert(&db.conn, &rows).await.unwrap();
+
+        ClientMetrics::compress_before(&db.conn, HOUR_MS * 3).await.unwrap();
+
+        let result = ClientMetrics::list_range(&db.conn, 0, HOUR_MS * 5).await.unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].bucket_ts, HOUR_MS);
+        assert_eq!(result[0].total_count, 15);
+    }
+
+    #[tokio::test]
+    async fn compress_before_is_idempotent() {
+        let db = setup_metrics_test_db().await.unwrap();
+
+        let rows = vec![make_client_metrics(HOUR_MS + MINUTE_MS, "a", 10, 2, 3, 1, 100)];
+        ClientMetrics::batch_upsert(&db.conn, &rows).await.unwrap();
+
+        ClientMetrics::compress_before(&db.conn, HOUR_MS * 3).await.unwrap();
+        ClientMetrics::compress_before(&db.conn, HOUR_MS * 3).await.unwrap();
+
+        let result = ClientMetrics::list_range(&db.conn, 0, HOUR_MS * 5).await.unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].total_count, 10);
     }
 }
