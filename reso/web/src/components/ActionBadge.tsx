@@ -24,7 +24,7 @@ const sharedStyles = {
 	transition: 'all 0.15s',
 } as const;
 
-function ActionBadgeContent({ action }: { action: ListAction; }) {
+function ActionBadgeContent({ action }: { action: ListAction }) {
 	return (
 		<>
 			<Icon as={action === 'block' ? Ban : ShieldCheck} boxSize='3' />
@@ -41,15 +41,15 @@ export function ActionBadge({ action, onClick, selected }: Props) {
 
 	const colorStyles = isActive
 		? {
-			bg: isBlock ? 'status.errorMuted' : 'status.successMuted',
-			color: isBlock ? 'status.error' : 'status.success',
-			borderColor: isBlock ? 'status.error' : 'status.success',
-		}
+				bg: isBlock ? 'status.errorMuted' : 'status.successMuted',
+				color: isBlock ? 'status.error' : 'status.success',
+				borderColor: isBlock ? 'status.error' : 'status.success',
+			}
 		: {
-			bg: 'bg.subtle',
-			color: 'fg.muted',
-			borderColor: 'border.input',
-		};
+				bg: 'bg.subtle',
+				color: 'fg.muted',
+				borderColor: 'border.input',
+			};
 
 	if (isClickable) {
 		return (

@@ -1,8 +1,31 @@
+import { AddRuleDialog } from '@/components/domain-rules/AddRuleDialog';
+import { DomainRulesGrid } from '@/components/domain-rules/DomainRulesGrid';
+import { EditRuleDialog } from '@/components/domain-rules/EditRuleDialog';
+import { SubscriptionDialog } from '@/components/domain-rules/SubscriptionDialog';
+import { SubscriptionsGrid } from '@/components/domain-rules/SubscriptionsGrid';
+import { toastError } from '@/components/Toaster';
+import { useAddDomainRule } from '@/hooks/domain-rules/useAddDomainRule';
+import { useAddSubscription } from '@/hooks/domain-rules/useAddSubscription';
+import {
+	DOMAIN_RULES_PAGE_SIZE,
+	useDomainRules,
+} from '@/hooks/domain-rules/useDomainRules';
+import { useListSubscriptions } from '@/hooks/domain-rules/useListSubscriptions';
+import { useRemoveDomainRule } from '@/hooks/domain-rules/useRemoveDomainRule';
+import { useRemoveSubscription } from '@/hooks/domain-rules/useRemoveSubscription';
+import { useToggleDomainRule } from '@/hooks/domain-rules/useToggleDomainRule';
+import { useToggleSubscription } from '@/hooks/domain-rules/useToggleSubscription';
+import { useToggleSubscriptionSync } from '@/hooks/domain-rules/useToggleSubscriptionSync';
+import { useUpdateDomainRule } from '@/hooks/domain-rules/useUpdateDomainRule';
+import { useDebounce } from '@/hooks/useDebounce';
+import type { DomainRule, ListAction } from '@/lib/api/domain-rules';
+import type { ListSubscription } from '@/lib/api/list-subscriptions';
+import type { PagedResponse } from '@/lib/api/pagination';
 import {
 	Box,
 	Button,
-	HStack,
 	Heading,
+	HStack,
 	Icon,
 	Tabs,
 	Text,
@@ -10,26 +33,6 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { Ban, List, Plus } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { SubscriptionDialog } from '@/components/domain-rules/SubscriptionDialog';
-import { SubscriptionsGrid } from '@/components/domain-rules/SubscriptionsGrid';
-import { AddRuleDialog } from '@/components/domain-rules/AddRuleDialog';
-import { DomainRulesGrid } from '@/components/domain-rules/DomainRulesGrid';
-import { EditRuleDialog } from '@/components/domain-rules/EditRuleDialog';
-import { toastError } from '@/components/Toaster';
-import { useAddDomainRule } from '@/hooks/useAddDomainRule';
-import { useDomainRules, DOMAIN_RULES_PAGE_SIZE } from '@/hooks/useDomainRules';
-import { useListSubscriptions } from '@/hooks/useListSubscriptions';
-import { useRemoveDomainRule } from '@/hooks/useRemoveDomainRule';
-import { useRemoveSubscription } from '@/hooks/useRemoveSubscription';
-import { useToggleDomainRule } from '@/hooks/useToggleDomainRule';
-import { useToggleSubscription } from '@/hooks/useToggleSubscription';
-import { useUpdateDomainRule } from '@/hooks/useUpdateDomainRule';
-import { useAddSubscription } from '@/hooks/useAddSubscription';
-import { useDebounce } from '@/hooks/useDebounce';
-import type { DomainRule, ListAction } from '@/lib/api/domain-rules';
-import type { ListSubscription } from '@/lib/api/list-subscriptions';
-import type { PagedResponse } from '@/lib/api/pagination';
-import { useToggleSubscriptionSync } from '@/hooks/useToggleSubscriptionSync';
 
 export default function DomainRulesPage() {
 	const queryClient = useQueryClient();

@@ -1,6 +1,6 @@
 import { StatusBadge } from '@/components/StatusBadge';
 import { toastError } from '@/components/Toaster';
-import { useAddDomainRule } from '@/hooks/useAddDomainRule';
+import { useAddDomainRule } from '@/hooks/domain-rules/useAddDomainRule';
 import {
 	type Activity,
 	type ErrorActivity,

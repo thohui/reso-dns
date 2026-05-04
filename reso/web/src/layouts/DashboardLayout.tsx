@@ -1,3 +1,6 @@
+import Logo from '@/assets/logo.svg?react';
+import { PageLoader } from '@/components/PageLoader';
+import { useLogout } from '@/hooks/auth/useLogout';
 import {
 	Box,
 	Button,
@@ -15,15 +18,12 @@ import {
 	Globe,
 	Home,
 	LogOut,
-	Menu,
 	type LucideIcon,
+	Menu,
 	Settings,
 } from 'lucide-react';
 import { Suspense, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import Logo from '@/assets/logo.svg?react';
-import { PageLoader } from '@/components/PageLoader';
-import { useLogout } from '@/hooks/useLogout';
 
 interface MenuItem {
 	path: string;

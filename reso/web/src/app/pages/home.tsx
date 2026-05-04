@@ -1,14 +1,15 @@
-import { Box, Button, Heading, HStack, Text } from '@chakra-ui/react';
-import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, Ban, Clock, DatabaseBackup, Globe } from 'lucide-react';
-import { useMemo, useState } from 'react';
 import { QueryTimeline } from '@/components/dashboard/QueryTimeline';
 import { RecentActivity } from '@/components/dashboard/RecentActivity';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { TopDonutChart } from '@/components/dashboard/TopDonutChart';
 import { useApiClient } from '@/contexts/ApiClientContext';
+import { useLiveStats } from '@/hooks/dashboard/useLiveStats';
 import { useUptime } from '@/hooks/useUptime';
 import type { TopRange } from '@/lib/api/stats';
+import { Box, Button, Heading, HStack, Text } from '@chakra-ui/react';
+import { useQuery } from '@tanstack/react-query';
+import { AlertCircle, Ban, Clock, DatabaseBackup, Globe } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 const RANGE_OPTIONS: { value: TopRange; label: string }[] = [
 	{ value: '5min', label: '5M' },
@@ -22,14 +23,8 @@ const RANGE_OPTIONS: { value: TopRange; label: string }[] = [
 
 export default function HomePage() {
 	const apiClient = useApiClient();
-	const [range, setRange] = useState<TopRange>('day');
 
-	const { data: liveData } = useQuery({
-		queryKey: ['live-stats'],
-		queryFn: async () => apiClient.stats.live(),
-		// we only fetch this for the uptime, so we can get away with a long stale time.
-		staleTime: 1000 * 60 * 60,
-	});
+	const [range, setRange] = useState<TopRange>('day');
 
 	const { data: topData, isPending: topLoading } = useQuery({
 		queryKey: ['top-stats', range],
@@ -60,6 +55,7 @@ export default function HomePage() {
 	const avgResponse =
 		totals.total > 0 ? (totals.sum_duration / totals.total).toFixed() : '0';
 
+	const { data: liveData } = useLiveStats();
 	const uptime = useUptime(liveData?.live_since);
 
 	return (
