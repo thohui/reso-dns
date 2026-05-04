@@ -3,9 +3,13 @@ pub mod parser;
 /// Node in the trie structure, representing a domain list entry.
 #[derive(Debug, Clone, Default)]
 struct Node {
+    /// The label for this node.
     label: Box<str>,
+    /// Indicates if this node represents a wildcard pattern.
     wildcard: bool,
+    /// Indicates if this node represents the end of a pattern.
     terminal: bool,
+    /// Child nodes, sorted by label for efficient lookup.
     children: Vec<Node>,
 }
 
@@ -37,16 +41,16 @@ pub struct DomainListMatcher {
 }
 
 impl DomainListMatcher {
-    /// Checks if a given domain matches any of the domain list patterns.
+    /// Check if a given domain matches any of the domain list patterns.
     pub fn exists(&self, name: &str) -> bool {
-        let labels = match normalize_to_rev_labels(name) {
+        let labels = match normalize(name) {
             Ok(labels) => labels,
             Err(_) => return false,
         };
 
         let mut node = &self.root;
 
-        for label in labels {
+        for label in labels.rev_labels() {
             if node.wildcard {
                 return true;
             }
@@ -60,7 +64,7 @@ impl DomainListMatcher {
         node.terminal
     }
 
-    /// Loads a list of domain patterns into the matcher.
+    /// Load a list of domain patterns into the matcher.
     pub fn load<'a, I>(patterns: I) -> anyhow::Result<Self>
     where
         I: IntoIterator<Item = &'a str>,
@@ -79,13 +83,13 @@ impl DomainListMatcher {
                 (false, pat)
             };
 
-            let labels = normalize_to_rev_labels(name)?;
-            if labels.is_empty() {
+            let labels = normalize(name)?;
+            if labels.0.is_empty() {
                 continue;
             }
 
             let mut node = &mut root;
-            for label in labels {
+            for label in labels.rev_labels() {
                 node = node.child_mut(&label);
             }
 
@@ -100,25 +104,22 @@ impl DomainListMatcher {
     }
 }
 
-/// Normalize to reverse labels:
-/// "Ads.Example.COM." -> ["com","example","ads"]
-/// "*.example.com"    -> ["com","example","*"]
-fn normalize_to_rev_labels(input: &str) -> anyhow::Result<Vec<String>> {
-    let s = input.trim().trim_end_matches('.').to_ascii_lowercase();
+pub struct NormalizedDomain(String);
+
+impl NormalizedDomain {
+    fn rev_labels(&self) -> impl Iterator<Item = &str> {
+        self.0.split('.').filter(|l| !l.is_empty()).rev()
+    }
+}
+
+/// Normalize a domain name using IDNA.
+fn normalize(input: &str) -> anyhow::Result<NormalizedDomain> {
+    let s = input.trim().trim_end_matches('.');
 
     // Convert Unicode to ASCII.
-    let ascii = idna::domain_to_ascii(&s).map_err(|_| anyhow::anyhow!("invalid domain: {}", input))?;
+    let ascii = idna::domain_to_ascii(s).map_err(|_| anyhow::anyhow!("invalid domain: {}", input))?;
 
-    // Split labels, map "*" to itself, reject empties (except root)
-    let mut labels: Vec<String> = ascii
-        .split('.')
-        .map(|l| if l == "*" { "*".to_string() } else { l.to_string() })
-        .filter(|l| !l.is_empty())
-        .collect();
-
-    // Reverse for suffix matching
-    labels.reverse();
-    Ok(labels)
+    Ok(NormalizedDomain(ascii))
 }
 
 #[cfg(test)]
@@ -133,5 +134,14 @@ mod tests {
         assert!(matcher.exists("google.com"));
         assert!(matcher.exists("yahoo.com"));
         assert!(matcher.exists("a.bla.com"));
+    }
+
+    #[test]
+    fn test_normalization() {
+        let patterns: Vec<&str> = vec!["  *.Example.COM.  ", "foo.bar.com"];
+        let matcher = DomainListMatcher::load(patterns).unwrap();
+        assert!(matcher.exists("a.example.com"));
+        assert!(matcher.exists("foo.bar.com"));
+        assert!(!matcher.exists("example.com"));
     }
 }
