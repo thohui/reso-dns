@@ -26,8 +26,7 @@ impl DnsMiddleware<Global, Local> for CacheMiddleware {
     async fn on_query(&self, ctx: &mut DnsRequestCtx<Global, Local>) -> anyhow::Result<Option<DnsResponse>> {
         let message = ctx.message()?;
 
-        // Skip cache if the query has EDNS Client Subnet, since that would
-        // require geo-aware caching which is out of scope.
+        // Skip cache if the query has EDNS Client Subnet.
         let has_ecs = message
             .edns()
             .as_ref()

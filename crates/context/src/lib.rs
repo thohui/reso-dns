@@ -68,8 +68,8 @@ impl<G, L> DnsRequestCtx<G, L> {
     }
 
     /// Request address
-    pub fn request_address(&self) -> &IpAddr {
-        &self.request_address
+    pub fn request_address(&self) -> IpAddr {
+        self.request_address
     }
 
     /// Request type
@@ -137,9 +137,11 @@ impl DnsResponse {
 /// Trait for DNS middlewares that can process DNS requests.
 #[async_trait]
 pub trait DnsMiddleware<G, L>: Send + Sync {
+    /// Called when a new DNS query is received, before processing the request.
     async fn on_query(&self, _ctx: &mut DnsRequestCtx<G, L>) -> anyhow::Result<Option<DnsResponse>> {
         Ok(None)
     }
+    /// Called after a response has been generated, but before it's sent to the client.
     async fn on_response(&self, _ctx: &mut DnsRequestCtx<G, L>, _response: &mut DnsResponse) -> anyhow::Result<()> {
         Ok(())
     }

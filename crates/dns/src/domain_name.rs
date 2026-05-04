@@ -152,9 +152,7 @@ impl PartialEq for DomainName {
 impl Eq for DomainName {}
 
 impl DomainName {
-    /// Primary constructor from raw label byte vectors.
-    ///
-    /// Validates label lengths, lowercases ASCII, and builds the display string.
+    /// Create a new `DomainName` from raw labels.
     pub fn from_labels(raw_labels: Vec<Vec<u8>>) -> ReadResult<Self> {
         if raw_labels.is_empty() {
             return Ok(Self::root());
@@ -187,7 +185,7 @@ impl DomainName {
         Ok(Self { labels, display })
     }
 
-    /// Create a new Qname from an ASCII string.
+    /// Create a new `DomainName` from an ASCII string.
     /// The domain name is validated according to RFC 1035.
     ///
     /// NOTE: This function does not support Unicode domain names and should only be called with ASCII input.
@@ -214,7 +212,7 @@ impl DomainName {
         Self::from_labels(raw_labels)
     }
 
-    /// Create a new Qname from a user input string.
+    /// Create a new `DomainName` from a user input string.
     /// This function supports Unicode domain names and performs IDNA conversion.
     pub fn from_user(s: impl AsRef<str>) -> ReadResult<Self> {
         let input = s.as_ref().trim();

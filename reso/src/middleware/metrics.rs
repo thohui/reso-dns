@@ -47,13 +47,15 @@ impl MetricsMiddleware {
             .expect("failed to get the system time")
             .as_millis() as i64;
 
-        let mut qname = None;
-        let mut qtype = None;
+        let qname = ctx
+            .message()
+            .ok()
+            .and_then(|msg| msg.questions().first().map(|q| q.qname.to_string()));
 
-        if let Ok(msg) = ctx.message() {
-            qname = msg.questions().first().map(|q| q.qname.to_string());
-            qtype = msg.questions().first().map(|q| q.qtype.to_u16() as i64);
-        }
+        let qtype = ctx
+            .message()
+            .ok()
+            .and_then(|msg| msg.questions().first().map(|q| q.qtype.to_u16() as i64));
 
         ctx.global().metrics.error(ErrorLogEvent {
             ts_ms,

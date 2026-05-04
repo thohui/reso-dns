@@ -120,9 +120,7 @@ async fn recv_loop(
 ) {
     const MAX_CONSECUTIVE_ERRORS: u32 = 10;
 
-    // max UDP DNS payload with EDNS is typically 1232-4096 bytes
-    // but use a full UDP datagram size buffer to be safe.
-    let mut buf = vec![0u8; 65535];
+    let mut buf = vec![0u8; 1232];
     let mut consecutive_errors: u32 = 0;
 
     loop {

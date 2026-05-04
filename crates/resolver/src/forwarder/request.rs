@@ -10,6 +10,9 @@ use reso_context::{RequestBudget, RequestType};
 use reso_dns::helpers;
 use tracing::Instrument;
 
+/// Minimum time remaining in the request budget to start a new upstream attempt.
+const MIN_REMAINING_TO_START_ATTEMPT: Duration = Duration::from_millis(15);
+
 pub struct UpstreamResolveRequest {
     request_type: RequestType,
     query: Bytes,
@@ -34,9 +37,6 @@ impl UpstreamResolveRequest {
 
     /// Resolve a DNS query by forwarding it to configured upstreams.
     pub async fn resolve(&self) -> Result<Bytes, ResolveError> {
-        /// Minimum amount of time needed to start a new attempt.
-        const MIN_REMAINING_TO_START_ATTEMPT: Duration = Duration::from_millis(15);
-
         let (pools, start) = self
             .upstreams
             .pick()
@@ -60,29 +60,7 @@ impl UpstreamResolveRequest {
             let span =
                 tracing::debug_span!("upstream_attempt", upstream = %upstream.addr, attempt = off + 1, total = n);
 
-            let attempt_res = async {
-                match req_type {
-                    RequestType::TCP | RequestType::DOH => self.resolve_tcp(&upstream.tcp, &self.query).await,
-                    RequestType::UDP => {
-                        match self.resolve_udp(upstream, &self.query).await {
-                            Ok(resp) => match helpers::is_truncated(&resp) {
-                                Some(true) => {
-                                    if !self.has_budget(MIN_REMAINING_TO_START_ATTEMPT) {
-                                        return Err(UpstreamError::Timeout);
-                                    }
-                                    // TCP fallback for THIS upstream only.
-                                    self.resolve_tcp(&upstream.tcp, &self.query).await
-                                }
-                                Some(false) => Ok(resp),
-                                None => Err(UpstreamError::Other("invalid UDP response".into())),
-                            },
-                            Err(e) => Err(e),
-                        }
-                    }
-                }
-            }
-            .instrument(span)
-            .await;
+            let attempt_res = self.try_upstream(upstream, req_type).instrument(span).await;
 
             let resp = match attempt_res {
                 Ok(r) => {
@@ -145,6 +123,28 @@ impl UpstreamResolveRequest {
         }
 
         Err(ResolveError::Other("all upstreams failed".into()))
+    }
+
+    async fn try_upstream(&self, upstream: &Upstream, req_type: RequestType) -> Result<Bytes, UpstreamError> {
+        match req_type {
+            RequestType::TCP | RequestType::DOH => self.resolve_tcp(&upstream.tcp, &self.query).await,
+            RequestType::UDP => self.resolve_udp_with_fallback(upstream).await,
+        }
+    }
+
+    async fn resolve_udp_with_fallback(&self, upstream: &Upstream) -> Result<Bytes, UpstreamError> {
+        let resp = self.resolve_udp(upstream, &self.query).await?;
+        match helpers::is_truncated(&resp) {
+            Some(true) => {
+                if !self.has_budget(MIN_REMAINING_TO_START_ATTEMPT) {
+                    return Err(UpstreamError::Timeout);
+                }
+                // TCP fallback for THIS upstream only.
+                self.resolve_tcp(&upstream.tcp, &self.query).await
+            }
+            Some(false) => Ok(resp),
+            None => Err(UpstreamError::Other("invalid UDP response".into())),
+        }
     }
 
     /// Check if the request budget has at least `min` remaining.
