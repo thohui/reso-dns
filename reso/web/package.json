@@ -9,6 +9,7 @@
 	"scripts": {
 		"dev": "vite",
 		"build": "tsc -b && vite build",
+		"typecheck": "tsc -b --noEmit",
 		"lint": "biome lint .",
 		"fmt": "biome format .",
 		"preview": "vite preview"

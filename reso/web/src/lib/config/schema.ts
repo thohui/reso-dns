@@ -80,7 +80,7 @@ function parseHostPort(input: string): { host: string; port?: string } | null {
 	return { host, port };
 }
 
-export const UpstreamSpecSchema = z
+export const upstreamSpecSchema = z
 	.string()
 	.trim()
 	.min(1, 'Address is empty')
@@ -151,3 +151,25 @@ export const UpstreamSpecSchema = z
 			return;
 		}
 	});
+
+export const configSchema = z.object({
+	upstreams: z.array(upstreamSpecSchema),
+	timeout: z.number().min(1),
+	rate_limit: z.object({
+		enabled: z.boolean(),
+		window_duration: z.number().int().min(1),
+		max_queries_per_window: z.number().int().min(1),
+	}),
+	security: z.object({
+		block_icloud_private_relay: z.boolean(),
+		block_firefox_canary: z.boolean(),
+		block_designated_resolver: z.boolean(),
+	}),
+	logs: z.object({
+		enabled: z.boolean(),
+		retention_secs: z.number().int().min(60),
+		truncate_interval_secs: z.number().int().min(60),
+	}),
+});
+
+export type FormValues = z.infer<typeof configSchema>;

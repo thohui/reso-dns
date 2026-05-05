@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     hash::Hash,
     net::{Ipv4Addr, Ipv6Addr},
     sync::LazyLock,
@@ -1085,7 +1086,7 @@ pub enum EdnsOptionCode {
     /// Report channel (RFC 9567)
     ReportChannel = 18,
     /// Zone version (RFC 9660)
-    ZONEVERSION = 19,
+    ZoneVersion = 19,
 }
 }
 
@@ -1226,7 +1227,7 @@ impl EdnsOptionData {
             EdnsOptionCode::ClientSubnet => {
                 if len < 4 {
                     return Err(DnsError::InvalidOptionLength {
-                        option: "ECS".to_string(),
+                        option: Cow::Borrowed("ECS"),
                         expected: 4,
                         actual: len as usize,
                     });
@@ -1255,7 +1256,7 @@ impl EdnsOptionData {
 
                 if len != expected_len {
                     return Err(DnsError::InvalidOptionLength {
-                        option: "ECS".to_string(),
+                        option: Cow::Borrowed("ECS"),
                         expected: expected_len as usize,
                         actual: len as usize,
                     });
@@ -1266,9 +1267,11 @@ impl EdnsOptionData {
                 // RFC 7871 Section 6: bits beyond source_prefix in the last byte must
                 // be zero so equivalent subnets always compare and hash the same.
                 // https://www.rfc-editor.org/rfc/rfc7871#section-6
-                let bits_used_in_last_byte = source_prefix_length % 8;
-                if let (Some(last), true) = (address.last_mut(), bits_used_in_last_byte != 0) {
-                    *last &= 0xFF << (8 - bits_used_in_last_byte);
+                let trailing_bits = source_prefix_length % 8;
+                if trailing_bits != 0 {
+                    if let Some(last) = address.last_mut() {
+                        *last &= 0xFF << (8 - trailing_bits);
+                    }
                 }
 
                 Self::ClientSubnet(ClientSubnet {
@@ -1282,7 +1285,7 @@ impl EdnsOptionData {
             EdnsOptionCode::UpdateLease => {
                 if len != 4 && len != 8 {
                     return Err(DnsError::InvalidOptionLength {
-                        option: "UPDATE-LEASE".to_string(),
+                        option: Cow::Borrowed("Update Lease"),
                         expected: 4,
                         actual: len as usize,
                     });
@@ -1297,7 +1300,7 @@ impl EdnsOptionData {
             EdnsOptionCode::TcpKeepAlive => {
                 if len != 2 {
                     return Err(DnsError::InvalidOptionLength {
-                        option: "TCP-Keepalive".to_string(),
+                        option: Cow::Borrowed("TCP-Keepalive"),
                         expected: 2,
                         actual: len as usize,
                     });
@@ -1315,7 +1318,7 @@ impl EdnsOptionData {
                 let len_usize = usize::from(len);
                 if len_usize < std::mem::size_of::<u16>() {
                     return Err(DnsError::InvalidOptionLength {
-                        option: "ExtendedDnsError".to_string(),
+                        option: Cow::Borrowed("ExtendedDnsError"),
                         expected: 2,
                         actual: len_usize,
                     });
@@ -1334,10 +1337,10 @@ impl EdnsOptionData {
 
                 Self::ExtendedError { info_code, extra_text }
             }
-            EdnsOptionCode::ZONEVERSION => {
+            EdnsOptionCode::ZoneVersion => {
                 if len < 2 {
                     return Err(DnsError::InvalidOptionLength {
-                        option: "ZONEVERSION".to_string(),
+                        option: Cow::Borrowed("ZONEVERSION"),
                         expected: 2,
                         actual: len as usize,
                     });

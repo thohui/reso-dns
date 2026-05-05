@@ -1,3 +1,12 @@
+import type { Upstream } from '@/lib/api/config';
+import {
+	type DetectedProtocol,
+	detectProtocol,
+	type ProviderGroup,
+	providerGroups,
+} from '@/lib/config/providers';
+import { upstreamSpecSchema } from '@/lib/config/schema';
+import { hexToRgba } from '@/lib/theme';
 import {
 	Box,
 	Button,
@@ -11,18 +20,10 @@ import {
 	Text,
 } from '@chakra-ui/react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, Check, ChevronRight, Plus, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, X } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import z from 'zod';
-import type { Upstream } from '@/lib/api/config';
-import {
-	detectProtocol,
-	type ProviderGroup,
-	providerGroups,
-} from '@/lib/config/providers';
-import { UpstreamSpecSchema } from '@/lib/config/schema';
-import { hexToRgba } from '@/lib/theme';
 
 interface Props {
 	existingUpstreams: Upstream[];
@@ -160,7 +161,7 @@ export function ServersView({
 		<Box>
 			{providerGroups.map((group, i) => {
 				const addedCount = group.servers.filter((s) =>
-					existingUpstreams.includes(s.address),
+					existingUpstreams.includes(s.address)
 				).length;
 				const allAdded = addedCount === group.servers.length;
 				return (
@@ -177,34 +178,14 @@ export function ServersView({
 						onClick={() => !allAdded && handleSelectProvider(group)}
 					>
 						<HStack justify='space-between'>
-							<HStack gap='4'>
-								<Box
-									w='10'
-									h='10'
-									borderRadius='lg'
-									bg={hexToRgba(group.color, 0.1)}
-									borderWidth='1px'
-									borderColor={hexToRgba(group.color, 0.3)}
-									display='flex'
-									alignItems='center'
-									justifyContent='center'
-									fontWeight='bold'
-									fontSize='xs'
-									color={group.color}
-									letterSpacing='-0.02em'
-									flexShrink={0}
-								>
-									{group.slug}
-								</Box>
-								<Box>
-									<Text fontSize='sm' fontWeight='500'>
-										{group.name}
-									</Text>
-									<Text fontSize='xs' color='fg.muted' mt='0.5'>
-										{group.description}
-									</Text>
-								</Box>
-							</HStack>
+							<Box>
+								<Text fontSize='sm' fontWeight='500'>
+									{group.name}
+								</Text>
+								<Text fontSize='xs' color='fg.muted' mt='0.5'>
+									{group.description}
+								</Text>
+							</Box>
 							<HStack gap='3'>
 								{addedCount > 0 && (
 									<Text fontSize='xs' color='fg.faint'>
@@ -234,20 +215,6 @@ export function ServersView({
 			>
 				<HStack justify='space-between'>
 					<HStack gap='4'>
-						<Box
-							w='10'
-							h='10'
-							borderRadius='lg'
-							bg='accent.muted'
-							borderWidth='1px'
-							borderColor='accent.bg'
-							display='flex'
-							alignItems='center'
-							justifyContent='center'
-							flexShrink={0}
-						>
-							<Icon as={Plus} boxSize='4' color='accent.fg' />
-						</Box>
 						<Box>
 							<Text fontSize='sm' fontWeight='500'>
 								Custom Server
@@ -355,7 +322,7 @@ function ProviderGroupView({
 }
 
 const customViewSchema = z.object({
-	upstream: UpstreamSpecSchema,
+	upstream: upstreamSpecSchema,
 });
 
 function CustomView({
@@ -365,7 +332,10 @@ function CustomView({
 	onClose: () => void;
 	onAdd: (upstream: Upstream) => void;
 }) {
-	const form = useForm({ resolver: zodResolver(customViewSchema) });
+	const form = useForm({
+		resolver: zodResolver(customViewSchema),
+		defaultValues: { upstream: '' },
+	});
 
 	const error = form.formState.errors.upstream;
 
@@ -398,7 +368,6 @@ function CustomView({
 							fontSize='sm'
 							{...form.register('upstream')}
 						/>
-
 						<Field.ErrorText>{error?.message}</Field.ErrorText>
 					</Field.Root>
 				</Box>
@@ -432,7 +401,7 @@ function CustomView({
 	);
 }
 
-export const PROTOCOL_COLORS: Record<string, string> = {
+export const PROTOCOL_COLORS: Record<DetectedProtocol, string> = {
 	'UDP/TCP': '#71717a',
 	DoH: '#60a5fa',
 	DoT: '#34d399',

@@ -37,6 +37,11 @@ const config = defineConfig({
 					subtle: { value: '#ec4899' },
 					muted: { value: 'rgba(233, 30, 120, 0.12)' },
 				},
+				protocol: {
+					DEFAULT: { value: '#71717a' },
+					doh: { value: '#60a5fa' },
+					dot: { value: '#fbbf24' },
+				},
 				status: {
 					success: { value: '#34d399' },
 					error: { value: '#f87171' },

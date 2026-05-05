@@ -18,7 +18,7 @@ pub struct ConfigService {
 }
 
 impl ConfigService {
-    /// Initializes the `ConfigService`
+    /// Initialize the `ConfigService`
     pub async fn initialize(db: Arc<CoreDatabasePool>) -> anyhow::Result<ConfigService> {
         let config = Self::initialize_config(&db).await?;
         let config = Arc::new(config);
@@ -31,7 +31,7 @@ impl ConfigService {
         })
     }
 
-    /// Initializes the configuration from the database.
+    /// Initialize the configuration from the database.
     /// Missing keys are seeded with defaults so that new config fields
     /// are automatically populated for existing databases.
     async fn initialize_config(db: &CoreDatabasePool) -> anyhow::Result<Config> {
@@ -45,7 +45,7 @@ impl ConfigService {
             .collect();
 
         if !missing.is_empty() {
-            tracing::info!("Seeding {} missing config keys", missing.len());
+            tracing::info!("seeding {} missing config keys", missing.len());
             ConfigSetting::batch_set(db, missing).await?;
         }
 
@@ -61,12 +61,12 @@ impl ConfigService {
         Ok(())
     }
 
-    /// Gets the config.
+    /// Get the config.
     pub fn get_config(&self) -> Arc<Config> {
         self.config.load_full()
     }
 
-    /// Subscribes to any config changes.
+    /// Subscribe to any config changes.
     pub fn subscribe(&self) -> tokio::sync::watch::Receiver<Arc<Config>> {
         self.tx.subscribe()
     }

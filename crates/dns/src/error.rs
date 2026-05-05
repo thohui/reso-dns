@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::DnsResponseCode;
 
 /// Error that can occur during DNS message reading.
@@ -62,7 +64,7 @@ pub enum DnsError {
 
     #[error("invalid option length for {option}: expected {expected} bytes, got {actual} bytes")]
     InvalidOptionLength {
-        option: String,
+        option: Cow<'static, str>,
         expected: usize,
         actual: usize,
     },

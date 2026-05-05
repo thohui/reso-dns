@@ -57,7 +57,8 @@ export function DurationInput({
 	errorText,
 }: Props) {
 	const { conversionFactor, allowedUnitsFull } = useMemo(() => {
-		const conversionFactor = UNITS.find((u) => u.label === conversion)!.value;
+		const conversionFactor =
+			UNITS.find((u) => u.label === conversion)?.value ?? 1;
 		const allowedUnitsFull = UNITS.filter((u) =>
 			allowedUnits.includes(u.label),
 		);
