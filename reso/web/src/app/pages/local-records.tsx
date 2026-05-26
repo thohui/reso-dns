@@ -11,9 +11,9 @@ import { useRemoveLocalRecord } from '@/hooks/local-records/useRemoveLocalRecord
 import { useToggleLocalRecord } from '@/hooks/local-records/useToggleLocalRecord';
 import type { LocalRecord } from '@/lib/api/local-records';
 import type { PagedResponse } from '@/lib/api/pagination';
-import { Box, Button, Grid, Heading, HStack, Icon } from '@chakra-ui/react';
+import { Box, Grid } from '@chakra-ui/react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Globe, Plus, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Globe, ToggleRight } from 'lucide-react';
 import { useState } from 'react';
 
 export default function LocalRecordsPage() {
@@ -81,26 +81,10 @@ export default function LocalRecordsPage() {
 	const items = data?.items ?? [];
 	const totalCount = items.length;
 	const enabledCount = items.filter((r) => r.enabled).length;
-	const disabledCount = totalCount - enabledCount;
 
 	return (
 		<Box>
-			<HStack justify='space-between' mb='8'>
-				<Heading size='lg'>Local Records</Heading>
-				<Button
-					bg='accent'
-					color='fg'
-					_hover={{ bg: 'accent.hover' }}
-					h='9'
-					fontSize='sm'
-					onClick={() => setShowDialog(true)}
-				>
-					<Icon as={Plus} boxSize='3.5' mr='2' />
-					Add Record
-				</Button>
-			</HStack>
-
-			<Grid templateColumns='repeat(3, 1fr)' gap='4' mb='6'>
+			<Grid templateColumns='repeat(2, 1fr)' gap='4' mb='6'>
 				<StatCard
 					label='Total Records'
 					value={totalCount}
@@ -112,12 +96,6 @@ export default function LocalRecordsPage() {
 					value={enabledCount}
 					icon={ToggleRight}
 					accentColor='status.success'
-				/>
-				<StatCard
-					label='Disabled'
-					value={disabledCount}
-					icon={ToggleLeft}
-					accentColor='status.warn'
 				/>
 			</Grid>
 
@@ -131,6 +109,7 @@ export default function LocalRecordsPage() {
 				records={items}
 				onRemove={handleRemove}
 				onToggle={handleToggle}
+				onAdd={() => setShowDialog(true)}
 			/>
 		</Box>
 	);

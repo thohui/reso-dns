@@ -21,15 +21,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import type { DomainRule, ListAction } from '@/lib/api/domain-rules';
 import type { ListSubscription } from '@/lib/api/list-subscriptions';
 import type { PagedResponse } from '@/lib/api/pagination';
-import {
-	Box,
-	Button,
-	Heading,
-	HStack,
-	Icon,
-	Tabs,
-	Text,
-} from '@chakra-ui/react';
+import { Box, Button, Icon, Tabs, Text } from '@chakra-ui/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Ban, List, Plus } from 'lucide-react';
 import { useRef, useState } from 'react';
@@ -191,9 +183,6 @@ export default function DomainRulesPage() {
 
 	return (
 		<Box gap='8'>
-			<HStack justify='space-between' mb='8'>
-				<Heading size='lg'>Domain Rules</Heading>
-			</HStack>
 			<Tabs.Root defaultValue='rules' variant='line'>
 				<Box
 					display='flex'
@@ -208,7 +197,8 @@ export default function DomainRulesPage() {
 						<Tabs.Trigger
 							value='rules'
 							color='fg.muted'
-							_selected={{ color: 'accent.fg' }}
+							_hover={{ color: 'fg' }}
+							_selected={{ color: 'accent.fg', _hover: { color: 'accent.fg' } }}
 						>
 							<Icon as={Ban} boxSize='3.5' mr='2' />
 							Rules
@@ -221,7 +211,8 @@ export default function DomainRulesPage() {
 						<Tabs.Trigger
 							value='subscriptions'
 							color='fg.muted'
-							_selected={{ color: 'accent.fg' }}
+							_hover={{ color: 'fg' }}
+							_selected={{ color: 'accent.fg', _hover: { color: 'accent.fg' } }}
 						>
 							<Icon as={List} boxSize='3.5' mr='2' />
 							Subscriptions

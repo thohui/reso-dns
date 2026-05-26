@@ -4,14 +4,22 @@ import { RecordTypeBadge } from '@/components/RecordTypeBadge';
 import { ToggleButton } from '@/components/ToggleButton';
 import type { LocalRecord } from '@/lib/api/local-records';
 import { formatTimeAgo } from '@/lib/time';
-import { Box, Icon, Input, Table, Text } from '@chakra-ui/react';
+import {
+	Box,
+	Button,
+	HStack,
+	Icon,
+	Input,
+	Table,
+	Text,
+} from '@chakra-ui/react';
 import {
 	createColumnHelper,
 	flexRender,
 	getCoreRowModel,
 	useReactTable,
 } from '@tanstack/react-table';
-import { Globe, Search } from 'lucide-react';
+import { Globe, Plus, Search } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 
 const columnHelper = createColumnHelper<LocalRecord>();
@@ -20,12 +28,14 @@ interface LocalRecordsGridProps {
 	records: LocalRecord[];
 	onRemove: (id: number) => void;
 	onToggle: (id: number) => void;
+	onAdd: () => void;
 }
 
 export function LocalRecordsGrid({
 	records,
 	onRemove,
 	onToggle,
+	onAdd,
 }: LocalRecordsGridProps) {
 	const [search, setSearch] = useState('');
 
@@ -124,29 +134,43 @@ export function LocalRecordsGrid({
 	});
 
 	const toolbar = (
-		<Box position='relative'>
-			<Box
-				position='absolute'
-				left='3'
-				top='50%'
-				transform='translateY(-50%)'
-				zIndex='1'
-			>
-				<Icon as={Search} boxSize='4' color='fg.subtle' />
+		<HStack gap='3'>
+			<Box position='relative' flex='1'>
+				<Box
+					position='absolute'
+					left='3'
+					top='50%'
+					transform='translateY(-50%)'
+					zIndex='1'
+				>
+					<Icon as={Search} boxSize='4' color='fg.subtle' />
+				</Box>
+				<Input
+					placeholder='Search records...'
+					value={search}
+					onChange={(e) => setSearch(e.target.value)}
+					bg='bg.panel'
+					borderColor='border.input'
+					pl='10'
+					_placeholder={{ color: 'fg.subtle' }}
+					_hover={{ borderColor: 'accent.subtle' }}
+					_focus={{ borderColor: 'accent.subtle' }}
+					size='sm'
+				/>
 			</Box>
-			<Input
-				placeholder='Search records...'
-				value={search}
-				onChange={(e) => setSearch(e.target.value)}
-				bg='bg.panel'
-				borderColor='border.input'
-				pl='10'
-				_placeholder={{ color: 'fg.subtle' }}
-				_hover={{ borderColor: 'accent.subtle' }}
-				_focus={{ borderColor: 'accent.subtle' }}
+			<Button
+				bg='accent'
+				color='fg'
+				_hover={{ bg: 'accent.hover' }}
+				h='8'
+				fontSize='sm'
 				size='sm'
-			/>
-		</Box>
+				onClick={onAdd}
+			>
+				<Icon as={Plus} boxSize='3.5' mr='1' />
+				Add Record
+			</Button>
+		</HStack>
 	);
 
 	return (

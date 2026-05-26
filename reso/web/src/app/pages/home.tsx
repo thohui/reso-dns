@@ -6,7 +6,7 @@ import { useApiClient } from '@/contexts/ApiClientContext';
 import { useLiveStats } from '@/hooks/dashboard/useLiveStats';
 import { useUptime } from '@/hooks/useUptime';
 import type { TopRange } from '@/lib/api/stats';
-import { Box, Button, Heading, HStack, Text } from '@chakra-ui/react';
+import { Box, Button, HStack, Text } from '@chakra-ui/react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, Ban, Clock, DatabaseBackup, Globe } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -62,9 +62,6 @@ export default function HomePage() {
 		<Box>
 			<HStack justify='space-between' mb='8'>
 				<Box>
-					<Heading size='lg' mb='2'>
-						Dashboard
-					</Heading>
 					<HStack gap='2'>
 						<Box position='relative'>
 							<Box w='2.5' h='2.5' borderRadius='full' bg='status.success' />

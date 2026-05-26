@@ -1,12 +1,15 @@
+import { StatCard } from '@/components/dashboard/StatCard';
 import { LogsGrid, type SearchField } from '@/components/logs/LogsGrid';
 import { useActivities } from '@/hooks/logs/useActivities';
+import { useLiveStats } from '@/hooks/dashboard/useLiveStats';
 import { useDebounce } from '@/hooks/useDebounce';
 import type {
 	ActivityListFilter,
 	SortColumn,
 	SortDir,
 } from '@/lib/api/activity';
-import { Heading } from '@chakra-ui/react';
+import { Grid } from '@chakra-ui/react';
+import { AlertCircle, Ban, DatabaseBackup, Globe } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 const PAGE_SIZE = 50;
@@ -42,6 +45,8 @@ export default function LogsPage() {
 		cachedTotal.current = data.total;
 	}
 
+	const { data: liveData } = useLiveStats();
+
 	const total = data?.total ?? cachedTotal.current;
 	const totalPages =
 		total != null ? Math.max(1, Math.ceil(total / PAGE_SIZE)) : null;
@@ -69,9 +74,32 @@ export default function LogsPage() {
 
 	return (
 		<>
-			<Heading size='lg' mb={8}>
-				Logs
-			</Heading>
+			<Grid templateColumns='repeat(4, 1fr)' gap='4' mb='6'>
+				<StatCard
+					label='Total Queries'
+					value={liveData?.total ?? '—'}
+					icon={Globe}
+					accentColor='status.info'
+				/>
+				<StatCard
+					label='Blocked'
+					value={liveData?.blocked ?? '—'}
+					icon={Ban}
+					accentColor='status.error'
+				/>
+				<StatCard
+					label='Cached'
+					value={liveData?.cached ?? '—'}
+					icon={DatabaseBackup}
+					accentColor='status.success'
+				/>
+				<StatCard
+					label='Errors'
+					value={liveData?.errors ?? '—'}
+					icon={AlertCircle}
+					accentColor='status.warn'
+				/>
+			</Grid>
 			<LogsGrid
 				isLoading={isLoading}
 				activities={data?.items ?? []}

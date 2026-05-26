@@ -129,7 +129,6 @@ export function UpstreamsSection({
 			<Button
 				variant='ghost'
 				borderWidth='1px'
-				borderStyle='dashed'
 				borderColor='border'
 				borderRadius='lg'
 				color='fg.muted'

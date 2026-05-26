@@ -4,6 +4,7 @@ import {
 	HStack,
 	Icon,
 	Input,
+	NativeSelect,
 	Table,
 	Text,
 } from '@chakra-ui/react';
@@ -305,8 +306,8 @@ export function LogsGrid({
 	);
 
 	const toolbar = (
-		<HStack gap='2' justify='space-between' flexWrap='wrap'>
-			<HStack gap='2' flexWrap='wrap'>
+		<HStack gap='3' justify='space-between' flexWrap='wrap'>
+			<HStack gap='1.5' flexWrap='wrap'>
 				{FILTER_PRESETS.map(({ key, label, color, filter }) => {
 					const active = activePreset === key;
 					return (
@@ -315,81 +316,61 @@ export function LogsGrid({
 							variant='ghost'
 							onClick={() => onPresetChange(filter)}
 							px='3'
-							py='1.5'
-							minH='auto'
-							h='auto'
-							borderRadius='full'
+							h='8'
+							borderRadius='lg'
 							fontSize='xs'
-							fontWeight='500'
-							cursor='pointer'
-							transition='all 0.15s ease'
+							fontWeight={active ? '500' : '400'}
 							borderWidth='1px'
-							borderColor={active ? (color ?? 'fg.subtle') : 'border'}
+							borderColor={active ? (color ?? 'border.input') : 'border'}
 							bg={active ? 'bg.subtle' : 'transparent'}
 							color={active ? (color ?? 'fg') : 'fg.muted'}
-							_hover={{ bg: 'bg.subtle', borderColor: color ?? 'fg.subtle' }}
+							_hover={{ bg: 'bg.subtle', color: color ?? 'fg' }}
 							aria-pressed={active}
-							aria-label={`${label} filter`}
 						>
-							<HStack gap='1.5'>
-								{color && (
-									<Box
-										w='1.5'
-										h='1.5'
-										borderRadius='full'
-										bg={color}
-										opacity={active ? 1 : 0.5}
-									/>
-								)}
-								<Text fontSize='xs' lineHeight='1'>
-									{label}
-								</Text>
-							</HStack>
+							{label}
 						</Button>
 					);
 				})}
 			</HStack>
 
-			<HStack
-				borderWidth='1px'
-				borderColor={searchValue ? 'fg.subtle' : 'border'}
-				borderRadius='full'
-				px='3'
-				py='1.5'
-				gap='1.5'
-				transition='border-color 0.15s'
-			>
-				<Icon as={Search} boxSize='3' color='fg.faint' flexShrink={0} />
-				<Input
-					variant='subtle'
-					value={searchValue}
-					onChange={(e) => onSearchChange(e.target.value)}
-					placeholder={`search ${SEARCH_FIELD_LABELS[searchField]}...`}
-					fontSize='xs'
-					lineHeight='1'
-					border='hidden'
-					p='0'
-					h='auto'
-					minW='32'
-					bg='transparent'
-					fontFamily="'Mozilla Text', sans-serif"
-				/>
-				<Box w='1px' h='3' bg='border' flexShrink={0} />
-				<Text
-					as='button'
-					fontSize='xs'
-					color='fg.muted'
-					cursor='pointer'
-					onClick={() =>
-						onSearchFieldChange(searchField === 'qname' ? 'client' : 'qname')
-					}
-					_hover={{ color: 'fg' }}
-					transition='color 0.15s'
-					whiteSpace='nowrap'
-					flexShrink={0}
-				>
-					{SEARCH_FIELD_LABELS[searchField]}
-				</Text>
+			<HStack gap='2'>
+				<Box position='relative'>
+					<Box
+						position='absolute'
+						left='3'
+						top='50%'
+						transform='translateY(-50%)'
+						zIndex='1'
+					>
+						<Icon as={Search} boxSize='3.5' color='fg.subtle' />
+					</Box>
+					<Input
+						placeholder={`Search by ${SEARCH_FIELD_LABELS[searchField]}...`}
+						value={searchValue}
+						onChange={(e) => onSearchChange(e.target.value)}
+						bg='bg.panel'
+						borderColor='border.input'
+						pl='9'
+						_placeholder={{ color: 'fg.subtle' }}
+						_hover={{ borderColor: 'accent.subtle' }}
+						_focus={{ borderColor: 'accent.subtle' }}
+						size='sm'
+						minW='48'
+					/>
+				</Box>
+				<NativeSelect.Root size='sm' w='auto' minW='24'>
+					<NativeSelect.Field
+						bg='bg.input'
+						borderColor='border.input'
+						_hover={{ borderColor: 'accent.subtle' }}
+						value={searchField}
+						onChange={(e) => onSearchFieldChange(e.target.value as SearchField)}
+					>
+						<option value='qname'>Domain</option>
+						<option value='client'>Client</option>
+					</NativeSelect.Field>
+					<NativeSelect.Indicator />
+				</NativeSelect.Root>
 			</HStack>
 		</HStack>
 	);

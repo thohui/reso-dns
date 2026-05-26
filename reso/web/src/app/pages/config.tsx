@@ -8,7 +8,7 @@ import { useConfig, useConfigQueryKey } from '@/hooks/config/useConfig';
 import { useUpdateConfig } from '@/hooks/config/useUpdateConfig';
 import type { ConfigModel } from '@/lib/api/config';
 import { configSchema } from '@/lib/config/schema';
-import { Box, Button, Flex, Heading, HStack, Icon } from '@chakra-ui/react';
+import { Box, Button, HStack, Icon } from '@chakra-ui/react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { RotateCcw, Save } from 'lucide-react';
@@ -62,44 +62,35 @@ export default function ConfigPage() {
 
 	return (
 		<Box>
-			<Flex
-				justify='space-between'
-				align={{ base: 'flex-start', sm: 'center' }}
-				direction={{ base: 'column', sm: 'row' }}
-				gap={{ base: '4', sm: '0' }}
-				mb='8'
-			>
-				<Heading size='lg'>Configuration</Heading>
-				<HStack gap='3'>
-					<Button
-						variant='ghost'
-						color='fg.muted'
-						_hover={{ bg: 'bg.subtle' }}
-						onClick={() => form.reset()}
-						disabled={!formState.isDirty}
-						px='4'
-						h='9'
-						fontSize='sm'
-					>
-						<Icon as={RotateCcw} boxSize='3.5' mr='2' />
-						Reset
-					</Button>
-					<Button
-						bg='accent'
-						color='fg'
-						_hover={{ bg: 'accent.hover' }}
-						onClick={handleSave}
-						loading={formState.isLoading || updateConfig.isPending}
-						disabled={!formState.isDirty || !formState.isValid}
-						px='5'
-						h='9'
-						fontSize='sm'
-					>
-						<Icon as={Save} boxSize='3.5' mr='2' />
-						Save Changes
-					</Button>
-				</HStack>
-			</Flex>
+			<HStack justify='flex-end' mb='4' gap='3'>
+				<Button
+					variant='ghost'
+					color='fg.muted'
+					_hover={{ bg: 'bg.subtle' }}
+					onClick={() => form.reset()}
+					disabled={!formState.isDirty}
+					px='4'
+					h='9'
+					fontSize='sm'
+				>
+					<Icon as={RotateCcw} boxSize='3.5' mr='2' />
+					Reset
+				</Button>
+				<Button
+					bg='accent'
+					color='fg'
+					_hover={{ bg: 'accent.hover' }}
+					onClick={handleSave}
+					loading={formState.isLoading || updateConfig.isPending}
+					disabled={!formState.isDirty || !formState.isValid}
+					px='5'
+					h='9'
+					fontSize='sm'
+				>
+					<Icon as={Save} boxSize='3.5' mr='2' />
+					Save Changes
+				</Button>
+			</HStack>
 
 			<UpstreamsSection control={control} />
 			<TimeoutSection control={control} />

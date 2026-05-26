@@ -38,7 +38,7 @@ export default function NotFoundPage() {
 						404
 					</Heading>
 					<Text color='fg.muted' fontSize='sm'>
-						This page doesn't exist.
+						This page does not exist.
 					</Text>
 				</VStack>
 				<Button

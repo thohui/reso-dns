@@ -146,7 +146,9 @@ export function DashboardLayout() {
 				<Button
 					aria-label='Open navigation'
 					variant='ghost'
+					color='fg.muted'
 					size='sm'
+					_hover={{ bg: 'bg.subtle' }}
 					px='2'
 					onClick={() => setDrawerOpen(true)}
 				>
