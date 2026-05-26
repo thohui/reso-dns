@@ -1,11 +1,11 @@
 import { ConfigField } from '@/components/config/ConfigField';
 import { ConfigSection } from '@/components/config/ConfigSection';
 import { DurationInput } from '@/components/config/DurationInput';
+import type { FormValues } from '@/lib/config/schema';
 import { Field, Input } from '@chakra-ui/react';
 import { Shield } from 'lucide-react';
-import { Controller, type Control } from 'react-hook-form';
+import { type Control, Controller } from 'react-hook-form';
 import { ConfigSwitch } from './ConfigSwitch';
-import type { FormValues } from '@/lib/config/schema';
 
 export function RateLimitSection({
 	control,
@@ -60,6 +60,9 @@ export function RateLimitSection({
 								step={1}
 								value={field.value}
 								onChange={(e) => field.onChange(e.target.valueAsNumber)}
+								borderColor='border.input'
+								_hover={{ borderColor: 'accent.subtle' }}
+								_focus={{ borderColor: 'accent.subtle' }}
 							/>
 							{fieldState.error?.message && (
 								<Field.ErrorText color='status.error'>

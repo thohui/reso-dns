@@ -161,7 +161,7 @@ export function ServersView({
 		<Box>
 			{providerGroups.map((group, i) => {
 				const addedCount = group.servers.filter((s) =>
-					existingUpstreams.includes(s.address)
+					existingUpstreams.includes(s.address),
 				).length;
 				const allAdded = addedCount === group.servers.length;
 				return (
@@ -361,9 +361,8 @@ function CustomView({
 							bg='bg.input'
 							borderColor={error ? 'status.error' : 'border.input'}
 							_placeholder={{ color: 'fg.subtle' }}
-							_focus={{
-								borderColor: error ? 'status.error' : 'accent.subtle',
-							}}
+							_hover={{ borderColor: error ? 'status.error' : 'accent.subtle' }}
+							_focus={{ borderColor: error ? 'status.error' : 'accent.subtle' }}
 							fontFamily='mono'
 							fontSize='sm'
 							{...form.register('upstream')}

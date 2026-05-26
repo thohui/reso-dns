@@ -152,6 +152,7 @@ export function DomainRulesGrid({
 				borderColor='border.input'
 				pl='10'
 				_placeholder={{ color: 'fg.subtle' }}
+				_hover={{ borderColor: 'accent.subtle' }}
 				_focus={{ borderColor: 'accent.subtle' }}
 				size='sm'
 			/>

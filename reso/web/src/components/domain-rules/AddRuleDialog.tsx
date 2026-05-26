@@ -106,6 +106,7 @@ export function AddRuleDialog({ onClose, onSubmit }: AddRuleDialogProps) {
 									bg='bg.input'
 									borderColor='border.input'
 									_placeholder={{ color: 'fg.subtle' }}
+									_hover={{ borderColor: 'accent.subtle' }}
 									_focus={{ borderColor: 'accent.subtle' }}
 									autoFocus
 									{...register('domain')}

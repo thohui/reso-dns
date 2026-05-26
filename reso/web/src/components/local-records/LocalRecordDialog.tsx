@@ -125,6 +125,7 @@ export function LocalRecordDialog({
 										bg='bg.input'
 										borderColor='border.input'
 										_placeholder={{ color: 'fg.subtle' }}
+										_hover={{ borderColor: 'accent.subtle' }}
 										_focus={{ borderColor: 'accent.subtle' }}
 										autoFocus
 										{...register('name')}
@@ -167,6 +168,7 @@ export function LocalRecordDialog({
 										bg='bg.input'
 										borderColor='border.input'
 										_placeholder={{ color: 'fg.subtle' }}
+										_hover={{ borderColor: 'accent.subtle' }}
 										_focus={{ borderColor: 'accent.subtle' }}
 										{...register('value')}
 									/>
@@ -185,6 +187,8 @@ export function LocalRecordDialog({
 										type='number'
 										bg='bg.input'
 										borderColor='border.input'
+										_hover={{ borderColor: 'accent.subtle' }}
+										_focus={{ borderColor: 'accent.subtle' }}
 										{...register('ttl', { valueAsNumber: true })}
 									/>
 								</Field.Root>

@@ -102,6 +102,9 @@ export function DurationInput({
 					value={amount}
 					onChange={handleAmountChange}
 					flex='1'
+					borderColor='border.input'
+					_hover={{ borderColor: 'accent.subtle' }}
+					_focus={{ borderColor: 'accent.subtle' }}
 				/>
 				<NativeSelect.Root w='auto' minW='110px'>
 					<NativeSelect.Field

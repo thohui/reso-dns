@@ -129,14 +129,14 @@ export function UpstreamsSection({
 			<Button
 				variant='ghost'
 				borderWidth='1px'
-				borderColor='border'
 				borderStyle='dashed'
+				borderColor='border'
+				borderRadius='lg'
 				color='fg.muted'
-				_hover={{ bg: 'bg.subtle', borderColor: 'accent', color: 'accent.fg' }}
+				_hover={{ bg: 'bg.subtle', borderColor: 'accent.subtle', color: 'fg' }}
 				onClick={() => setPickerOpen(true)}
 				w='full'
 				py='5'
-				borderRadius='lg'
 				transition='all 0.15s ease'
 			>
 				<Icon as={Plus} boxSize='4' mr='2' />

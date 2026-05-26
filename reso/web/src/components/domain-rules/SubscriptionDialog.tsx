@@ -96,6 +96,7 @@ export function SubscriptionDialog({
 									bg='bg.input'
 									borderColor='border.input'
 									_placeholder={{ color: 'fg.subtle' }}
+									_hover={{ borderColor: 'accent.subtle' }}
 									_focus={{ borderColor: 'accent.subtle' }}
 									autoFocus
 									{...form.register('name')}
@@ -121,6 +122,7 @@ export function SubscriptionDialog({
 									bg='bg.input'
 									borderColor='border.input'
 									_placeholder={{ color: 'fg.subtle' }}
+									_hover={{ borderColor: 'accent.subtle' }}
 									_focus={{ borderColor: 'accent.subtle' }}
 									{...form.register('url')}
 								/>
