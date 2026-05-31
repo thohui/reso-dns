@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { DashboardLayout } from '@/layouts/DashboardLayout';
+import ApiKeysPage from './pages/api-keys';
 import DomainRulesPage from './pages/domain-rules';
 import ConfigPage from './pages/config';
 import HomePage from './pages/home';
@@ -25,6 +26,7 @@ export function AppRouter() {
 						<Route path='/local-records' element={<LocalRecordsPage />} />
 						<Route path='/logs' element={<LogsPage />} />
 						<Route path='/config' element={<ConfigPage />} />
+						<Route path='/api-keys' element={<ApiKeysPage />} />
 					</Route>
 				</Route>
 				<Route path='*' element={<NotFoundPage />} />

@@ -21,7 +21,7 @@ use tracing_subscriber::{Layer, fmt, layer::SubscriberExt, util::SubscriberInitE
 use crate::{
     database::{connect_metrics_db, run_metrics_db_migrations},
     metrics::task::run_metrics_compression,
-    services::local_records::LocalRecordService,
+    services::{api_keys::ApiKeysService, local_records::LocalRecordService},
 };
 
 mod api;
@@ -71,6 +71,7 @@ async fn run() -> anyhow::Result<()> {
         cache: DnsMessageCache::default(),
         domain_rules: DomainRulesService::initialize(core_db_connection.clone()).await?,
         local_records: LocalRecordService::initialize(core_db_connection.clone()).await?,
+        api_keys: ApiKeysService::new(core_db_connection.clone()),
         config: ConfigService::initialize(core_db_connection.clone()).await?,
         metrics: handle,
         stats,

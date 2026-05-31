@@ -1,5 +1,6 @@
 use crate::database::DatabaseError;
 
+pub mod api_keys;
 pub mod config;
 pub mod domain_rules;
 pub mod local_records;
@@ -14,6 +15,9 @@ pub enum ServiceError {
 
     #[error("{0}")]
     NotFound(String),
+
+    #[error("{0}")]
+    Unauthorized(String),
 
     #[error("internal error")]
     Internal(#[from] anyhow::Error),

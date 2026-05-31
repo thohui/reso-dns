@@ -92,6 +92,12 @@ impl From<ServiceError> for ApiError {
                 message: Cow::Owned(msg),
                 jar: None,
             },
+            ServiceError::Unauthorized(msg) => Self {
+                status_code: StatusCode::UNAUTHORIZED,
+                error: Cow::Borrowed("unauthorized"),
+                message: Cow::Owned(msg),
+                jar: None,
+            },
             ServiceError::Internal(err) => {
                 tracing::error!("internal error: {:?}", err);
                 Self::server_error()

@@ -100,7 +100,7 @@ impl User {
                 let mut stmt = c.prepare("SELECT id, name, password_hash, created_at FROM users")?;
                 let iter = stmt.query_map([], |r| {
                     Ok(Self {
-                        id: EntityId::from(r.get::<usize, Uuid>(0)?),
+                        id: EntityId::from(r.get::<_, Uuid>(0)?),
                         name: r.get(1)?,
                         password_hash: r.get(2)?,
                         created_at: r.get(3)?,

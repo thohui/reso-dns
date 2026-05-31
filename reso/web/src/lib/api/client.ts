@@ -1,5 +1,6 @@
 import ky, { type KyInstance } from 'ky';
 import { Activities } from './activity';
+import { ApiKeys } from './api-keys';
 import { DomainRules } from './domain-rules';
 import { Config } from './config';
 import { ListSubscriptions } from './list-subscriptions';
@@ -17,6 +18,7 @@ export class ApiClient {
 	public domainRules: DomainRules;
 	public listSubscriptions: ListSubscriptions;
 	public localRecords: LocalRecords;
+	public apiKeys: ApiKeys;
 	public config: Config;
 
 	constructor() {
@@ -42,6 +44,7 @@ export class ApiClient {
 		this.domainRules = new DomainRules(this.httpClient);
 		this.listSubscriptions = new ListSubscriptions(this.httpClient);
 		this.localRecords = new LocalRecords(this.httpClient);
+		this.apiKeys = new ApiKeys(this.httpClient);
 		this.config = new Config(this.httpClient);
 	}
 

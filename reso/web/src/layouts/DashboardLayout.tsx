@@ -17,6 +17,7 @@ import {
 	FileText,
 	Globe,
 	Home,
+	Key,
 	LogOut,
 	type LucideIcon,
 	Menu,
@@ -36,6 +37,7 @@ const menuItems: MenuItem[] = [
 	{ path: '/domain-rules', label: 'Domain Rules', icon: Ban },
 	{ path: '/local-records', label: 'Local Records', icon: Globe },
 	{ path: '/logs', label: 'Logs', icon: FileText },
+	{ path: '/api-keys', label: 'API Keys', icon: Key },
 	{ path: '/config', label: 'Config', icon: Settings },
 ];
 

@@ -20,15 +20,30 @@ use middleware::auth_middleware;
 
 pub mod middleware;
 
+bitflags::bitflags! {
+    /// Allowed authentication methods for API routes.
+    #[derive(Clone, Copy)]
+    pub struct AllowedAuthMethods: u32 {
+        /// Allow authentication via API key.
+        const ApiKey = 1 << 0;
+        /// Allow authentication via session cookie.
+        const Session = 1 << 1;
+    }
+}
+
 pub fn create_auth_router(global: SharedGlobal) -> Router<SharedGlobal> {
+    let authenticated = Router::new()
+        .route("/logout", post(logout))
+        .layer(axum_middleware::from_fn_with_state(
+            (global.clone(), AllowedAuthMethods::Session),
+            auth_middleware,
+        ));
+
     Router::new()
         .route("/login", post(login))
         .route("/check", post(check))
         .route("/setup", post(setup))
-        .route(
-            "/logout",
-            post(logout).layer(axum_middleware::from_fn_with_state(global.clone(), auth_middleware)),
-        )
+        .merge(authenticated)
         .with_state(global)
 }
 

@@ -9,7 +9,7 @@ use axum::{
 use serde::Deserialize;
 
 use super::{
-    auth::middleware::auth_middleware,
+    auth::{AllowedAuthMethods, middleware::auth_middleware},
     error::ApiError,
     pagination::{PagedQuery, PagedResponse},
 };
@@ -20,7 +20,7 @@ pub fn create_local_records_router(global: SharedGlobal) -> Router<SharedGlobal>
         .route("/", post(add_record))
         .route("/", delete(remove_record))
         .route("/toggle", patch(toggle_record))
-        .layer(middleware::from_fn_with_state(global, auth_middleware))
+        .layer(middleware::from_fn_with_state((global, AllowedAuthMethods::Session), auth_middleware))
 }
 
 pub async fn list(
