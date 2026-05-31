@@ -6,4 +6,5 @@ config.toml
 *.pem
 stress.txt
 .env
+reso_session.key
 release.sh
