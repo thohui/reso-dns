@@ -2,8 +2,10 @@ use base64::{Engine, engine::general_purpose::STANDARD};
 use rand::Rng;
 use std::{
     env::{self, VarError},
-    fs,
+    fs::{self, OpenOptions, read},
+    io::Write,
     net::SocketAddr,
+    os::unix::fs::OpenOptionsExt,
     path::Path,
     str::FromStr,
 };
@@ -57,7 +59,13 @@ impl EnvConfig {
                     );
                 }
                 let secret: [u8; 32] = decoded.try_into().unwrap();
-                fs::write(&session_secret_path, secret)?;
+                let mut file = OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .truncate(true)
+                    .mode(0o600) // read + write for owner only
+                    .open(&session_secret_path)?;
+                file.write_all(&secret)?;
             }
         }
 
@@ -80,12 +88,25 @@ fn load_or_create_session_secret(path: &str) -> anyhow::Result<[u8; 32]> {
         let bytes = fs::read(path)?;
         return bytes.try_into().map_err(|_| {
             anyhow::anyhow!(
-                "Session secret file at '{}' has invalid length, expected 32 bytes",
+                "session secret file at '{}' has invalid length, expected 32 bytes",
                 path.display()
             )
         });
     }
     let secret: [u8; 32] = rand::rng().random();
-    fs::write(path, secret)?;
+    create_session_secret_file(path, secret)?;
+
     Ok(secret)
+}
+
+fn create_session_secret_file(path: &Path, buf: [u8; 32]) -> anyhow::Result<()> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600) // read + write for owner only
+        .open(path)?;
+    file.write_all(&buf)?;
+
+    Ok(())
 }
