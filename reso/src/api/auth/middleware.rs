@@ -11,8 +11,9 @@ use crate::{
         cookie::{SESSION_COOKIE_KEY, decrypt_session_cookie},
         error::ApiError,
     },
-    database::models::{api_key::ApiKey as DbApiKey, user_session::UserSession},
+    database::models::{api_key::ApiKey as DbApiKey, user::User, user_session::UserSession},
     global::SharedGlobal,
+    utils::uuid::EntityId,
 };
 
 pub async fn auth_middleware(
@@ -20,7 +21,6 @@ pub async fn auth_middleware(
     mut req: Request,
     next: Next,
 ) -> Result<Response, ApiError> {
-
     if allowed.contains(AllowedAuthMethods::Session) {
         let cookie_value = CookieJar::from_headers(req.headers())
             .get(SESSION_COOKIE_KEY)
@@ -28,8 +28,9 @@ pub async fn auth_middleware(
 
         if let Some(value) = cookie_value {
             match try_session_auth(&global, value).await {
-                Ok(session) => {
-                    req.extensions_mut().insert(session);
+                Ok((session_id, user_id)) => {
+                    req.extensions_mut().insert(session_id);
+                    req.extensions_mut().insert(user_id);
                     return Ok(next.run(req).await);
                 }
                 Err(e) => return Err(e),
@@ -59,43 +60,13 @@ pub async fn auth_middleware(
     Err(ApiError::authentication_required())
 }
 
-async fn try_session_auth(global: &SharedGlobal, cookie_value: String) -> Result<UserSession, ApiError> {
-    let id = decrypt_session_cookie(&global.cipher, &cookie_value).map_err(|_| ApiError::invalid_credentials())?;
-
-    let session = match UserSession::find_by_id(&global.core_database, id).await {
-        Ok(Some(s)) => s,
-        Ok(None) => return Err(ApiError::invalid_credentials()),
-        Err(e) => {
-            tracing::error!("failed to find user session: {:?}", e);
-            return Err(ApiError::invalid_credentials());
-        }
-    };
-
-    if session.is_expired() {
-        if let Err(e) = session.delete(&global.core_database).await {
-            tracing::error!("failed to delete expired session: {:?}", e);
-        }
-        return Err(ApiError::session_expired());
-    }
-
-    Ok(session)
+async fn try_session_auth(global: &SharedGlobal, cookie_value: String) -> Result<(EntityId<UserSession>, EntityId<User>), ApiError> {
+    let session_id = decrypt_session_cookie(&global.cipher, &cookie_value).map_err(|_| ApiError::invalid_credentials())?;
+    let user_id = global.auth.verify_session(session_id.clone()).await?;
+    Ok((session_id, user_id))
 }
 
-async fn try_api_key_auth(global: &SharedGlobal, bearer: String) -> Result<DbApiKey, ApiError> {
-    let hash = DbApiKey::hash_token(&bearer);
-
-    let key = match DbApiKey::get_by_hash(&global.core_database, hash).await {
-        Ok(Some(k)) => k,
-        Ok(None) => return Err(ApiError::invalid_credentials()),
-        Err(e) => {
-            tracing::error!("failed to look up api key: {:?}", e);
-            return Err(ApiError::invalid_credentials());
-        }
-    };
-
-    if key.is_expired() {
-        return Err(ApiError::invalid_credentials());
-    }
-
-    Ok(key)
+async fn try_api_key_auth(global: &SharedGlobal, bearer: String) -> Result<EntityId<DbApiKey>, ApiError> {
+    let id = global.api_keys.verify_api_key(&bearer).await?;
+    Ok(id)
 }

@@ -1,4 +1,3 @@
-pub mod password;
 pub mod uuid;
 
 use std::time::{SystemTime, UNIX_EPOCH};

@@ -20,7 +20,10 @@ pub fn create_local_records_router(global: SharedGlobal) -> Router<SharedGlobal>
         .route("/", post(add_record))
         .route("/", delete(remove_record))
         .route("/toggle", patch(toggle_record))
-        .layer(middleware::from_fn_with_state((global, AllowedAuthMethods::Session), auth_middleware))
+        .layer(middleware::from_fn_with_state(
+            (global, AllowedAuthMethods::Session | AllowedAuthMethods::ApiKey),
+            auth_middleware,
+        ))
 }
 
 pub async fn list(

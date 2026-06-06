@@ -22,7 +22,10 @@ use super::{
 pub fn create_activity_router(global: SharedGlobal) -> Router<SharedGlobal> {
     Router::new()
         .route("/", get(activity))
-        .layer(middleware::from_fn_with_state((global, AllowedAuthMethods::Session), auth_middleware))
+        .layer(middleware::from_fn_with_state(
+            (global, AllowedAuthMethods::Session | AllowedAuthMethods::ApiKey),
+            auth_middleware,
+        ))
 }
 
 #[derive(Deserialize)]

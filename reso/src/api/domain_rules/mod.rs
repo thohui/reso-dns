@@ -24,7 +24,10 @@ pub fn create_domain_rules_router(global: SharedGlobal) -> Router<SharedGlobal> 
         .route("/", delete(remove_domain))
         .route("/", put(update_domain))
         .route("/toggle", patch(toggle_domain))
-        .layer(middleware::from_fn_with_state((global, AllowedAuthMethods::Session), auth_middleware))
+        .layer(middleware::from_fn_with_state(
+            (global, AllowedAuthMethods::Session | AllowedAuthMethods::ApiKey),
+            auth_middleware,
+        ))
 }
 
 pub async fn list(

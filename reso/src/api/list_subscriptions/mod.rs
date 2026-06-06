@@ -25,7 +25,10 @@ pub fn create_list_subscriptions_router(global: SharedGlobal) -> Router<SharedGl
         .route("/", delete(remove))
         .route("/toggle", patch(toggle))
         .route("/toggle-sync", patch(toggle_sync))
-        .layer(middleware::from_fn_with_state((global, AllowedAuthMethods::Session), auth_middleware))
+        .layer(middleware::from_fn_with_state(
+            (global, AllowedAuthMethods::Session | AllowedAuthMethods::ApiKey),
+            auth_middleware,
+        ))
 }
 
 #[derive(Serialize)]

@@ -8,7 +8,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    database::models::{api_key::ApiKey as DbApiKey, user_session::UserSession},
+    database::models::{api_key::ApiKey as DbApiKey, user::User},
     global::SharedGlobal,
     services::api_keys::{ApiKey, CreatedApiKey},
     utils::uuid::EntityId,
@@ -104,12 +104,12 @@ pub struct CreatePayload {
 
 pub async fn create(
     global: State<SharedGlobal>,
-    Extension(session): Extension<UserSession>,
+    Extension(user_id): Extension<EntityId<User>>,
     Json(payload): Json<CreatePayload>,
 ) -> Result<(StatusCode, Json<CreatedApiKeyResponse>), ApiError> {
     let key = global
         .api_keys
-        .create_api_key(payload.display_name, session.user_id, payload.expires_at)
+        .create_api_key(payload.display_name, user_id, payload.expires_at)
         .await
         .map_err(|e| {
             tracing::error!("failed to create api key: {:?}", e);

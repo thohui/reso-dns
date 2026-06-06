@@ -9,11 +9,12 @@ use crate::{
     utils::uuid::EntityId,
 };
 
+/// Service for managing API keys.
 pub struct ApiKeysService {
     db: Arc<CoreDatabasePool>,
 }
 
-/// Service representation of an API key (for listing).
+/// Service representation of an API key.
 pub struct ApiKey {
     pub id: EntityId<DbApiKey>,
     pub display_name: String,
@@ -86,6 +87,21 @@ impl ApiKeysService {
                 })
                 .collect(),
         })
+    }
+
+    /// Validate an API key bearer token.
+    pub async fn verify_api_key(&self, bearer: &str) -> Result<EntityId<DbApiKey>, ServiceError> {
+        let hash = DbApiKey::hash_token(bearer);
+
+        let key = DbApiKey::get_by_hash(&self.db, hash)
+            .await?
+            .ok_or(ServiceError::Unauthorized("invalid api key".into()))?;
+
+        if key.is_expired() {
+            return Err(ServiceError::Unauthorized("api key expired".into()));
+        }
+
+        Ok(key.id)
     }
 
     /// Delete an API key by its id.

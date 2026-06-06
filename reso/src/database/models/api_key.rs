@@ -22,11 +22,13 @@ pub struct ApiKey {
     pub expires_at: Option<i64>,
 }
 
+const API_KEY_PREFIX: &str = "reso_";
+
 fn generate_token() -> String {
     let mut bytes = [0u8; 32];
     rand::rng().fill_bytes(&mut bytes);
     let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
-    format!("reso_{hex}")
+    format!("{API_KEY_PREFIX}{hex}")
 }
 
 impl ApiKey {

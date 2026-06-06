@@ -1,6 +1,7 @@
 use crate::database::DatabaseError;
 
 pub mod api_keys;
+pub mod auth;
 pub mod config;
 pub mod domain_rules;
 pub mod local_records;
