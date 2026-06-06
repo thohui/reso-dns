@@ -53,6 +53,7 @@ impl ApiKey {
         (key, token)
     }
 
+    /// Get an API key by its identifier.
     pub async fn get_by_id(db: &CoreDatabasePool, id: &EntityId<Self>) -> Result<Option<Self>, DatabaseError> {
         let id = *id.id();
         Ok(db
@@ -65,9 +66,9 @@ impl ApiKey {
                             id: EntityId::from(r.get::<_, Uuid>(0)?),
                             display_name: r.get(1)?,
                             user_id: EntityId::from(r.get::<_, Uuid>(2)?),
-                            key_hash: r.get(2)?,
-                            created_at: r.get(3)?,
-                            expires_at: r.get(4)?,
+                            key_hash: r.get(3)?,
+                            created_at: r.get(4)?,
+                            expires_at: r.get(5)?,
                         })
                     },
                 )
@@ -76,11 +77,12 @@ impl ApiKey {
             .await?)
     }
 
+    /// Get an API key by its hash.
     pub async fn get_by_hash(db: &CoreDatabasePool, hash: String) -> Result<Option<Self>, DatabaseError> {
         Ok(db
             .interact(move |c| {
                 c.query_row(
-                    "SELECT id, user_id, key_hash, created_at, expires_at FROM api_keys WHERE key_hash = ?1",
+                    "SELECT id, display_name, user_id, key_hash, created_at, expires_at FROM api_keys WHERE key_hash = ?1",
                     params![hash],
                     |r| {
                         Ok(Self {
@@ -118,7 +120,7 @@ impl ApiKey {
         Ok(())
     }
 
-    /// List API keys joined with their owner's username, with a total count.
+    /// List API keys joined with their owner's username.
     pub async fn list_with_username(
         db: &CoreDatabasePool,
         limit: i64,
@@ -239,6 +241,26 @@ mod tests {
                 .items
                 .is_empty()
         );
+    }
+
+    #[tokio::test]
+    async fn test_get_by_id() {
+        let db = setup_core_test_db().await.unwrap();
+        let user_id = insert_test_user(&db.conn).await;
+
+        let (key, _) = ApiKey::new("my key".into(), user_id.clone(), None);
+        let key_id = key.id.clone();
+        let key_hash = key.key_hash.clone();
+        key.insert(&db.conn).await.unwrap();
+
+        let found = ApiKey::get_by_id(&db.conn, &key_id).await.unwrap().unwrap();
+        assert_eq!(found.id, key_id);
+        assert_eq!(found.display_name, "my key");
+        assert_eq!(found.user_id, user_id);
+        assert_eq!(found.key_hash, key_hash);
+
+        let not_found = ApiKey::get_by_id(&db.conn, &EntityId::new()).await.unwrap();
+        assert!(not_found.is_none());
     }
 
     #[tokio::test]
