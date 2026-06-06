@@ -48,8 +48,6 @@ services:
       RESO_METRICS_DATABASE_PATH: /data/reso_metrics.db
       RESO_DNS_SERVER_ADDRESS: 0.0.0.0:53
       RESO_HTTP_SERVER_ADDRESS: 0.0.0.0:80
-      # generate with: openssl rand -base64 32
-      RESO_COOKIE_SECRET: ${RESO_COOKIE_SECRET:?RESO_COOKIE_SECRET is required}
 
 volumes:
   reso-data:
@@ -72,7 +70,6 @@ The web UI will be available at `http://<your-host>` and DNS on port 53.
 | `RESO_DNS_SERVER_ADDRESS`    | `0.0.0.0:53`      | Address the DNS server listens on                     |
 | `RESO_HTTP_SERVER_ADDRESS`   | `0.0.0.0:80`      | Address the web UI/API listens on                     |
 | `RESO_LOG_LEVEL`             | `info`            | Log level (`trace`, `debug`, `info`, `warn`, `error`) |
-| `RESO_COOKIE_SECRET`         | —                 | Base64-encoded 32-byte secret for cookies (required)  |
 
 ## Development
 
