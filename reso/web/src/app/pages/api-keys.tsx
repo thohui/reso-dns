@@ -64,12 +64,17 @@ export default function ApiKeysPage() {
       apiKeysQueryKey(page, debouncedSearch),
       (old: typeof data) => {
         if (!old) return old;
-        return { ...old, items: old.items.filter((k) => k.id !== id) };
+        return {
+          ...old,
+          total: old.total != null ? Math.max(0, old.total - 1) : old.total,
+          items: old.items.filter((k) => k.id !== id),
+        };
       },
     );
 
     try {
       await deleteMutation.mutateAsync(id);
+      await refetch();
     } catch (e) {
       queryClient.setQueryData(
         apiKeysQueryKey(page, debouncedSearch),

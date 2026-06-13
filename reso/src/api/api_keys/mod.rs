@@ -86,10 +86,14 @@ pub async fn list(
     let db_top = top.try_into().map_err(|_| ApiError::bad_request())?;
     let db_skip = skip.try_into().map_err(|_| ApiError::bad_request())?;
 
-    let page = global.api_keys.list_api_keys(db_top, db_skip, search).await.map_err(|e| {
-        tracing::error!("failed to list api keys: {:?}", e);
-        ApiError::server_error()
-    })?;
+    let page = global
+        .api_keys
+        .list_api_keys(db_top, db_skip, search)
+        .await
+        .map_err(|e| {
+            tracing::error!("failed to list api keys: {:?}", e);
+            ApiError::server_error()
+        })?;
 
     let total = page.total.map(|t| t as u64);
     let items: Vec<ApiKeyResponse> = page.items.into_iter().map(ApiKeyResponse::from).collect();
@@ -108,6 +112,12 @@ pub async fn create(
     Extension(user_id): Extension<EntityId<User>>,
     Json(payload): Json<CreatePayload>,
 ) -> Result<(StatusCode, Json<CreatedApiKeyResponse>), ApiError> {
+    let display_name = payload.display_name.trim();
+
+    if display_name.is_empty() {
+        return Err(ApiError::bad_request().with_message("Display name is required"));
+    }
+
     if let Some(expires_at) = payload.expires_at {
         if now_millis() > expires_at {
             return Err(ApiError::bad_request().with_message("API key cannot expire in the past"));
