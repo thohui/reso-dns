@@ -1,14 +1,20 @@
 import { useApiClient } from '@/contexts/ApiClientContext';
-import { useSuspenseQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
-export const apiKeysQueryKey = ['api-keys'];
+export const API_KEYS_PAGE_SIZE = 25;
+export const apiKeysQueryKey = (page: number, search: string) => ['api-keys', page, search];
 
-export function useApiKeys() {
+export function useApiKeys(page: number, search: string) {
 	const apiClient = useApiClient();
 
-	// todo: add pagination support.
-	return useSuspenseQuery({
-		queryKey: apiKeysQueryKey,
-		queryFn: async () => apiClient.apiKeys.list({ top: 100, skip: 0 }),
+	return useQuery({
+		queryKey: apiKeysQueryKey(page, search),
+		queryFn: () =>
+			apiClient.apiKeys.list({
+				top: API_KEYS_PAGE_SIZE,
+				skip: page * API_KEYS_PAGE_SIZE,
+				search: search || undefined,
+			}),
+		placeholderData: keepPreviousData,
 	});
 }

@@ -10,4 +10,5 @@ export interface PagedResponse<T> {
 export interface PagedRequest {
 	top: number;
 	skip: number;
+	search?: string;
 }

@@ -66,8 +66,13 @@ impl ApiError {
         }
     }
 
-    pub fn cookie_jar(self, jar: CookieJar) -> Self {
+    pub fn with_cookie_jar(self, jar: CookieJar) -> Self {
         Self { jar: Some(jar), ..self }
+    }
+
+    pub fn with_message<'a>(mut self, str: &'static str) -> Self {
+        self.message = Cow::Borrowed(str);
+        self
     }
 }
 

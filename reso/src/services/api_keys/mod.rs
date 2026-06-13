@@ -45,20 +45,19 @@ impl ApiKeysService {
         user_id: EntityId<DbUser>,
         expires_at: Option<i64>,
     ) -> Result<CreatedApiKey, ServiceError> {
+        let username = DbUser::find_by_id(&self.db, &user_id)
+            .await?
+            .ok_or_else(|| ServiceError::NotFound("user not found".to_owned()))?
+            .name;
+
         let (api_key, token) = DbApiKey::new(display_name, user_id, expires_at);
 
         let id = api_key.id.clone();
-        let db_user_id = api_key.user_id.clone();
         let created_at = api_key.created_at;
         let expires_at = api_key.expires_at;
         let display_name = api_key.display_name.clone();
 
         api_key.insert(&self.db).await?;
-
-        let username = DbUser::find_by_id(&self.db, &db_user_id)
-            .await?
-            .ok_or_else(|| ServiceError::Internal(anyhow::anyhow!("user not found")))?
-            .name;
 
         Ok(CreatedApiKey {
             id,
@@ -70,9 +69,9 @@ impl ApiKeysService {
         })
     }
 
-    /// List all API keys, with pagination.
-    pub async fn list_api_keys(&self, limit: i64, offset: i64) -> Result<Page<ApiKey>, ServiceError> {
-        let page = DbApiKey::list_with_username(&self.db, limit, offset).await?;
+    /// List all API keys, with pagination and optional search.
+    pub async fn list_api_keys(&self, limit: i64, offset: i64, search: Option<String>) -> Result<Page<ApiKey>, ServiceError> {
+        let page = DbApiKey::list_with_username(&self.db, limit, offset, search).await?;
         Ok(Page {
             total: page.total,
             items: page

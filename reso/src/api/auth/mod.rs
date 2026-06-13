@@ -94,7 +94,7 @@ pub async fn logout(
         .auth
         .logout(session_id)
         .await
-        .map_err(|_| ApiError::server_error().cookie_jar(jar.clone()))?;
+        .map_err(|_| ApiError::server_error().with_cookie_jar(jar.clone()))?;
 
     Ok((jar, StatusCode::OK).into_response())
 }

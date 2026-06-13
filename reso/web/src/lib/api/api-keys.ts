@@ -9,9 +9,9 @@ export class ApiKeys {
 	}
 
 	public async list(req: PagedRequest) {
-		const response = await this.httpClient.get(
-			`api/api-keys?top=${req.top}&skip=${req.skip}`,
-		);
+		const params = new URLSearchParams({ top: String(req.top), skip: String(req.skip) });
+		if (req.search) params.set('search', req.search);
+		const response = await this.httpClient.get(`api/api-keys?${params}`);
 		return await response.json<PagedResponse<ApiKey>>();
 	}
 

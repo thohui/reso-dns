@@ -1,5 +1,5 @@
 use rand::RngCore;
-use rusqlite::{OptionalExtension, params};
+use rusqlite::{OptionalExtension, params, types::Value};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
@@ -7,6 +7,7 @@ use crate::{
     database::{
         CoreDatabasePool, DatabaseError,
         models::{Page, user::User},
+        query::WhereBuilder,
     },
     utils::{now_millis, uuid::EntityId},
 };
@@ -125,18 +126,37 @@ impl ApiKey {
         db: &CoreDatabasePool,
         limit: i64,
         offset: i64,
+        search: Option<String>,
     ) -> Result<Page<(Self, String)>, DatabaseError> {
         Ok(db
             .interact(move |c| {
-                let total = c.query_row("SELECT COUNT(*) FROM api_keys", [], |r| r.get(0))?;
-                let mut stmt = c.prepare(
+                let mut count_b = WhereBuilder::new(0);
+                if let Some(ref s) = search {
+                    count_b.like("display_name", s);
+                }
+                let (count_where, count_params) = count_b.build();
+                let count_sql = format!("SELECT COUNT(*) FROM api_keys WHERE 1=1 {count_where}");
+                let total = c.query_row(&count_sql, rusqlite::params_from_iter(&count_params), |r| r.get(0))?;
+
+                let mut list_b = WhereBuilder::new(2);
+                if let Some(ref s) = search {
+                    list_b.like("ak.display_name", s);
+                }
+                let (list_where, list_filter_params) = list_b.build();
+                let list_sql = format!(
                     "SELECT ak.id, ak.display_name, ak.user_id, ak.key_hash, ak.created_at, ak.expires_at, u.name
                      FROM api_keys ak
                      JOIN users u ON u.id = ak.user_id
-                     LIMIT ?1 OFFSET ?2",
-                )?;
+                     WHERE 1=1 {list_where}
+                     ORDER BY ak.created_at DESC
+                     LIMIT ?1 OFFSET ?2"
+                );
+                let mut list_params: Vec<Value> = vec![Value::Integer(limit), Value::Integer(offset)];
+                list_params.extend(list_filter_params);
+
+                let mut stmt = c.prepare(&list_sql)?;
                 let items = stmt
-                    .query_map(params![limit, offset], |r| {
+                    .query_map(rusqlite::params_from_iter(&list_params), |r| {
                         Ok((
                             Self {
                                 id: EntityId::from(r.get::<_, Uuid>(0)?),
@@ -146,7 +166,7 @@ impl ApiKey {
                                 created_at: r.get(4)?,
                                 expires_at: r.get(5)?,
                             },
-                            r.get::<_, String>(6)?, // username
+                            r.get::<_, String>(6)?,
                         ))
                     })?
                     .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -169,11 +189,9 @@ impl ApiKey {
 
     /// Check if the API key is expired.
     pub fn is_expired(&self) -> bool {
-        if let Some(expires_at) = self.expires_at {
-            now_millis() > expires_at
-        } else {
-            false
-        }
+        self.expires_at
+            .map(|expires_at| now_millis() >= expires_at)
+            .unwrap_or(false)
     }
 }
 

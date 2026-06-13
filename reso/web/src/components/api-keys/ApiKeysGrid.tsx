@@ -2,14 +2,14 @@ import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
 import { GridPage } from '@/components/GridPage';
 import type { ApiKey } from '@/lib/api/api-keys';
 import { formatTimeAgo } from '@/lib/time';
-import { Button, HStack, Icon, Table, Text } from '@chakra-ui/react';
+import { Box, Button, HStack, Icon, Input, Table, Text } from '@chakra-ui/react';
 import {
 	createColumnHelper,
 	flexRender,
 	getCoreRowModel,
 	useReactTable,
 } from '@tanstack/react-table';
-import { Key, Plus } from 'lucide-react';
+import { Key, Plus, Search } from 'lucide-react';
 import React, { useMemo } from 'react';
 
 const columnHelper = createColumnHelper<ApiKey>();
@@ -18,9 +18,29 @@ interface ApiKeysGridProps {
 	keys: ApiKey[];
 	onDelete: (id: string) => void;
 	onAdd: () => void;
+	page: number;
+	totalPages: number | null;
+	total: number | null;
+	hasMore?: boolean;
+	isLoading?: boolean;
+	onPageChange: (page: number) => void;
+	search: string;
+	onSearchChange: (value: string) => void;
 }
 
-export function ApiKeysGrid({ keys, onDelete, onAdd }: ApiKeysGridProps) {
+export function ApiKeysGrid({
+	keys,
+	onDelete,
+	onAdd,
+	page,
+	totalPages,
+	total,
+	hasMore,
+	isLoading,
+	onPageChange,
+	search,
+	onSearchChange,
+}: ApiKeysGridProps) {
 	const columns = useMemo(
 		() => [
 			columnHelper.accessor('display_name', {
@@ -78,10 +98,35 @@ export function ApiKeysGrid({ keys, onDelete, onAdd }: ApiKeysGridProps) {
 		data: keys,
 		columns,
 		getCoreRowModel: getCoreRowModel(),
+		manualPagination: true,
+		pageCount: totalPages ?? undefined,
 	});
 
 	const toolbar = (
-		<HStack gap='3' justify='flex-end'>
+		<HStack gap='3'>
+			<Box position='relative' flex='1'>
+				<Box
+					position='absolute'
+					left='3'
+					top='50%'
+					transform='translateY(-50%)'
+					zIndex='1'
+				>
+					<Icon as={Search} boxSize='4' color='fg.subtle' />
+				</Box>
+				<Input
+					placeholder='Search keys...'
+					value={search}
+					onChange={(e) => onSearchChange(e.target.value)}
+					bg='bg.panel'
+					borderColor='border.input'
+					pl='10'
+					_placeholder={{ color: 'fg.subtle' }}
+					_hover={{ borderColor: 'accent.subtle' }}
+					_focus={{ borderColor: 'accent.subtle' }}
+					size='sm'
+				/>
+			</Box>
 			<Button
 				bg='accent'
 				color='fg'
@@ -101,9 +146,16 @@ export function ApiKeysGrid({ keys, onDelete, onAdd }: ApiKeysGridProps) {
 		<GridPage
 			toolbar={toolbar}
 			isEmpty={keys.length === 0}
-			emptyIcon={Key}
-			emptyTitle='No API keys yet'
-			emptySubtitle='Click "New Key" to create one'
+			emptyIcon={search ? Search : Key}
+			emptyTitle={search ? 'No keys match your search' : 'No API keys yet'}
+			emptySubtitle={search ? 'Try adjusting your search' : 'Click "New Key" to create one'}
+			page={page}
+			totalPages={totalPages}
+			total={total}
+			totalLabel='keys'
+			hasMore={hasMore}
+			isLoading={isLoading}
+			onPageChange={onPageChange}
 		>
 			<Table.Root size='sm'>
 				<Table.Header>

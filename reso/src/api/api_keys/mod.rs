@@ -11,7 +11,7 @@ use crate::{
     database::models::{api_key::ApiKey as DbApiKey, user::User},
     global::SharedGlobal,
     services::api_keys::{ApiKey, CreatedApiKey},
-    utils::uuid::EntityId,
+    utils::{now_millis, uuid::EntityId},
 };
 
 use super::{
@@ -81,11 +81,12 @@ pub async fn list(
 ) -> Result<Json<PagedResponse<ApiKeyResponse>>, ApiError> {
     let top = query.top();
     let skip = query.skip();
+    let search = query.search.clone();
 
     let db_top = top.try_into().map_err(|_| ApiError::bad_request())?;
     let db_skip = skip.try_into().map_err(|_| ApiError::bad_request())?;
 
-    let page = global.api_keys.list_api_keys(db_top, db_skip).await.map_err(|e| {
+    let page = global.api_keys.list_api_keys(db_top, db_skip, search).await.map_err(|e| {
         tracing::error!("failed to list api keys: {:?}", e);
         ApiError::server_error()
     })?;
@@ -107,6 +108,12 @@ pub async fn create(
     Extension(user_id): Extension<EntityId<User>>,
     Json(payload): Json<CreatePayload>,
 ) -> Result<(StatusCode, Json<CreatedApiKeyResponse>), ApiError> {
+    if let Some(expires_at) = payload.expires_at {
+        if now_millis() > expires_at {
+            return Err(ApiError::bad_request().with_message("API key cannot expire in the past"));
+        }
+    }
+
     let key = global
         .api_keys
         .create_api_key(payload.display_name, user_id, payload.expires_at)
