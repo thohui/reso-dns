@@ -68,6 +68,7 @@ impl RateLimiter {
 pub struct RateLimitConfig {
     /// Duration of each rate limit window in seconds.
     pub window_duration: Duration,
+    /// Amount of maximum queries per window.
     pub max_queries_per_window: usize,
 }
 

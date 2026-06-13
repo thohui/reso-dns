@@ -12,13 +12,19 @@ use crate::{
     services::{self, config::model::Config},
 };
 
-use super::{auth::middleware::auth_middleware, error::ApiError};
+use super::{
+    auth::{AllowedAuthMethods, middleware::auth_middleware},
+    error::ApiError,
+};
 
 pub fn create_config_router(global: SharedGlobal) -> Router<SharedGlobal> {
     Router::new()
         .route("/", get(config))
         .route("/", put(update))
-        .layer(middleware::from_fn_with_state(global, auth_middleware))
+        .layer(middleware::from_fn_with_state(
+            (global, AllowedAuthMethods::Session | AllowedAuthMethods::ApiKey),
+            auth_middleware,
+        ))
 }
 
 pub async fn config(global: State<SharedGlobal>) -> Json<Arc<services::config::model::Config>> {

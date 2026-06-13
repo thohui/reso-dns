@@ -10,6 +10,7 @@ use metrics::{service::MetricsService, task::run_metrics_truncation};
 use reso_cache::DnsMessageCache;
 use server_builder::{build_dns_server, update_server_state_on_config_changes};
 use services::{
+    auth::AuthService,
     config::ConfigService,
     domain_rules::{DomainRulesService, run_subscription_sync},
 };
@@ -21,7 +22,7 @@ use tracing_subscriber::{Layer, fmt, layer::SubscriberExt, util::SubscriberInitE
 use crate::{
     database::{connect_metrics_db, run_metrics_db_migrations},
     metrics::task::run_metrics_compression,
-    services::local_records::LocalRecordService,
+    services::{api_keys::ApiKeysService, local_records::LocalRecordService},
 };
 
 mod api;
@@ -67,16 +68,20 @@ async fn run() -> anyhow::Result<()> {
 
     let (handle, stats, metrics_service) = MetricsService::new(metrics_db_connection.clone(), 1000).await?;
 
+    let cipher = AesGcm::new(&GenericArray::clone_from_slice(&config.cookie_secret));
+
     let global: SharedGlobal = Arc::new(Global {
         cache: DnsMessageCache::default(),
         domain_rules: DomainRulesService::initialize(core_db_connection.clone()).await?,
         local_records: LocalRecordService::initialize(core_db_connection.clone()).await?,
+        api_keys: ApiKeysService::new(core_db_connection.clone()),
         config: ConfigService::initialize(core_db_connection.clone()).await?,
+        auth: AuthService::new(core_db_connection.clone()),
+        cipher,
         metrics: handle,
         stats,
         core_database: core_db_connection,
         metrics_database: metrics_db_connection.clone(),
-        cipher: AesGcm::new(&GenericArray::clone_from_slice(&config.cookie_secret)),
     });
 
     let server = build_dns_server(global.clone()).await?;

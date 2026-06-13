@@ -13,7 +13,10 @@ use crate::{
     utils::uuid::EntityId,
 };
 
-use super::{auth::middleware::auth_middleware, error::ApiError};
+use super::{
+    auth::{AllowedAuthMethods, middleware::auth_middleware},
+    error::ApiError,
+};
 
 pub fn create_list_subscriptions_router(global: SharedGlobal) -> Router<SharedGlobal> {
     Router::new()
@@ -22,7 +25,10 @@ pub fn create_list_subscriptions_router(global: SharedGlobal) -> Router<SharedGl
         .route("/", delete(remove))
         .route("/toggle", patch(toggle))
         .route("/toggle-sync", patch(toggle_sync))
-        .layer(middleware::from_fn_with_state(global, auth_middleware))
+        .layer(middleware::from_fn_with_state(
+            (global, AllowedAuthMethods::Session | AllowedAuthMethods::ApiKey),
+            auth_middleware,
+        ))
 }
 
 #[derive(Serialize)]

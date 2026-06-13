@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 
 use activity::create_activity_router;
+use api_keys::create_api_keys_router;
 use auth::create_auth_router;
 use axum::{
     Router,
@@ -19,6 +20,7 @@ use stats::create_stats_router;
 use tower_http::cors::{AllowMethods, CorsLayer};
 
 mod activity;
+mod api_keys;
 mod auth;
 mod config;
 mod cookie;
@@ -43,7 +45,8 @@ pub async fn serve_web(
         .nest("/domain-rules", create_domain_rules_router(global.clone()))
         .nest("/list-subscriptions", create_list_subscriptions_router(global.clone()))
         .nest("/local-records", create_local_records_router(global.clone()))
-        .nest("/config", create_config_router(global.clone()));
+        .nest("/config", create_config_router(global.clone()))
+        .nest("/api-keys", create_api_keys_router(global.clone()));
 
     let mut app = Router::new().nest("/api", api).with_state(global);
 

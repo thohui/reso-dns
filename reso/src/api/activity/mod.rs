@@ -13,12 +13,19 @@ use crate::{
     global::SharedGlobal,
 };
 
-use super::{auth::middleware::auth_middleware, error::ApiError, pagination::PagedResponse};
+use super::{
+    auth::{AllowedAuthMethods, middleware::auth_middleware},
+    error::ApiError,
+    pagination::PagedResponse,
+};
 
 pub fn create_activity_router(global: SharedGlobal) -> Router<SharedGlobal> {
     Router::new()
         .route("/", get(activity))
-        .layer(middleware::from_fn_with_state(global, auth_middleware))
+        .layer(middleware::from_fn_with_state(
+            (global, AllowedAuthMethods::Session | AllowedAuthMethods::ApiKey),
+            auth_middleware,
+        ))
 }
 
 #[derive(Deserialize)]

@@ -66,8 +66,13 @@ impl ApiError {
         }
     }
 
-    pub fn cookie_jar(self, jar: CookieJar) -> Self {
+    pub fn with_cookie_jar(self, jar: CookieJar) -> Self {
         Self { jar: Some(jar), ..self }
+    }
+
+    pub fn with_message(mut self, str: &'static str) -> Self {
+        self.message = Cow::Borrowed(str);
+        self
     }
 }
 
@@ -89,6 +94,12 @@ impl From<ServiceError> for ApiError {
             ServiceError::NotFound(msg) => Self {
                 status_code: StatusCode::NOT_FOUND,
                 error: Cow::Borrowed("not_found"),
+                message: Cow::Owned(msg),
+                jar: None,
+            },
+            ServiceError::Unauthorized(msg) => Self {
+                status_code: StatusCode::UNAUTHORIZED,
+                error: Cow::Borrowed("unauthorized"),
                 message: Cow::Owned(msg),
                 jar: None,
             },
