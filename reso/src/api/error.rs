@@ -70,7 +70,7 @@ impl ApiError {
         Self { jar: Some(jar), ..self }
     }
 
-    pub fn with_message<'a>(mut self, str: &'static str) -> Self {
+    pub fn with_message(mut self, str: &'static str) -> Self {
         self.message = Cow::Borrowed(str);
         self
     }

@@ -220,7 +220,7 @@ mod tests {
         let (key2, _) = ApiKey::new("another token".into(), user_id.clone(), Some(expires_at));
         key2.insert(&db.conn).await.unwrap();
 
-        let page = ApiKey::list_with_username(&db.conn, 10, 0).await.unwrap();
+        let page = ApiKey::list_with_username(&db.conn, 10, 0, None).await.unwrap();
         assert_eq!(page.items.len(), 2);
         assert!(page.items.iter().any(|(k, _)| k.expires_at.is_none()));
         assert!(page.items.iter().any(|(k, _)| k.expires_at == Some(expires_at)));
@@ -253,7 +253,7 @@ mod tests {
         ApiKey::delete(&db.conn, &key_id).await.unwrap();
 
         assert!(
-            ApiKey::list_with_username(&db.conn, 10, 0)
+            ApiKey::list_with_username(&db.conn, 10, 0, None)
                 .await
                 .unwrap()
                 .items
