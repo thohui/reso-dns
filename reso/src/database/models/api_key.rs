@@ -148,7 +148,7 @@ impl ApiKey {
                      FROM api_keys ak
                      JOIN users u ON u.id = ak.user_id
                      WHERE 1=1 {list_where}
-                     ORDER BY ak.created_at DESC
+                     ORDER BY ak.created_at DESC, ak.id DESC
                      LIMIT ?1 OFFSET ?2"
                 );
                 let mut list_params: Vec<Value> = vec![Value::Integer(limit), Value::Integer(offset)];

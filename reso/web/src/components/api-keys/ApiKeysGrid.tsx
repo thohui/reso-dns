@@ -75,13 +75,15 @@ export function ApiKeysGrid({
 			}),
 			columnHelper.accessor('expires_at', {
 				header: 'Expires',
-				cell: ({ getValue }) => (
-					<Table.Cell py='3.5' px='4' textAlign='right'>
-						<Text color='fg.muted' fontSize='sm'>
-							{getValue() ? formatTimeAgo(getValue()) : 'Never'}
-						</Text>
-					</Table.Cell>
-				),
+				cell: ({ getValue }) => {
+					const expiresAt = getValue();
+					const label = expiresAt != null ? formatTimeAgo(expiresAt) : 'Never';
+					return (
+						<Table.Cell py='3.5' px='4' textAlign='right'>
+							<Text color='fg.muted' fontSize='sm'>{label}</Text>
+						</Table.Cell>
+					);
+				},
 			}),
 			columnHelper.display({
 				id: 'delete',
