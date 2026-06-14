@@ -28,3 +28,10 @@ export async function getApiError(e: unknown): Promise<ApiError | undefined> {
 		console.log(error);
 	}
 }
+
+export async function getErrorMessage(e: unknown): Promise<string> {
+	const apiError = await getApiError(e);
+	if (apiError) return apiError.message;
+	if (e instanceof Error) return e.message;
+	return 'Something went wrong';
+}

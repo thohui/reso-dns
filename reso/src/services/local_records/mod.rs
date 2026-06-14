@@ -28,7 +28,7 @@ fn parse_record_type(rtype: u16) -> Result<RecordType, ServiceError> {
     if SUPPORTED_TYPES.contains(&rt) {
         Ok(rt)
     } else {
-        Err(ServiceError::BadRequest(format!("Unsupported record type: {}", rtype)))
+        Err(ServiceError::BadRequest("Unsupported record type".into()))
     }
 }
 
@@ -110,18 +110,18 @@ impl LocalRecordService {
 }
 
 fn parse_value(name: &str, rtype: RecordType, value: &str) -> Result<ResolvedRecord, ServiceError> {
-    let domain = DomainName::from_user(name).map_err(|e| ServiceError::BadRequest(format!("Invalid domain: {e}")))?;
+    let domain = DomainName::from_user(name).map_err(|_| ServiceError::BadRequest("Invalid domain format".into()))?;
 
     let data = match rtype {
         RecordType::A => {
             let ip: IpAddr = value
                 .parse()
-                .map_err(|e| ServiceError::BadRequest(format!("Invalid IP address: {e}")))?;
+                .map_err(|_| ServiceError::BadRequest(format!("Invalid IP address format")))?;
             match ip {
                 IpAddr::V4(v4) => DnsRecordData::Ipv4(v4),
                 _ => {
                     return Err(ServiceError::BadRequest(
-                        "Expected IPv4 address for A record, got IPv6.".into(),
+                        "Expected IPv4 address for A record, got IPv6".into(),
                     ));
                 }
             }
@@ -129,24 +129,24 @@ fn parse_value(name: &str, rtype: RecordType, value: &str) -> Result<ResolvedRec
         RecordType::AAAA => {
             let ip: IpAddr = value
                 .parse()
-                .map_err(|e| ServiceError::BadRequest(format!("Invalid IP address: {e}")))?;
+                .map_err(|_| ServiceError::BadRequest("Invalid IP address format".into()))?;
             match ip {
                 IpAddr::V6(v6) => DnsRecordData::Ipv6(v6),
                 _ => {
                     return Err(ServiceError::BadRequest(
-                        "Expected IPv6 address for AAAA record, got IPv4.".into(),
+                        "Expected IPv6 address for AAAA record, got IPv4".into(),
                     ));
                 }
             }
         }
         RecordType::CNAME => {
-            let target = DomainName::from_user(value)
-                .map_err(|e| ServiceError::BadRequest(format!("Invalid CNAME target: {e}")))?;
+            let target =
+                DomainName::from_user(value).map_err(|_| ServiceError::BadRequest("Invalid CNAME target".into()))?;
             DnsRecordData::DomainName(target)
         }
         _ => {
             return Err(ServiceError::BadRequest(
-                "Unsupported record type for local records.".into(),
+                "Unsupported record type for local record".into(),
             ));
         }
     };

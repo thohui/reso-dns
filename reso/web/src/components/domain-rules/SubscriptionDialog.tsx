@@ -13,6 +13,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import z from 'zod';
+import { getErrorMessage } from '@/lib/api/error';
+import { FormError } from '@/components/FormError';
 import type { ListAction } from '@/lib/api/domain-rules';
 
 interface SubscriptionDialogProps {
@@ -45,9 +47,7 @@ export function SubscriptionDialog({
 			try {
 				await onSubmit(name, url, 'block', sync_enabled);
 			} catch (e) {
-				if (e instanceof Error) {
-					form.setError('root', { message: e.message });
-				}
+				form.setError('root', { message: await getErrorMessage(e) });
 			}
 		},
 	);
@@ -108,12 +108,7 @@ export function SubscriptionDialog({
 								)}
 							</Field.Root>
 
-							<Field.Root
-								invalid={
-									!!form.formState.errors.url || !!form.formState.errors.root
-								}
-								mb='6'
-							>
+							<Field.Root invalid={!!form.formState.errors.url} mb='6'>
 								<Field.Label color='fg.muted' fontSize='sm'>
 									URL
 								</Field.Label>
@@ -126,14 +121,13 @@ export function SubscriptionDialog({
 									_focus={{ borderColor: 'accent.subtle' }}
 									{...form.register('url')}
 								/>
-								{(form.formState.errors.url?.message ||
-									form.formState.errors.root?.message) && (
+								{form.formState.errors.url?.message && (
 									<Field.ErrorText color='status.error' fontSize='xs' mt='1'>
-										{form.formState.errors.url?.message ??
-											form.formState.errors.root?.message}
+										{form.formState.errors.url.message}
 									</Field.ErrorText>
 								)}
 							</Field.Root>
+							<FormError message={form.formState.errors.root?.message} />
 
 							<Field.Root mb='6'>
 								<HStack justify='space-between'>

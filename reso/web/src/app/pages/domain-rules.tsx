@@ -75,7 +75,7 @@ export default function DomainRulesPage() {
 	};
 
 	const handleAddRule = async (domain: string, action: ListAction) => {
-		await addRule.mutateAsync({ domain, action }, { onError: toastError });
+		await addRule.mutateAsync({ domain, action });
 		invalidateRules();
 		setShowRuleDialog(false);
 	};
@@ -117,7 +117,7 @@ export default function DomainRulesPage() {
 	};
 
 	const handleEditRule = async (domain: string, action: ListAction) => {
-		await updateRule.mutateAsync({ domain, action }, { onError: toastError });
+		await updateRule.mutateAsync({ domain, action });
 		invalidateRules();
 		setEditingRule(null);
 	};
@@ -128,10 +128,7 @@ export default function DomainRulesPage() {
 		list_type: ListAction,
 		sync_enabled: boolean,
 	) => {
-		await addSubscription.mutateAsync(
-			{ name, url, list_type, sync_enabled },
-			{ onError: toastError },
-		);
+		await addSubscription.mutateAsync({ name, url, list_type, sync_enabled });
 		invalidateRules();
 		invalidateSubs();
 		setShowSubscriptionDialog(false);

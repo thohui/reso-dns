@@ -15,6 +15,8 @@ import { ActionBadge } from '@/components/ActionBadge';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import z from 'zod';
+import { getErrorMessage } from '@/lib/api/error';
+import { FormError } from '@/components/FormError';
 import type { ListAction } from '@/lib/api/domain-rules';
 
 interface AddRuleDialogProps {
@@ -40,9 +42,7 @@ export function AddRuleDialog({ onClose, onSubmit }: AddRuleDialogProps) {
 		try {
 			await onSubmit(domain.trim().toLowerCase(), action);
 		} catch (e) {
-			if (e instanceof Error) {
-				setError('root', { message: e.message });
-			}
+			setError('root', { message: await getErrorMessage(e) });
 		}
 	});
 
@@ -97,7 +97,7 @@ export function AddRuleDialog({ onClose, onSubmit }: AddRuleDialogProps) {
 								</HStack>
 							</Field.Root>
 
-							<Field.Root invalid={!!errors.root || !!errors.domain} mb='6'>
+							<Field.Root invalid={!!errors.domain} mb='6'>
 								<Field.Label color='fg.muted' fontSize='sm'>
 									Domain
 								</Field.Label>
@@ -111,12 +111,13 @@ export function AddRuleDialog({ onClose, onSubmit }: AddRuleDialogProps) {
 									autoFocus
 									{...register('domain')}
 								/>
-								{(errors.domain?.message || errors.root?.message) && (
+								{errors.domain?.message && (
 									<Field.ErrorText color='status.error' fontSize='xs' mt='1'>
-										{errors.domain?.message ?? errors.root?.message}
+										{errors.domain.message}
 									</Field.ErrorText>
 								)}
 							</Field.Root>
+							<FormError message={errors.root?.message} />
 
 							<Text color='fg.muted' fontSize='xs' mb='5'>
 								{action === 'block'

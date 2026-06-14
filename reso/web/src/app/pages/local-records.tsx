@@ -32,14 +32,9 @@ export default function LocalRecordsPage() {
 		value: string;
 		ttl?: number;
 	}) => {
-		try {
-			await createMutation.mutateAsync(record);
-			await refetch();
-			setShowDialog(false);
-		} catch (e) {
-			toastError(e);
-			throw e;
-		}
+		await createMutation.mutateAsync(record);
+		refetch();
+		setShowDialog(false);
 	};
 
 	const handleRemove = async (id: number) => {

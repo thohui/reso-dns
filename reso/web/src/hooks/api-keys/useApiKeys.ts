@@ -2,7 +2,11 @@ import { useApiClient } from '@/contexts/ApiClientContext';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 export const API_KEYS_PAGE_SIZE = 25;
-export const apiKeysQueryKey = (page: number, search: string) => ['api-keys', page, search];
+export const apiKeysQueryKey = (page: number, search: string) => [
+	'api-keys',
+	page,
+	search,
+];
 
 export function useApiKeys(page: number, search: string) {
 	const apiClient = useApiClient();

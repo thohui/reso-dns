@@ -6,7 +6,7 @@ import {
 	Stack,
 	Toast,
 } from '@chakra-ui/react';
-import { getApiError } from '@/lib/api/error';
+import { getErrorMessage } from '@/lib/api/error';
 
 export const toaster = createToaster({
 	placement: 'bottom-end',
@@ -14,29 +14,11 @@ export const toaster = createToaster({
 });
 
 export async function toastError(e: unknown) {
-	const toasterDuration = 3000;
-
-	const error = await getApiError(e);
-
-	if (error) {
-		toaster.error({
-			title: 'Error',
-			description: error.message,
-			duration: toasterDuration,
-		});
-	} else if (e instanceof Error) {
-		toaster.error({
-			title: 'Error',
-			description: e.message,
-			duration: toasterDuration,
-		});
-	} else {
-		toaster.error({
-			title: 'Error',
-			description: 'Something went wrong',
-			duration: toasterDuration,
-		});
-	}
+	toaster.error({
+		title: 'Error',
+		description: await getErrorMessage(e),
+		duration: 3000,
+	});
 }
 
 export const Toaster = () => {

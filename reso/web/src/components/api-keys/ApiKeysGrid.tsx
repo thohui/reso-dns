@@ -2,7 +2,15 @@ import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
 import { GridPage } from '@/components/GridPage';
 import type { ApiKey } from '@/lib/api/api-keys';
 import { formatTimeAgo } from '@/lib/time';
-import { Box, Button, HStack, Icon, Input, Table, Text } from '@chakra-ui/react';
+import {
+	Box,
+	Button,
+	HStack,
+	Icon,
+	Input,
+	Table,
+	Text,
+} from '@chakra-ui/react';
 import {
 	createColumnHelper,
 	flexRender,
@@ -80,7 +88,9 @@ export function ApiKeysGrid({
 					const label = expiresAt != null ? formatTimeAgo(expiresAt) : 'Never';
 					return (
 						<Table.Cell py='3.5' px='4' textAlign='right'>
-							<Text color='fg.muted' fontSize='sm'>{label}</Text>
+							<Text color='fg.muted' fontSize='sm'>
+								{label}
+							</Text>
 						</Table.Cell>
 					);
 				},
@@ -150,7 +160,9 @@ export function ApiKeysGrid({
 			isEmpty={keys.length === 0}
 			emptyIcon={search ? Search : Key}
 			emptyTitle={search ? 'No keys match your search' : 'No API keys yet'}
-			emptySubtitle={search ? 'Try adjusting your search' : 'Click "New Key" to create one'}
+			emptySubtitle={
+				search ? 'Try adjusting your search' : 'Click "New Key" to create one'
+			}
 			page={page}
 			totalPages={totalPages}
 			total={total}
@@ -180,7 +192,10 @@ export function ApiKeysGrid({
 									}
 									w={header.id === 'delete' ? '10' : undefined}
 								>
-									{flexRender(header.column.columnDef.header, header.getContext())}
+									{flexRender(
+										header.column.columnDef.header,
+										header.getContext(),
+									)}
 								</Table.ColumnHeader>
 							))}
 						</Table.Row>

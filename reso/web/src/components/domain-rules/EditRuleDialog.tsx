@@ -9,6 +9,8 @@ import {
 	Text,
 } from '@chakra-ui/react';
 import { AlertTriangle, Pencil, X } from 'lucide-react';
+import { getErrorMessage } from '@/lib/api/error';
+import { FormError } from '@/components/FormError';
 import { useState } from 'react';
 import type { DomainRule, ListAction } from '@/lib/api/domain-rules';
 import { ActionBadge } from '@/components/ActionBadge';
@@ -35,7 +37,7 @@ export function EditRuleDialog({
 		try {
 			await onSubmit(rule.domain, action);
 		} catch (e) {
-			setError(e instanceof Error ? e.message : 'An error occurred');
+			setError(await getErrorMessage(e));
 		} finally {
 			setIsSubmitting(false);
 		}
@@ -134,11 +136,7 @@ export function EditRuleDialog({
 								</HStack>
 							</Field.Root>
 
-							{error && (
-								<Text color='status.error' fontSize='xs' mb='4'>
-									{error}
-								</Text>
-							)}
+							<FormError message={error ?? undefined} />
 						</Dialog.Body>
 
 						<Dialog.Footer px='6' pb='6' pt='0' justifyContent='flex-end'>

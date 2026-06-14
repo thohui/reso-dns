@@ -9,14 +9,16 @@ export class ApiKeys {
 	}
 
 	public async list(req: PagedRequest) {
-		const params = new URLSearchParams({ top: String(req.top), skip: String(req.skip) });
+		const params = new URLSearchParams({
+			top: String(req.top),
+			skip: String(req.skip),
+		});
 		if (req.search) params.set('search', req.search);
 		const response = await this.httpClient.get(`api/api-keys?${params}`);
 		return await response.json<PagedResponse<ApiKey>>();
 	}
 
-
-	public async create(payload: { display_name: string; expires_at?: number; }) {
+	public async create(payload: { display_name: string; expires_at?: number }) {
 		const response = await this.httpClient.post('api/api-keys', {
 			json: payload,
 		});
@@ -26,7 +28,6 @@ export class ApiKeys {
 	public async remove(id: string) {
 		await this.httpClient.delete(`api/api-keys/${id}`);
 	}
-
 }
 
 export interface ApiKey {

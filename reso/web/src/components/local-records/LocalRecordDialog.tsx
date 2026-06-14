@@ -15,6 +15,8 @@ import { Plus, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import z from 'zod';
 import { LOCAL_RECORD_TYPES } from '@/lib/dns';
+import { getErrorMessage } from '@/lib/api/error';
+import { FormError } from '@/components/FormError';
 
 interface LocalRecordDialogProps {
 	onClose: () => void;
@@ -71,9 +73,7 @@ export function LocalRecordDialog({
 		try {
 			await onSubmit(data);
 		} catch (e) {
-			if (e instanceof Error) {
-				setError('root', { message: e.message });
-			}
+			setError('root', { message: await getErrorMessage(e) });
 		}
 	});
 
@@ -194,11 +194,7 @@ export function LocalRecordDialog({
 								</Field.Root>
 							</HStack>
 
-							{errors.root?.message && (
-								<Text color='status.error' fontSize='xs' mb='4'>
-									{errors.root.message}
-								</Text>
-							)}
+							<FormError message={errors.root?.message} />
 						</Dialog.Body>
 
 						<Dialog.Footer px='6' pb='6' pt='0' justifyContent='flex-end'>
