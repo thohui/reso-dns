@@ -58,7 +58,7 @@ impl LocalRecordService {
     }
 
     pub async fn remove_record(&self, id: i64) -> Result<(), ServiceError> {
-        let changed = LocalRecord::delete(&self.connection, id).await?;
+        let changed = LocalRecord::delete_by_id(&self.connection, id).await?;
         if !changed {
             return Err(ServiceError::NotFound("Record not found".into()));
         }
@@ -116,7 +116,7 @@ fn parse_value(name: &str, rtype: RecordType, value: &str) -> Result<ResolvedRec
         RecordType::A => {
             let ip: IpAddr = value
                 .parse()
-                .map_err(|_| ServiceError::BadRequest(format!("Invalid IP address format")))?;
+                .map_err(|_| ServiceError::BadRequest("Invalid IP address format".into()))?;
             match ip {
                 IpAddr::V4(v4) => DnsRecordData::Ipv4(v4),
                 _ => {
@@ -146,7 +146,7 @@ fn parse_value(name: &str, rtype: RecordType, value: &str) -> Result<ResolvedRec
         }
         _ => {
             return Err(ServiceError::BadRequest(
-                "Unsupported record type for local record".into(),
+                "Unsupported record type for local records".into(),
             ));
         }
     };

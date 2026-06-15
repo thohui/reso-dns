@@ -64,7 +64,7 @@ impl ListSubscription {
     }
 
     pub async fn list(db: &CoreDatabasePool) -> Result<Vec<Self>, DatabaseError> {
-        Ok(db
+        db
             .interact(move |c| {
                 let mut stmt = c.prepare(
                     "SELECT id, name, url, list_type, created_at, enabled, last_synced_at, domain_count, hash, sync_enabled FROM list_subscriptions",
@@ -85,16 +85,12 @@ impl ListSubscription {
                 })?;
                 iter.collect::<rusqlite::Result<Vec<_>>>()
             })
-            .await?)
-    }
-
-    pub async fn delete(self, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
-        Self::delete_by_id(self.id, db).await
+            .await
     }
 
     pub async fn delete_by_id(id: EntityId<Self>, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
         let rows = db
-            .interact(move |c| Ok(c.execute("DELETE FROM list_subscriptions WHERE id = ?1", params![id.id()])?))
+            .interact(move |c| c.execute("DELETE FROM list_subscriptions WHERE id = ?1", params![id.id()]))
             .await?;
         Ok(rows > 0)
     }
@@ -177,7 +173,7 @@ mod tests {
         sub.clone().insert(&db.conn).await.unwrap();
 
         assert_eq!(ListSubscription::list(&db.conn).await.unwrap().len(), 1);
-        sub.delete(&db.conn).await.unwrap();
+        ListSubscription::delete_by_id(sub.id, &db.conn).await.unwrap();
         assert_eq!(ListSubscription::list(&db.conn).await.unwrap().len(), 0);
     }
 
@@ -198,18 +194,15 @@ mod tests {
         .await
         .unwrap();
 
-        // All domain rules enabled by default
         let rules = DomainRule::list_all(&db.conn).await.unwrap();
         assert!(rules.iter().all(|d| d.enabled));
 
-        // Disable subscription — rules should follow
         ListSubscription::toggle_enabled(sub.id.clone(), &db.conn)
             .await
             .unwrap();
         let rules = DomainRule::list_all(&db.conn).await.unwrap();
         assert!(rules.iter().all(|d| !d.enabled));
 
-        // Re-enable — rules should follow
         ListSubscription::toggle_enabled(sub.id, &db.conn).await.unwrap();
         let rules = DomainRule::list_all(&db.conn).await.unwrap();
         assert!(rules.iter().all(|d| d.enabled));

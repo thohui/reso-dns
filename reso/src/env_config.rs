@@ -1,8 +1,8 @@
 use base64::{Engine, engine::general_purpose::STANDARD};
 use rand::Rng;
 use std::{
-    env::{self, VarError},
-    fs::{self, OpenOptions, read},
+    env::{self},
+    fs::{self, OpenOptions},
     io::Write,
     net::SocketAddr,
     os::unix::fs::OpenOptionsExt,

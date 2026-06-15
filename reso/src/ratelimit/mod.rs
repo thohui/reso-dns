@@ -80,12 +80,3 @@ impl Default for RateLimitConfig {
         }
     }
 }
-
-impl RateLimitConfig {
-    pub fn new(window_duration: Duration, max_queries_per_window: usize) -> Self {
-        Self {
-            window_duration,
-            max_queries_per_window,
-        }
-    }
-}

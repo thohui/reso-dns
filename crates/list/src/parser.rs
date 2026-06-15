@@ -134,8 +134,8 @@ mod tests {
 
     #[test]
     fn detects_none_for_empty() {
-        assert!(matches!(detect_format(""), None));
-        assert!(matches!(detect_format("# just a comment\n"), None));
+        assert!(detect_format("").is_none());
+        assert!(detect_format("# just a comment\n").is_none());
     }
 
     #[test]

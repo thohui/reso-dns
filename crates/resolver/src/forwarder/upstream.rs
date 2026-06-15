@@ -68,16 +68,19 @@ impl Upstreams {
         Ok(Arc::into_inner(upstreams).expect("no other references at construction"))
     }
 
-    /// Returns the healthy upstreams and a round-robin starting index into that list.
-    /// The caller should iterate over the returned slice starting at the given index.
-    pub fn pick(&self) -> Option<(arc_swap::Guard<Arc<Vec<Arc<Upstream>>>>, usize)> {
-        let upstreams = self.healthy_cache.load();
+    pub fn iter(&self) -> Option<UpstreamIter> {
+        let upstreams = self.healthy_cache.load_full();
         let n = upstreams.len();
         if n == 0 {
             return None;
         }
-        let i = self.rr.fetch_add(1, Ordering::Relaxed) % n;
-        Some((upstreams, i))
+        let starting_index = self.rr.fetch_add(1, Ordering::Relaxed) % n;
+
+        Some(UpstreamIter {
+            upstreams,
+            start: starting_index,
+            offset: 0,
+        })
     }
 
     pub fn rebuild_healthy_cache(&self) {
@@ -88,6 +91,25 @@ impl Upstreams {
         let upstreams: Vec<_> = list.iter().filter(|u| u.is_healthy()).cloned().collect();
         // If no healthy upstreams, return all upstreams to allow requests to go through.
         if upstreams.is_empty() { list.to_vec() } else { upstreams }
+    }
+}
+
+pub struct UpstreamIter {
+    upstreams: Arc<Vec<Arc<Upstream>>>,
+    start: usize,
+    offset: usize,
+}
+
+impl Iterator for UpstreamIter {
+    type Item = Arc<Upstream>;
+    fn next(&mut self) -> Option<Self::Item> {
+        let n = self.upstreams.len();
+        if self.offset >= n {
+            return None;
+        }
+        let idx = (self.start + self.offset) % n;
+        self.offset += 1;
+        Some(Arc::clone(&self.upstreams[idx]))
     }
 }
 
@@ -264,53 +286,45 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn pick_round_robin() {
+    async fn iter_round_robin() {
         let addrs: Vec<SocketAddr> = vec!["127.0.0.1:5353".parse().unwrap(), "127.0.0.2:5353".parse().unwrap()];
         let upstreams = Upstreams::new(&addrs, test_limits()).await.unwrap();
 
-        let (list1, idx1) = upstreams.pick().unwrap();
-        let (list2, idx2) = upstreams.pick().unwrap();
+        let first = upstreams.iter().unwrap().next().unwrap();
+        let second = upstreams.iter().unwrap().next().unwrap();
 
-        assert_eq!(list1.len(), 2);
-        assert_eq!(list2.len(), 2);
-        // Round-robin should advance
-        assert_ne!(idx1, idx2);
+        assert_ne!(first.addr, second.addr);
     }
 
     #[tokio::test]
-    async fn pick_skips_unhealthy() {
+    async fn iter_skips_unhealthy() {
         let addrs: Vec<SocketAddr> = vec!["127.0.0.1:5353".parse().unwrap(), "127.0.0.2:5353".parse().unwrap()];
         let upstreams = Upstreams::new(&addrs, test_limits()).await.unwrap();
 
-        // make first upstream unhealthy
         let addr = upstreams.list[0].addr;
         for _ in 0..UpstreamHealth::FAILURE_THRESHOLD {
             upstreams.list[0].health.record_failure(addr);
         }
-
-        // rebuild cache so pick sees the change
         upstreams.rebuild_healthy_cache();
 
-        let (list, _) = upstreams.pick().unwrap();
-        assert_eq!(list.len(), 1);
-        assert_eq!(list[0].addr, addrs[1]);
+        let results: Vec<_> = upstreams.iter().unwrap().collect();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].addr, addrs[1]);
     }
 
     #[tokio::test]
-    async fn pick_returns_all_when_all_unhealthy() {
+    async fn iter_returns_all_when_all_unhealthy() {
         let addrs: Vec<SocketAddr> = vec!["127.0.0.1:5353".parse().unwrap(), "127.0.0.2:5353".parse().unwrap()];
         let upstreams = Upstreams::new(&addrs, test_limits()).await.unwrap();
 
-        // Make all upstreams unhealthy
         for upstream in upstreams.list.iter() {
             for _ in 0..UpstreamHealth::FAILURE_THRESHOLD {
                 upstream.health.record_failure(upstream.addr);
             }
         }
-
         upstreams.rebuild_healthy_cache();
 
-        let (list, _) = upstreams.pick().unwrap();
-        assert_eq!(list.len(), 2);
+        let results: Vec<_> = upstreams.iter().unwrap().collect();
+        assert_eq!(results.len(), 2);
     }
 }

@@ -37,30 +37,25 @@ impl UpstreamResolveRequest {
 
     /// Resolve a DNS query by forwarding it to configured upstreams.
     pub async fn resolve(&self) -> Result<Bytes, ResolveError> {
-        let (pools, start) = self
+        let upstreams = self
             .upstreams
-            .pick()
+            .iter()
             .ok_or(ResolveError::Other("no upstreams available".into()))?;
 
         let request_tid = helpers::extract_transaction_id(&self.query)
             .ok_or(ResolveError::InvalidRequest("failed to extract tid from query".into()))?;
 
-        let n = pools.len();
         let req_type = self.request_type;
 
         // Try each upstream in round robin order once.
-        for off in 0..n {
+        for (attempt, upstream) in upstreams.enumerate() {
             if !self.has_budget(MIN_REMAINING_TO_START_ATTEMPT) {
                 return Err(ResolveError::Timeout);
             }
 
-            // pick the next upstream in round-robin order.
-            let idx = (start + off) % n;
-            let upstream = &pools[idx];
-            let span =
-                tracing::debug_span!("upstream_attempt", upstream = %upstream.addr, attempt = off + 1, total = n);
+            let span = tracing::debug_span!("upstream_attempt", upstream = %upstream.addr, attempt=attempt);
 
-            let attempt_res = self.try_upstream(upstream, req_type).instrument(span).await;
+            let attempt_res = self.try_upstream(&upstream, req_type).instrument(span).await;
 
             let resp = match attempt_res {
                 Ok(r) => {
@@ -86,9 +81,6 @@ impl UpstreamResolveRequest {
                     tracing::warn!(
                         upstream = %upstream.addr,
                         req_type = ?req_type,
-                        attempt = off + 1,
-                        total = n,
-                        error = ?e,
                         "forward attempt failed"
                     );
 

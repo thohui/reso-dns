@@ -129,7 +129,7 @@ async fn run() -> anyhow::Result<()> {
     ));
 
     let task_global = global.clone();
-    let _ = tokio::spawn(async move { update_server_state_on_config_changes(task_global, server).await });
+    tokio::spawn(async move { update_server_state_on_config_changes(task_global, server).await });
 
     let subscription_sync_shutdown = shutdown.child_token();
     let subscription_sync_global = global.clone();

@@ -33,22 +33,7 @@ impl ApiError {
             jar: None,
         }
     }
-    pub fn session_expired() -> Self {
-        Self {
-            status_code: StatusCode::UNAUTHORIZED,
-            error: Cow::Borrowed("session_expired"),
-            message: Cow::Borrowed("The session has expired."),
-            jar: None,
-        }
-    }
-    pub fn setup_already_completed() -> Self {
-        Self {
-            status_code: StatusCode::CONFLICT,
-            error: Cow::Borrowed("setup_already_completed"),
-            message: Cow::Borrowed("Setup has already been completed."),
-            jar: None,
-        }
-    }
+
     pub fn bad_request() -> Self {
         Self {
             status_code: StatusCode::BAD_REQUEST,

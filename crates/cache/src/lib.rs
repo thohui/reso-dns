@@ -179,14 +179,8 @@ impl DnsMessageCache {
         let soa_rr = self.cache.get(&entry.soa_cache_key).await?;
 
         let mut soa_record = match soa_rr.records.first() {
-            Some(record) => {
-                if record.record_type == RecordType::SOA {
-                    record.clone()
-                } else {
-                    return Some(CacheResult::Miss);
-                }
-            }
-            None => return Some(CacheResult::Miss),
+            Some(record) if record.record_type == RecordType::SOA => record.clone(),
+            _ => return Some(CacheResult::Miss),
         };
 
         // Update the TTL of the record.

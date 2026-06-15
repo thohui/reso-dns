@@ -28,6 +28,7 @@ impl ServerError {
         }
     }
 
+    // Get the appropriate Error Type for this error.
     pub fn error_type(&self) -> ErrorType {
         match self {
             ServerError::ResolveError(e) => e.error_type(),

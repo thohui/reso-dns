@@ -28,11 +28,11 @@ impl AuthService {
         let count = User::count(&self.db).await?;
 
         if count > 0 {
-            return Err(ServiceError::Conflict("setup already completed".into()));
+            return Err(ServiceError::Conflict("Setup already completed".into()));
         }
 
         if username.trim().is_empty() || password.len() < 8 {
-            return Err(ServiceError::BadRequest("invalid credentials".into()));
+            return Err(ServiceError::BadRequest("Invalid credentials".into()));
         }
 
         let hash = hash_password(password)?;
@@ -51,7 +51,7 @@ impl AuthService {
             Ok(None) => {
                 // Simulate hashing to prevent timing attacks.
                 let _ = hash_password(password);
-                return Err(ServiceError::Unauthorized("invalid credentials".into()));
+                return Err(ServiceError::Unauthorized("Invalid credentials".into()));
             }
             Err(e) => {
                 let _ = hash_password(password);
@@ -60,7 +60,7 @@ impl AuthService {
         };
 
         verify_password(password, &user.password_hash)
-            .map_err(|_| ServiceError::Unauthorized("invalid credentials".into()))?;
+            .map_err(|_| ServiceError::Unauthorized("Invalid credentials".into()))?;
 
         self.create_session(user.id).await
     }
@@ -69,7 +69,7 @@ impl AuthService {
     pub async fn logout(&self, id: EntityId<DbUserSession>) -> Result<(), ServiceError> {
         let session = DbUserSession::find_by_id(&self.db, id)
             .await?
-            .ok_or(ServiceError::Unauthorized("session not found".into()))?;
+            .ok_or(ServiceError::Unauthorized("Session not found".into()))?;
 
         session.delete(&self.db).await?;
         Ok(())
@@ -79,11 +79,11 @@ impl AuthService {
     pub async fn verify_session(&self, id: EntityId<DbUserSession>) -> Result<EntityId<User>, ServiceError> {
         let session = DbUserSession::find_by_id(&self.db, id)
             .await?
-            .ok_or(ServiceError::Unauthorized("session not found".into()))?;
+            .ok_or(ServiceError::Unauthorized("Session not found".into()))?;
 
         if session.is_expired() {
             let _ = session.delete(&self.db).await;
-            return Err(ServiceError::Unauthorized("session expired".into()));
+            return Err(ServiceError::Unauthorized("Session expired".into()));
         }
 
         Ok(session.user_id)

@@ -218,8 +218,7 @@ impl DnsMessage {
     pub fn response_code(&self) -> DnsResponseCode {
         let low = self.flags.rcode_low as u16;
         let high = self.edns.as_ref().map(|e| e.extended_rcode).unwrap_or(0) as u16;
-        let code = DnsResponseCode::from((high << 4) | low);
-        code
+        DnsResponseCode::from((high << 4) | low)
     }
 }
 
@@ -267,6 +266,7 @@ impl TryFrom<u16> for DnsFlags {
 }
 
 impl DnsFlags {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         response: bool,
         opcode: DnsOpcode,
@@ -786,8 +786,7 @@ impl DnsRecordData {
                             pos: reader.position(),
                             need: len,
                             have: remaining,
-                        }
-                        .into());
+                        });
                     }
                     let bytes = reader.read_bytes(len)?;
                     remaining -= len;
@@ -1247,8 +1246,7 @@ impl EdnsOptionData {
                         family,
                         prefix: source_prefix_length,
                         max: max_prefix,
-                    }
-                    .into());
+                    });
                 }
 
                 let address_size = (source_prefix_length as usize).div_ceil(8);
@@ -1268,10 +1266,10 @@ impl EdnsOptionData {
                 // be zero so equivalent subnets always compare and hash the same.
                 // https://www.rfc-editor.org/rfc/rfc7871#section-6
                 let trailing_bits = source_prefix_length % 8;
-                if trailing_bits != 0 {
-                    if let Some(last) = address.last_mut() {
-                        *last &= 0xFF << (8 - trailing_bits);
-                    }
+                if trailing_bits != 0
+                    && let Some(last) = address.last_mut()
+                {
+                    *last &= 0xFF << (8 - trailing_bits);
                 }
 
                 Self::ClientSubnet(ClientSubnet {
@@ -1896,11 +1894,13 @@ mod tests {
             data: DnsRecordData::Ipv4(Ipv4Addr::new(198, 51, 100, 1)),
         };
 
-        let mut flags = DnsFlags::default();
-        flags.response = true;
-        flags.recursion_desired = true;
-        flags.recursion_available = true;
-        flags.authorative_answer = true;
+        let flags = DnsFlags {
+            response: true,
+            recursion_desired: true,
+            recursion_available: true,
+            authorative_answer: true,
+            ..Default::default()
+        };
 
         let message = DnsMessage::new(
             0xABCD,

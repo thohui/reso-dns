@@ -113,11 +113,9 @@ where
                                 }
                             }
                             Err(e) => {
-                                if let Ok(message) = ctx.message() {
-                                    if let Err(e) = write_tcp_server_error_response(message, &mut stream, &e).await {
-                                        tracing::debug!("failed to write tcp server response to client: {:?}", e);
-                                        return;
-                                    }
+                                if let Ok(message) = ctx.message() && let Err(e) = write_tcp_server_error_response(message, &mut stream, &e).await {
+                                    tracing::debug!("failed to write tcp server response to client: {:?}", e);
+                                    return;
                                 }
                                 continue;
                             }
