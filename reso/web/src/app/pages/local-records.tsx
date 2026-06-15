@@ -1,4 +1,6 @@
-import { StatCard } from '@/components/dashboard/StatCard';
+import { Box } from '@chakra-ui/react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { LocalRecordDialog } from '@/components/local-records/LocalRecordDialog';
 import { LocalRecordsGrid } from '@/components/local-records/LocalRecordsGrid';
 import { toastError } from '@/components/Toaster';
@@ -11,10 +13,6 @@ import { useRemoveLocalRecord } from '@/hooks/local-records/useRemoveLocalRecord
 import { useToggleLocalRecord } from '@/hooks/local-records/useToggleLocalRecord';
 import type { LocalRecord } from '@/lib/api/local-records';
 import type { PagedResponse } from '@/lib/api/pagination';
-import { Box, Grid } from '@chakra-ui/react';
-import { useQueryClient } from '@tanstack/react-query';
-import { Globe, ToggleRight } from 'lucide-react';
-import { useState } from 'react';
 
 export default function LocalRecordsPage() {
 	const { data, refetch } = useLocalRecords();
@@ -74,26 +72,9 @@ export default function LocalRecordsPage() {
 	};
 
 	const items = data?.items ?? [];
-	const totalCount = items.length;
-	const enabledCount = items.filter((r) => r.enabled).length;
 
 	return (
 		<Box>
-			<Grid templateColumns='repeat(2, 1fr)' gap='4' mb='6'>
-				<StatCard
-					label='Total Records'
-					value={totalCount}
-					icon={Globe}
-					accentColor='status.info'
-				/>
-				<StatCard
-					label='Active'
-					value={enabledCount}
-					icon={ToggleRight}
-					accentColor='status.success'
-				/>
-			</Grid>
-
 			{showDialog && (
 				<LocalRecordDialog
 					onClose={() => setShowDialog(false)}

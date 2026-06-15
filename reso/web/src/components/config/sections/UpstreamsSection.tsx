@@ -1,3 +1,7 @@
+import { Box, Button, HStack, Icon, Text } from '@chakra-ui/react';
+import { Plus, Server, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { type Control, useController } from 'react-hook-form';
 import { ConfigSection } from '@/components/config/ConfigSection';
 import {
 	PROTOCOL_COLORS,
@@ -6,10 +10,6 @@ import {
 import { detectProtocol, getProviderGroup } from '@/lib/config/providers';
 import type { FormValues } from '@/lib/config/schema';
 import { hexToRgba } from '@/lib/theme';
-import { Box, Button, HStack, Icon, Text } from '@chakra-ui/react';
-import { Plus, Server, Trash2 } from 'lucide-react';
-import { useState } from 'react';
-import { type Control, useController } from 'react-hook-form';
 
 export function UpstreamsSection({
 	control,
@@ -27,7 +27,7 @@ export function UpstreamsSection({
 	return (
 		<ConfigSection
 			title='Upstream Servers'
-			description='DNS servers that Reso forwards queries to.'
+			description='DNS servers that Reso forwards queries to. Queries are distributed across servers in round-robin order.'
 			icon={Server}
 		>
 			{upstreams.length > 0 ? (

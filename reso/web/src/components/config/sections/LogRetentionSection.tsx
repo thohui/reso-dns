@@ -1,9 +1,9 @@
+import { FileText } from 'lucide-react';
+import { type Control, Controller } from 'react-hook-form';
 import { ConfigField } from '@/components/config/ConfigField';
 import { ConfigSection } from '@/components/config/ConfigSection';
 import { DurationInput } from '@/components/config/DurationInput';
 import type { FormValues } from '@/lib/config/schema';
-import { FileText } from 'lucide-react';
-import { type Control, Controller } from 'react-hook-form';
 import { ConfigSwitch } from './ConfigSwitch';
 
 export function LogRetentionSection({
