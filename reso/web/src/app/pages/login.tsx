@@ -1,5 +1,3 @@
-import Logo from '@/assets/logo.svg?react';
-import { useApiClient } from '@/contexts/ApiClientContext';
 import {
 	Box,
 	Button,
@@ -17,6 +15,9 @@ import { Lock, User } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import z from 'zod';
+import Logo from '@/assets/logo.svg?react';
+import { useApiClient } from '@/contexts/ApiClientContext';
+import { getVersion } from '@/lib/version';
 
 const loginSchema = z.object({
 	username: z.string().min(1),
@@ -202,6 +203,9 @@ export default function LoginPage() {
 						>
 							Sign In
 						</Button>
+						<Text fontSize='xs' color='fg.faint'>
+							Version {getVersion()}
+						</Text>
 					</VStack>
 				</form>
 			</Box>
