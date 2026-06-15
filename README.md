@@ -46,6 +46,7 @@ services:
     environment:
       RESO_DATABASE_PATH: /data/reso.db
       RESO_METRICS_DATABASE_PATH: /data/reso_metrics.db
+      RESO_SESSION_SECRET_PATH: /data/reso_session.key
       RESO_DNS_SERVER_ADDRESS: 0.0.0.0:53
       RESO_HTTP_SERVER_ADDRESS: 0.0.0.0:80
 
@@ -65,11 +66,12 @@ The web UI will be available at `http://<your-host>` and DNS on port 53.
 
 | Variable                     | Default           | Description                                           |
 | ---------------------------- | ----------------- | ----------------------------------------------------- |
-| `RESO_DATABASE_PATH`         | `reso.db`         | Path to the SQLite database file                      |
-| `RESO_METRICS_DATABASE_PATH` | `reso_metrics.db` | Path to the metrics SQLite database file              |
-| `RESO_DNS_SERVER_ADDRESS`    | `0.0.0.0:53`      | Address the DNS server listens on                     |
-| `RESO_HTTP_SERVER_ADDRESS`   | `0.0.0.0:80`      | Address the web UI/API listens on                     |
-| `RESO_LOG_LEVEL`             | `info`            | Log level (`trace`, `debug`, `info`, `warn`, `error`) |
+| `RESO_DATABASE_PATH`         | `reso.db`            | Path to the SQLite database file                      |
+| `RESO_METRICS_DATABASE_PATH` | `reso_metrics.db`    | Path to the metrics SQLite database file              |
+| `RESO_SESSION_SECRET_PATH`   | `reso_session.key`   | Path to the session secret key file                   |
+| `RESO_DNS_SERVER_ADDRESS`    | `0.0.0.0:53`         | Address the DNS server listens on                     |
+| `RESO_HTTP_SERVER_ADDRESS`   | `0.0.0.0:80`         | Address the web UI/API listens on                     |
+| `RESO_LOG_LEVEL`             | `info`               | Log level (`trace`, `debug`, `info`, `warn`, `error`) |
 
 ## Development
 

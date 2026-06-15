@@ -14,6 +14,7 @@ services:
     environment:
       RESO_DATABASE_PATH: /data/reso.db
       RESO_METRICS_DATABASE_PATH: /data/reso_metrics.db
+      RESO_SESSION_SECRET_PATH: /data/reso_session.key
       RESO_DNS_SERVER_ADDRESS: 0.0.0.0:53
       RESO_HTTP_SERVER_ADDRESS: 0.0.0.0:80
 

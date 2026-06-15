@@ -10,6 +10,7 @@ services:
     environment:
       RESO_DATABASE_PATH: /data/reso.db
       RESO_METRICS_DATABASE_PATH: /data/reso_metrics.db
+      RESO_SESSION_SECRET_PATH: /data/reso_session.key
 
 volumes:
   reso-data:
