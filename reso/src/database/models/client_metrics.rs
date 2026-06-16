@@ -82,57 +82,30 @@ impl ClientMetrics {
         Ok(())
     }
 
-    /// List client metrics buckets in the given time range, ordered by timestamp ascending.
-    pub async fn list_range(db: &MetricsDatabasePool, start_ts: i64, end_ts: i64) -> Result<Vec<Self>, DatabaseError> {
-        Ok(db
-            .interact(move |c| {
-                let mut stmt = c.prepare(
-                    "SELECT bucket_ts, client, total_count, blocked_count, cached_count, error_count, sum_duration
-                     FROM metrics_by_client
-                     WHERE bucket_ts >= ?1 AND bucket_ts < ?2
-                     ORDER BY bucket_ts",
-                )?;
-                let iter = stmt.query_map(params![start_ts, end_ts], |r| {
-                    Ok(Self {
-                        bucket_ts: r.get(0)?,
-                        client: r.get(1)?,
-                        total_count: r.get(2)?,
-                        blocked_count: r.get(3)?,
-                        cached_count: r.get(4)?,
-                        error_count: r.get(5)?,
-                        sum_duration: r.get(6)?,
-                    })
-                })?;
-                iter.collect()
-            })
-            .await?)
-    }
-
     /// List top clients by total count since the given timestamp, ordered by count descending.
     pub async fn top_clients(
         db: &MetricsDatabasePool,
         since: i64,
         limit: i64,
     ) -> Result<Vec<(String, i64)>, DatabaseError> {
-        Ok(db
-            .interact(move |c| {
-                let mut stmt = c.prepare(
-                    "SELECT client, SUM(total_count) as count
+        db.interact(move |c| {
+            let mut stmt = c.prepare(
+                "SELECT client, SUM(total_count) as count
                      FROM metrics_by_client
                      WHERE bucket_ts >= ?1
                      GROUP BY client
                      ORDER BY count DESC
                      LIMIT ?2",
-                )?;
-                let iter = stmt.query_map(params![since, limit], |r| Ok((r.get(0)?, r.get(1)?)))?;
-                iter.collect()
-            })
-            .await?)
+            )?;
+            let iter = stmt.query_map(params![since, limit], |r| Ok((r.get(0)?, r.get(1)?)))?;
+            iter.collect()
+        })
+        .await
     }
 
     /// Get timeline of total counts, blocked counts, cached counts, error counts, and sum duration, grouped by bucket_ts.
     pub async fn timeline(db: &MetricsDatabasePool, since: i64) -> Result<Vec<TimelineBucket>, DatabaseError> {
-        Ok(db
+        db
             .interact(move |c| {
                 let mut stmt = c.prepare(
                     "SELECT bucket_ts, SUM(total_count), SUM(blocked_count), SUM(cached_count), SUM(error_count), SUM(sum_duration)
@@ -153,7 +126,7 @@ impl ClientMetrics {
                 })?;
                 iter.collect()
             })
-            .await?)
+            .await
     }
 
     /// Compress old metric buckets into larger ones to save space.
@@ -265,6 +238,34 @@ mod tests {
         }
     }
 
+    async fn list_range(
+        db: &MetricsDatabasePool,
+        start_ts: i64,
+        end_ts: i64,
+    ) -> Result<Vec<ClientMetrics>, DatabaseError> {
+        db.interact(move |c| {
+            let mut stmt = c.prepare(
+                "SELECT bucket_ts, client, total_count, blocked_count, cached_count, error_count, sum_duration
+                     FROM metrics_by_client
+                     WHERE bucket_ts >= ?1 AND bucket_ts < ?2
+                     ORDER BY bucket_ts",
+            )?;
+            let iter = stmt.query_map(params![start_ts, end_ts], |r| {
+                Ok(ClientMetrics {
+                    bucket_ts: r.get(0)?,
+                    client: r.get(1)?,
+                    total_count: r.get(2)?,
+                    blocked_count: r.get(3)?,
+                    cached_count: r.get(4)?,
+                    error_count: r.get(5)?,
+                    sum_duration: r.get(6)?,
+                })
+            })?;
+            iter.collect()
+        })
+        .await
+    }
+
     #[tokio::test]
     async fn batch_upsert_accumulates_on_conflict() {
         let db = setup_metrics_test_db().await.unwrap();
@@ -272,7 +273,7 @@ mod tests {
         ClientMetrics::batch_upsert(&db.conn, &rows).await.unwrap();
         ClientMetrics::batch_upsert(&db.conn, &rows).await.unwrap();
 
-        let result = ClientMetrics::list_range(&db.conn, 0, 2000).await.unwrap();
+        let result = list_range(&db.conn, 0, 2000).await.unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].total_count, 20);
         assert_eq!(result[0].blocked_count, 4);
@@ -291,7 +292,7 @@ mod tests {
         ];
         ClientMetrics::batch_upsert(&db.conn, &rows).await.unwrap();
 
-        let result = ClientMetrics::list_range(&db.conn, 1500, 2500).await.unwrap();
+        let result = list_range(&db.conn, 1500, 2500).await.unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].bucket_ts, 2000);
     }
@@ -380,7 +381,7 @@ mod tests {
 
         ClientMetrics::compress_before(&db.conn, HOUR_MS * 3).await.unwrap();
 
-        let result = ClientMetrics::list_range(&db.conn, 0, HOUR_MS * 5).await.unwrap();
+        let result = list_range(&db.conn, 0, HOUR_MS * 5).await.unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].bucket_ts, HOUR_MS);
         assert_eq!(result[0].total_count, 15);
@@ -396,7 +397,7 @@ mod tests {
         ClientMetrics::compress_before(&db.conn, HOUR_MS * 3).await.unwrap();
         ClientMetrics::compress_before(&db.conn, HOUR_MS * 3).await.unwrap();
 
-        let result = ClientMetrics::list_range(&db.conn, 0, HOUR_MS * 5).await.unwrap();
+        let result = list_range(&db.conn, 0, HOUR_MS * 5).await.unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].total_count, 10);
     }

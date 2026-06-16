@@ -55,7 +55,7 @@ impl DomainListMatcher {
                 return true;
             }
 
-            match node.children.binary_search_by(|n| n.label.as_ref().cmp(&label)) {
+            match node.children.binary_search_by(|n| n.label.as_ref().cmp(label)) {
                 Ok(i) => node = &node.children[i],
                 Err(_) => return false,
             }
@@ -90,7 +90,7 @@ impl DomainListMatcher {
 
             let mut node = &mut root;
             for label in labels.rev_labels() {
-                node = node.child_mut(&label);
+                node = node.child_mut(label);
             }
 
             if is_wildcard {

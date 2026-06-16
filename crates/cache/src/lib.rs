@@ -147,7 +147,6 @@ impl DnsMessageCache {
         CacheResult::Miss
     }
 
-    /// Handle negative entry
     async fn handle_negative_entry(&self, now: Instant, key: &CacheKey) -> Option<CacheResult> {
         let nxdomain_key = NegativeCacheKey::NxDomain {
             qname: key.name.clone(),
@@ -179,14 +178,8 @@ impl DnsMessageCache {
         let soa_rr = self.cache.get(&entry.soa_cache_key).await?;
 
         let mut soa_record = match soa_rr.records.first() {
-            Some(record) => {
-                if record.record_type == RecordType::SOA {
-                    record.clone()
-                } else {
-                    return Some(CacheResult::Miss);
-                }
-            }
-            None => return Some(CacheResult::Miss),
+            Some(record) if record.record_type == RecordType::SOA => record.clone(),
+            _ => return Some(CacheResult::Miss),
         };
 
         // Update the TTL of the record.
@@ -200,7 +193,6 @@ impl DnsMessageCache {
         }))
     }
 
-    /// Handle Entry.
     async fn handle_entry(&self, now: Instant, key: &CacheKey) -> Option<CacheResult> {
         let entry = self.cache.get(key).await?;
 
@@ -319,9 +311,6 @@ impl DnsMessageCache {
         inserted
     }
 
-    /// Insert a negative cache entry (NxDomain or NoData).
-    /// Returns `Some(true)` on success, `Some(false)` on invalid data, `None` if
-    /// the response lacks the required SOA record.
     async fn insert_negative(&self, query_msg: &DnsMessage, resp_msg: &DnsMessage, kind: NegKind) -> Option<bool> {
         let soa_record = resp_msg
             .authority_records()

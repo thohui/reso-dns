@@ -46,69 +46,66 @@ impl User {
     pub async fn find_by_name(db: &CoreDatabasePool, name: impl Into<String>) -> Result<Option<Self>, DatabaseError> {
         let name = name.into();
 
-        Ok(db
-            .interact(move |c| {
-                c.query_row(
-                    "SELECT id, name, password_hash, created_at FROM users WHERE name = ?1",
-                    params![name],
-                    |f| {
-                        let uuid: Uuid = f.get(0)?;
-                        Ok(Self {
-                            id: EntityId::from(uuid),
-                            name: f.get(1)?,
-                            password_hash: f.get(2)?,
-                            created_at: f.get(3)?,
-                        })
-                    },
-                )
-                .optional()
-            })
-            .await?)
+        db.interact(move |c| {
+            c.query_row(
+                "SELECT id, name, password_hash, created_at FROM users WHERE name = ?1",
+                params![name],
+                |f| {
+                    let uuid: Uuid = f.get(0)?;
+                    Ok(Self {
+                        id: EntityId::from(uuid),
+                        name: f.get(1)?,
+                        password_hash: f.get(2)?,
+                        created_at: f.get(3)?,
+                    })
+                },
+            )
+            .optional()
+        })
+        .await
     }
 
     pub async fn find_by_id(db: &CoreDatabasePool, id: &EntityId<Self>) -> Result<Option<Self>, DatabaseError> {
         let id = *id.id();
 
-        Ok(db
-            .interact(move |c| {
-                c.query_row(
-                    "SELECT id, name, password_hash, created_at FROM users WHERE id = ?1",
-                    params![id],
-                    |f| {
-                        Ok(Self {
-                            id: EntityId::from(f.get::<usize, Uuid>(0)?),
-                            name: f.get(1)?,
-                            password_hash: f.get(2)?,
-                            created_at: f.get(3)?,
-                        })
-                    },
-                )
-                .optional()
-            })
-            .await?)
+        db.interact(move |c| {
+            c.query_row(
+                "SELECT id, name, password_hash, created_at FROM users WHERE id = ?1",
+                params![id],
+                |f| {
+                    Ok(Self {
+                        id: EntityId::from(f.get::<usize, Uuid>(0)?),
+                        name: f.get(1)?,
+                        password_hash: f.get(2)?,
+                        created_at: f.get(3)?,
+                    })
+                },
+            )
+            .optional()
+        })
+        .await
     }
 
     pub async fn count(db: &CoreDatabasePool) -> Result<i64, DatabaseError> {
-        Ok(db
-            .interact(|c| c.query_row("SELECT COUNT(*) FROM users", [], |r| r.get(0)))
-            .await?)
+        db.interact(|c| c.query_row("SELECT COUNT(*) FROM users", [], |r| r.get(0)))
+            .await
     }
 
+    #[allow(unused)]
     pub async fn list(db: &CoreDatabasePool) -> Result<Vec<Self>, DatabaseError> {
-        Ok(db
-            .interact(|c| {
-                let mut stmt = c.prepare("SELECT id, name, password_hash, created_at FROM users")?;
-                let iter = stmt.query_map([], |r| {
-                    Ok(Self {
-                        id: EntityId::from(r.get::<_, Uuid>(0)?),
-                        name: r.get(1)?,
-                        password_hash: r.get(2)?,
-                        created_at: r.get(3)?,
-                    })
-                })?;
-                iter.collect::<rusqlite::Result<Vec<_>>>()
-            })
-            .await?)
+        db.interact(|c| {
+            let mut stmt = c.prepare("SELECT id, name, password_hash, created_at FROM users")?;
+            let iter = stmt.query_map([], |r| {
+                Ok(Self {
+                    id: EntityId::from(r.get::<_, Uuid>(0)?),
+                    name: r.get(1)?,
+                    password_hash: r.get(2)?,
+                    created_at: r.get(3)?,
+                })
+            })?;
+            iter.collect::<rusqlite::Result<Vec<_>>>()
+        })
+        .await
     }
 }
 
@@ -262,7 +259,7 @@ mod tests {
     #[tokio::test]
     async fn test_user_entity_id_conversion() {
         let user = User::new("test", "hash");
-        let uuid = user.id.id().clone();
+        let uuid = *user.id.id();
 
         let new_entity_id = EntityId::<User>::from(uuid);
         assert_eq!(user.id, new_entity_id);

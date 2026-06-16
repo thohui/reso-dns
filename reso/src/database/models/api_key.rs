@@ -54,51 +54,26 @@ impl ApiKey {
         (key, token)
     }
 
-    /// Get an API key by its identifier.
-    pub async fn get_by_id(db: &CoreDatabasePool, id: &EntityId<Self>) -> Result<Option<Self>, DatabaseError> {
-        let id = *id.id();
-        Ok(db
-            .interact(move |c| {
-                c.query_row(
-                    "SELECT id, display_name, user_id, key_hash, created_at, expires_at FROM api_keys WHERE id = ?1",
-                    params![id],
-                    |r| {
-                        Ok(Self {
-                            id: EntityId::from(r.get::<_, Uuid>(0)?),
-                            display_name: r.get(1)?,
-                            user_id: EntityId::from(r.get::<_, Uuid>(2)?),
-                            key_hash: r.get(3)?,
-                            created_at: r.get(4)?,
-                            expires_at: r.get(5)?,
-                        })
-                    },
-                )
-                .optional()
-            })
-            .await?)
-    }
-
-    /// Get an API key by its hash.
-    pub async fn get_by_hash(db: &CoreDatabasePool, hash: String) -> Result<Option<Self>, DatabaseError> {
-        Ok(db
-            .interact(move |c| {
-                c.query_row(
-                    "SELECT id, display_name, user_id, key_hash, created_at, expires_at FROM api_keys WHERE key_hash = ?1",
-                    params![hash],
-                    |r| {
-                        Ok(Self {
-                            id: EntityId::from(r.get::<_, Uuid>(0)?),
-                            display_name: r.get(1)?,
-                            user_id: EntityId::from(r.get::<_, Uuid>(2)?),
-                            key_hash: r.get(3)?,
-                            created_at: r.get(4)?,
-                            expires_at: r.get(5)?,
-                        })
-                    },
-                )
-                .optional()
-            })
-            .await?)
+    /// Find an API key by its hash.
+    pub async fn find_by_hash(db: &CoreDatabasePool, hash: String) -> Result<Option<Self>, DatabaseError> {
+        db.interact(move |c| {
+            c.query_row(
+                "SELECT id, display_name, user_id, key_hash, created_at, expires_at FROM api_keys WHERE key_hash = ?1",
+                params![hash],
+                |r| {
+                    Ok(Self {
+                        id: EntityId::from(r.get::<_, Uuid>(0)?),
+                        display_name: r.get(1)?,
+                        user_id: EntityId::from(r.get::<_, Uuid>(2)?),
+                        key_hash: r.get(3)?,
+                        created_at: r.get(4)?,
+                        expires_at: r.get(5)?,
+                    })
+                },
+            )
+            .optional()
+        })
+        .await
     }
 
     /// Insert the API key into the database.
@@ -128,61 +103,60 @@ impl ApiKey {
         offset: i64,
         search: Option<String>,
     ) -> Result<Page<(Self, String)>, DatabaseError> {
-        Ok(db
-            .interact(move |c| {
-                let mut count_b = WhereBuilder::new(0);
-                if let Some(ref s) = search {
-                    count_b.like("display_name", s);
-                }
-                let (count_where, count_params) = count_b.build();
-                let count_sql = format!("SELECT COUNT(*) FROM api_keys WHERE 1=1 {count_where}");
-                let total = c.query_row(&count_sql, rusqlite::params_from_iter(&count_params), |r| r.get(0))?;
+        db.interact(move |c| {
+            let mut count_b = WhereBuilder::new(0);
+            if let Some(ref s) = search {
+                count_b.like("display_name", s);
+            }
+            let (count_where, count_params) = count_b.build();
+            let count_sql = format!("SELECT COUNT(*) FROM api_keys WHERE 1=1 {count_where}");
+            let total = c.query_row(&count_sql, rusqlite::params_from_iter(&count_params), |r| r.get(0))?;
 
-                let mut list_b = WhereBuilder::new(2);
-                if let Some(ref s) = search {
-                    list_b.like("ak.display_name", s);
-                }
-                let (list_where, list_filter_params) = list_b.build();
-                let list_sql = format!(
-                    "SELECT ak.id, ak.display_name, ak.user_id, ak.key_hash, ak.created_at, ak.expires_at, u.name
+            let mut list_b = WhereBuilder::new(2);
+            if let Some(ref s) = search {
+                list_b.like("ak.display_name", s);
+            }
+            let (list_where, list_filter_params) = list_b.build();
+            let list_sql = format!(
+                "SELECT ak.id, ak.display_name, ak.user_id, ak.key_hash, ak.created_at, ak.expires_at, u.name
                      FROM api_keys ak
                      JOIN users u ON u.id = ak.user_id
                      WHERE 1=1 {list_where}
                      ORDER BY ak.created_at DESC, ak.id DESC
                      LIMIT ?1 OFFSET ?2"
-                );
-                let mut list_params: Vec<Value> = vec![Value::Integer(limit), Value::Integer(offset)];
-                list_params.extend(list_filter_params);
+            );
+            let mut list_params: Vec<Value> = vec![Value::Integer(limit), Value::Integer(offset)];
+            list_params.extend(list_filter_params);
 
-                let mut stmt = c.prepare(&list_sql)?;
-                let items = stmt
-                    .query_map(rusqlite::params_from_iter(&list_params), |r| {
-                        Ok((
-                            Self {
-                                id: EntityId::from(r.get::<_, Uuid>(0)?),
-                                display_name: r.get(1)?,
-                                user_id: EntityId::from(r.get::<_, Uuid>(2)?),
-                                key_hash: r.get(3)?,
-                                created_at: r.get(4)?,
-                                expires_at: r.get(5)?,
-                            },
-                            r.get::<_, String>(6)?,
-                        ))
-                    })?
-                    .collect::<rusqlite::Result<Vec<_>>>()?;
-                Ok(Page {
-                    items,
-                    total: Some(total),
-                })
+            let mut stmt = c.prepare(&list_sql)?;
+            let items = stmt
+                .query_map(rusqlite::params_from_iter(&list_params), |r| {
+                    Ok((
+                        Self {
+                            id: EntityId::from(r.get::<_, Uuid>(0)?),
+                            display_name: r.get(1)?,
+                            user_id: EntityId::from(r.get::<_, Uuid>(2)?),
+                            key_hash: r.get(3)?,
+                            created_at: r.get(4)?,
+                            expires_at: r.get(5)?,
+                        },
+                        r.get::<_, String>(6)?,
+                    ))
+                })?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            Ok(Page {
+                items,
+                total: Some(total),
             })
-            .await?)
+        })
+        .await
     }
 
     /// Delete an API key by its ID.
-    pub async fn delete(db: &CoreDatabasePool, id: &EntityId<Self>) -> Result<bool, DatabaseError> {
+    pub async fn delete_by_id(db: &CoreDatabasePool, id: &EntityId<Self>) -> Result<bool, DatabaseError> {
         let id = *id.id();
         let changed = db
-            .interact(move |c| Ok(c.execute("DELETE FROM api_keys WHERE id = ?1", params![id])?))
+            .interact(move |c| c.execute("DELETE FROM api_keys WHERE id = ?1", params![id]))
             .await?;
         Ok(changed > 0)
     }
@@ -227,17 +201,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_by_hash() {
+    async fn test_find_by_hash() {
         let db = setup_core_test_db().await.unwrap();
         let user_id = insert_test_user(&db.conn).await;
 
         let (key, token) = ApiKey::new("test token".into(), user_id, None);
         key.insert(&db.conn).await.unwrap();
 
-        let found = ApiKey::get_by_hash(&db.conn, ApiKey::hash_token(&token)).await.unwrap();
+        let found = ApiKey::find_by_hash(&db.conn, ApiKey::hash_token(&token))
+            .await
+            .unwrap();
         assert!(found.is_some());
 
-        let not_found = ApiKey::get_by_hash(&db.conn, "notahash".to_string()).await.unwrap();
+        let not_found = ApiKey::find_by_hash(&db.conn, "notahash".to_string()).await.unwrap();
         assert!(not_found.is_none());
     }
 
@@ -250,7 +226,7 @@ mod tests {
         let key_id = key.id.clone();
         key.insert(&db.conn).await.unwrap();
 
-        ApiKey::delete(&db.conn, &key_id).await.unwrap();
+        ApiKey::delete_by_id(&db.conn, &key_id).await.unwrap();
 
         assert!(
             ApiKey::list_with_username(&db.conn, 10, 0, None)
@@ -259,26 +235,6 @@ mod tests {
                 .items
                 .is_empty()
         );
-    }
-
-    #[tokio::test]
-    async fn test_get_by_id() {
-        let db = setup_core_test_db().await.unwrap();
-        let user_id = insert_test_user(&db.conn).await;
-
-        let (key, _) = ApiKey::new("my key".into(), user_id.clone(), None);
-        let key_id = key.id.clone();
-        let key_hash = key.key_hash.clone();
-        key.insert(&db.conn).await.unwrap();
-
-        let found = ApiKey::get_by_id(&db.conn, &key_id).await.unwrap().unwrap();
-        assert_eq!(found.id, key_id);
-        assert_eq!(found.display_name, "my key");
-        assert_eq!(found.user_id, user_id);
-        assert_eq!(found.key_hash, key_hash);
-
-        let not_found = ApiKey::get_by_id(&db.conn, &EntityId::new()).await.unwrap();
-        assert!(not_found.is_none());
     }
 
     #[tokio::test]

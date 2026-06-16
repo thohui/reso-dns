@@ -118,10 +118,10 @@ pub async fn create(
         return Err(ApiError::bad_request().with_message("Display name is required"));
     }
 
-    if let Some(expires_at) = payload.expires_at {
-        if now_millis() > expires_at {
-            return Err(ApiError::bad_request().with_message("API key cannot expire in the past"));
-        }
+    if let Some(expires_at) = payload.expires_at
+        && now_millis() > expires_at
+    {
+        return Err(ApiError::bad_request().with_message("API key cannot expire in the past"));
     }
 
     let key = global

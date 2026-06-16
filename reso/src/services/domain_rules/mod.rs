@@ -168,10 +168,8 @@ impl DomainRulesService {
 
         let rules = DomainRule::list_enabled_by_action(ListAction::Allow, &self.connection).await?;
 
-        let new_matcher = Arc::new(
-            DomainListMatcher::load(rules.iter().map(|r| r.domain.as_str()))
-                .map_err(|e| ServiceError::Internal(e.into()))?,
-        );
+        let new_matcher =
+            Arc::new(DomainListMatcher::load(rules.iter().map(|r| r.domain.as_str())).map_err(ServiceError::Internal)?);
 
         self.matchers.rcu(|current| {
             Arc::new(Matchers {
@@ -186,10 +184,8 @@ impl DomainRulesService {
     async fn reload_blocklist(&self) -> Result<(), ServiceError> {
         let _guard = self.write_lock.lock().await;
         let rules = DomainRule::list_enabled_by_action(ListAction::Block, &self.connection).await?;
-        let new_matcher = Arc::new(
-            DomainListMatcher::load(rules.iter().map(|r| r.domain.as_str()))
-                .map_err(|e| ServiceError::Internal(e.into()))?,
-        );
+        let new_matcher =
+            Arc::new(DomainListMatcher::load(rules.iter().map(|r| r.domain.as_str())).map_err(ServiceError::Internal)?);
 
         self.matchers.rcu(|current| {
             Arc::new(Matchers {
@@ -316,16 +312,15 @@ impl DomainRulesService {
 
         let content_type = head_response.headers().get("content-type");
 
-        if let Some(content_type) = content_type {
-            if !content_type
+        if let Some(content_type) = content_type
+            && !content_type
                 .to_str()
                 .map_err(|_| ServiceError::BadRequest("Invalid content-type header from URL".into()))?
                 .contains("text/plain")
-            {
-                return Err(ServiceError::BadRequest(
-                    "URL must have content-type of text/plain".into(),
-                ));
-            }
+        {
+            return Err(ServiceError::BadRequest(
+                "URL must have content-type of text/plain".into(),
+            ));
         }
 
         list_subscription.clone().insert(&self.connection).await.map_err(|e| {
@@ -395,14 +390,14 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
 
     let content_length = response.content_length();
 
-    if let Some(len) = content_length {
-        if len > SUBSCRIPTION_MAX_RESPONSE_BYTES {
-            anyhow::bail!(
-                "list subscription {} response exceeded size limit before download ({} bytes)",
-                subscription.url,
-                len
-            );
-        }
+    if let Some(len) = content_length
+        && len > SUBSCRIPTION_MAX_RESPONSE_BYTES
+    {
+        anyhow::bail!(
+            "list subscription {} response exceeded size limit before download ({} bytes)",
+            subscription.url,
+            len
+        );
     }
 
     let mut stream = response.bytes_stream();
@@ -449,18 +444,17 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
         tracing::warn!("list subscription {} contained no valid domains", subscription.url);
     }
 
-    let count =
-        match DomainRule::sync_subscription(subscription.id.clone(), subscription.list_type.clone(), domains, db).await
-        {
-            Ok(count) => count,
-            Err(e) => {
-                return Err(anyhow::anyhow!(
-                    "failed to sync domain rules from subscription {}: {:?}",
-                    subscription.url,
-                    e
-                ));
-            }
-        };
+    let count = match DomainRule::sync_subscription(subscription.id.clone(), subscription.list_type, domains, db).await
+    {
+        Ok(count) => count,
+        Err(e) => {
+            return Err(anyhow::anyhow!(
+                "failed to sync domain rules from subscription {}: {:?}",
+                subscription.url,
+                e
+            ));
+        }
+    };
 
     if let Err(e) = ListSubscription::update_after_sync(subscription.id.clone(), count, content_hash, db).await {
         anyhow::bail!(
@@ -494,18 +488,18 @@ fn validate_list_subscription_url(url: &str) -> Result<(), ServiceError> {
                 "URL host cannot be a loopback, multicast, or unspecified IP address".into(),
             ));
         }
-        if let std::net::IpAddr::V4(ipv4) = ip {
-            if ipv4.is_private() {
-                return Err(ServiceError::BadRequest(
-                    "URL host cannot be a private IP address".into(),
-                ));
-            }
-        } else if let std::net::IpAddr::V6(ipv6) = ip {
-            if ipv6.is_unique_local() {
-                return Err(ServiceError::BadRequest(
-                    "URL host cannot be a unique local IPv6 address".into(),
-                ));
-            }
+        if let std::net::IpAddr::V4(ipv4) = ip
+            && ipv4.is_private()
+        {
+            return Err(ServiceError::BadRequest(
+                "URL host cannot be a private IP address".into(),
+            ));
+        } else if let std::net::IpAddr::V6(ipv6) = ip
+            && ipv6.is_unique_local()
+        {
+            return Err(ServiceError::BadRequest(
+                "URL host cannot be a unique local IPv6 address".into(),
+            ));
         }
     }
 

@@ -47,7 +47,7 @@ impl TryFrom<&DnsMessage> for InflightCacheKey {
                 record_type: q.qtype,
                 opcode: message.flags.opcode,
                 do_bit: message.edns().as_ref().map(|e| e.do_bit()).unwrap_or(false),
-                client_subnet: client_subnet,
+                client_subnet,
             })
             .ok_or_else(|| anyhow::anyhow!("no question in message"))
     }
@@ -139,7 +139,7 @@ where
         let response_message =
             DnsMessage::decode(&response).map_err(|e| ResolveError::InvalidResponse(e.to_string()))?;
 
-        validate_upstream_response(&query_message, &response_message)?;
+        validate_upstream_response(query_message, &response_message)?;
 
         Ok(DnsResponse::from_parsed(response, response_message))
     }

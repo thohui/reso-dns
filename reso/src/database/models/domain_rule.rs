@@ -57,19 +57,11 @@ impl DomainRule {
         Ok(())
     }
 
-    /// Deletes this domain rule from the database.
-    pub async fn delete(self, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
-        let rows = db
-            .interact(move |c| Ok(c.execute("DELETE FROM domain_rules WHERE domain = ?1", params![self.domain])?))
-            .await?;
-        Ok(rows > 0)
-    }
-
     /// Deletes a domain rule by domain name.
     pub async fn delete_by_domain(domain: &str, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
         let domain = domain.to_string();
         let rows = db
-            .interact(move |c| Ok(c.execute("DELETE FROM domain_rules WHERE domain = ?1", params![domain])?))
+            .interact(move |c| c.execute("DELETE FROM domain_rules WHERE domain = ?1", params![domain]))
             .await?;
         Ok(rows > 0)
     }
@@ -81,40 +73,39 @@ impl DomainRule {
         offset: i64,
         search: Option<String>,
     ) -> Result<Vec<Self>, DatabaseError> {
-        Ok(db
-            .interact(move |c| {
-                let mut b = WhereBuilder::new(2);
-                if let Some(ref s) = search {
-                    b.like("domain", s);
-                }
-                let (where_clause, filter_params) = b.build();
+        db.interact(move |c| {
+            let mut b = WhereBuilder::new(2);
+            if let Some(ref s) = search {
+                b.like("domain", s);
+            }
+            let (where_clause, filter_params) = b.build();
 
-                let sql = format!(
-                    r#"
+            let sql = format!(
+                r#"
                     SELECT id, domain, action, created_at, enabled, subscription_id
                     FROM domain_rules
                     WHERE 1=1 {where_clause}
                     ORDER BY created_at DESC
                     LIMIT ?1 OFFSET ?2
                     "#
-                );
-                let mut list_params: Vec<Value> = vec![Value::Integer(limit), Value::Integer(offset)];
-                list_params.extend(filter_params);
+            );
+            let mut list_params: Vec<Value> = vec![Value::Integer(limit), Value::Integer(offset)];
+            list_params.extend(filter_params);
 
-                let mut stmt = c.prepare(&sql)?;
-                let iter = stmt.query_map(rusqlite::params_from_iter(&list_params), |r| {
-                    Ok(DomainRule {
-                        id: EntityId::from(r.get::<_, Uuid>(0)?),
-                        domain: r.get(1)?,
-                        action: r.get(2)?,
-                        created_at: r.get(3)?,
-                        enabled: r.get(4)?,
-                        subscription_id: r.get::<_, Option<Uuid>>(5)?.map(EntityId::from),
-                    })
-                })?;
-                iter.collect::<rusqlite::Result<Vec<_>>>()
-            })
-            .await?)
+            let mut stmt = c.prepare(&sql)?;
+            let iter = stmt.query_map(rusqlite::params_from_iter(&list_params), |r| {
+                Ok(DomainRule {
+                    id: EntityId::from(r.get::<_, Uuid>(0)?),
+                    domain: r.get(1)?,
+                    action: r.get(2)?,
+                    created_at: r.get(3)?,
+                    enabled: r.get(4)?,
+                    subscription_id: r.get::<_, Option<Uuid>>(5)?.map(EntityId::from),
+                })
+            })?;
+            iter.collect::<rusqlite::Result<Vec<_>>>()
+        })
+        .await
     }
 
     /// Lists all enabled domain rules for a given action. Used for building matchers.
@@ -140,29 +131,29 @@ impl DomainRule {
     }
 
     /// Lists all domain rules without pagination.
+    #[allow(unused)]
     pub async fn list_all(db: &CoreDatabasePool) -> Result<Vec<Self>, DatabaseError> {
-        Ok(db
-            .interact(move |c| {
-                let mut stmt = c.prepare(
-                    r#"
+        db.interact(move |c| {
+            let mut stmt = c.prepare(
+                r#"
                     SELECT id, domain, action, created_at, enabled, subscription_id
                     FROM domain_rules
                     ORDER BY created_at
                     "#,
-                )?;
-                let iter = stmt.query_map([], |r| {
-                    Ok(DomainRule {
-                        id: EntityId::from(r.get::<_, Uuid>(0)?),
-                        domain: r.get(1)?,
-                        action: r.get(2)?,
-                        created_at: r.get(3)?,
-                        enabled: r.get(4)?,
-                        subscription_id: r.get::<_, Option<Uuid>>(5)?.map(EntityId::from),
-                    })
-                })?;
-                iter.collect::<rusqlite::Result<Vec<_>>>()
-            })
-            .await?)
+            )?;
+            let iter = stmt.query_map([], |r| {
+                Ok(DomainRule {
+                    id: EntityId::from(r.get::<_, Uuid>(0)?),
+                    domain: r.get(1)?,
+                    action: r.get(2)?,
+                    created_at: r.get(3)?,
+                    enabled: r.get(4)?,
+                    subscription_id: r.get::<_, Option<Uuid>>(5)?.map(EntityId::from),
+                })
+            })?;
+            iter.collect::<rusqlite::Result<Vec<_>>>()
+        })
+        .await
     }
 
     /// Updates the action of a domain rule. It will also clear the subscription_id to disassociate it from any subscription.
@@ -170,10 +161,10 @@ impl DomainRule {
         let domain = domain.to_string();
         let rows = db
             .interact(move |c| {
-                Ok(c.execute(
+                c.execute(
                     "UPDATE domain_rules SET action = ?1, subscription_id = NULL WHERE domain = ?2",
                     params![action, domain],
-                )?)
+                )
             })
             .await?;
         Ok(rows > 0)
@@ -184,10 +175,10 @@ impl DomainRule {
         let domain = domain.to_string();
         let rows = db
             .interact(move |c| {
-                Ok(c.execute(
+                c.execute(
                     "UPDATE domain_rules SET enabled = NOT enabled WHERE domain = ?1",
                     params![domain],
-                )?)
+                )
             })
             .await?;
         Ok(rows > 0)
@@ -201,7 +192,7 @@ impl DomainRule {
         db: &CoreDatabasePool,
     ) -> Result<i64, DatabaseError> {
         let now = now_millis();
-        Ok(db
+        db
             .interact(move |c| {
                 let tx = c.transaction()?;
 
@@ -253,22 +244,21 @@ impl DomainRule {
                 tx.commit()?;
                 Ok(count)
             })
-            .await?)
+            .await
     }
 
     /// Counts the total number of domain rules, optionally filtered by a search term.
     pub async fn row_count(db: &CoreDatabasePool, search: Option<String>) -> Result<i64, DatabaseError> {
-        Ok(db
-            .interact(move |c| {
-                let mut b = WhereBuilder::new(0);
-                if let Some(ref s) = search {
-                    b.like("domain", s);
-                }
-                let (where_clause, filter_params) = b.build();
-                let sql = format!("SELECT COUNT(*) FROM domain_rules WHERE 1=1 {where_clause}");
-                c.query_row(&sql, rusqlite::params_from_iter(&filter_params), |r| r.get(0))
-            })
-            .await?)
+        db.interact(move |c| {
+            let mut b = WhereBuilder::new(0);
+            if let Some(ref s) = search {
+                b.like("domain", s);
+            }
+            let (where_clause, filter_params) = b.build();
+            let sql = format!("SELECT COUNT(*) FROM domain_rules WHERE 1=1 {where_clause}");
+            c.query_row(&sql, rusqlite::params_from_iter(&filter_params), |r| r.get(0))
+        })
+        .await
     }
 }
 
@@ -309,17 +299,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_delete() {
-        let db = setup_core_test_db().await.unwrap();
-        let rule = DomainRule::new("delete-me.com".into());
-        rule.clone().insert(&db.conn).await.unwrap();
-
-        assert_eq!(DomainRule::row_count(&db.conn, None).await.unwrap(), 1);
-        rule.delete(&db.conn).await.unwrap();
-        assert_eq!(DomainRule::row_count(&db.conn, None).await.unwrap(), 0);
-    }
-
-    #[tokio::test]
     async fn test_toggle() {
         let db = setup_core_test_db().await.unwrap();
         DomainRule::new("toggle.com".into()).insert(&db.conn).await.unwrap();
@@ -336,6 +315,17 @@ mod tests {
 
         let restored = DomainRule::list(&db.conn, 1, 0, None).await.unwrap();
         assert!(restored[0].enabled);
+    }
+
+    #[tokio::test]
+    async fn test_delete() {
+        let db = setup_core_test_db().await.unwrap();
+        let rule = DomainRule::new("delete-me.com".into());
+        rule.insert(&db.conn).await.unwrap();
+
+        assert_eq!(DomainRule::row_count(&db.conn, None).await.unwrap(), 1);
+        DomainRule::delete_by_domain("delete-me.com", &db.conn).await.unwrap();
+        assert_eq!(DomainRule::row_count(&db.conn, None).await.unwrap(), 0);
     }
 
     #[tokio::test]

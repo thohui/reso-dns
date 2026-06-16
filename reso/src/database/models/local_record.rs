@@ -47,9 +47,9 @@ impl LocalRecord {
         Ok(())
     }
 
-    pub async fn delete(db: &CoreDatabasePool, id: i64) -> Result<bool, DatabaseError> {
+    pub async fn delete_by_id(db: &CoreDatabasePool, id: i64) -> Result<bool, DatabaseError> {
         let rows = db
-            .interact(move |c| Ok(c.execute("DELETE FROM local_records WHERE id = ?1", params![id])?))
+            .interact(move |c| c.execute("DELETE FROM local_records WHERE id = ?1", params![id]))
             .await?;
         Ok(rows > 0)
     }
@@ -57,17 +57,17 @@ impl LocalRecord {
     pub async fn toggle(db: &CoreDatabasePool, id: i64) -> Result<bool, DatabaseError> {
         let rows = db
             .interact(move |c| {
-                Ok(c.execute(
+                c.execute(
                     "UPDATE local_records SET enabled = NOT enabled WHERE id = ?1",
                     params![id],
-                )?)
+                )
             })
             .await?;
         Ok(rows > 0)
     }
 
     pub async fn list(db: &CoreDatabasePool, limit: i64, offset: i64) -> Result<Vec<Self>, DatabaseError> {
-        Ok(db
+        db
             .interact(move |c| {
                 let mut stmt = c.prepare(
                     "SELECT id, name, record_type, value, ttl, enabled, created_at FROM local_records ORDER BY created_at LIMIT ?1 OFFSET ?2",
@@ -75,25 +75,23 @@ impl LocalRecord {
                 let iter = stmt.query_map(params![limit, offset], Self::from_row)?;
                 iter.collect::<rusqlite::Result<Vec<_>>>()
             })
-            .await?)
+            .await
     }
 
     pub async fn list_all(db: &CoreDatabasePool) -> Result<Vec<Self>, DatabaseError> {
-        Ok(db
-            .interact(move |c| {
-                let mut stmt = c.prepare(
-                    "SELECT id, name, record_type, value, ttl, enabled, created_at FROM local_records ORDER BY created_at",
-                )?;
-                let iter = stmt.query_map([], Self::from_row)?;
-                iter.collect::<rusqlite::Result<Vec<_>>>()
-            })
-            .await?)
+        db.interact(move |c| {
+            let mut stmt = c.prepare(
+                "SELECT id, name, record_type, value, ttl, enabled, created_at FROM local_records ORDER BY created_at",
+            )?;
+            let iter = stmt.query_map([], Self::from_row)?;
+            iter.collect::<rusqlite::Result<Vec<_>>>()
+        })
+        .await
     }
 
     pub async fn row_count(db: &CoreDatabasePool) -> Result<i64, DatabaseError> {
-        Ok(db
-            .interact(|c| c.query_row("SELECT COUNT(*) FROM local_records", [], |r| r.get(0)))
-            .await?)
+        db.interact(|c| c.query_row("SELECT COUNT(*) FROM local_records", [], |r| r.get(0)))
+            .await
     }
 
     fn from_row(r: &rusqlite::Row) -> rusqlite::Result<Self> {
@@ -140,7 +138,7 @@ mod tests {
         let records = LocalRecord::list(&db.conn, 10, 0).await.unwrap();
         let id = records[0].id;
 
-        LocalRecord::delete(&db.conn, id).await.unwrap();
+        LocalRecord::delete_by_id(&db.conn, id).await.unwrap();
         let records = LocalRecord::list(&db.conn, 10, 0).await.unwrap();
         assert!(records.is_empty());
     }

@@ -216,7 +216,7 @@ impl MetricsService {
                 blocked_count: if event.blocked == Some(true) { 1 } else { 0 },
                 cached_count: if event.cache_hit == Some(true) { 1 } else { 0 },
                 error_count: if is_error { 1 } else { 0 },
-                sum_duration: event.dur_ms as i64,
+                sum_duration: event.dur_ms,
             };
 
             client_map

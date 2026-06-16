@@ -70,7 +70,12 @@ impl ApiKeysService {
     }
 
     /// List all API keys, with pagination and optional search.
-    pub async fn list_api_keys(&self, limit: i64, offset: i64, search: Option<String>) -> Result<Page<ApiKey>, ServiceError> {
+    pub async fn list_api_keys(
+        &self,
+        limit: i64,
+        offset: i64,
+        search: Option<String>,
+    ) -> Result<Page<ApiKey>, ServiceError> {
         let page = DbApiKey::list_with_username(&self.db, limit, offset, search).await?;
         Ok(Page {
             total: page.total,
@@ -92,7 +97,7 @@ impl ApiKeysService {
     pub async fn verify_api_key(&self, bearer: &str) -> Result<EntityId<DbApiKey>, ServiceError> {
         let hash = DbApiKey::hash_token(bearer);
 
-        let key = DbApiKey::get_by_hash(&self.db, hash)
+        let key = DbApiKey::find_by_hash(&self.db, hash)
             .await?
             .ok_or(ServiceError::Unauthorized("invalid api key".into()))?;
 
@@ -105,7 +110,7 @@ impl ApiKeysService {
 
     /// Delete an API key by its id.
     pub async fn delete_api_key(&self, id: &EntityId<DbApiKey>) -> Result<(), ServiceError> {
-        let changed = DbApiKey::delete(&self.db, id).await?;
+        let changed = DbApiKey::delete_by_id(&self.db, id).await?;
         if changed {
             Ok(())
         } else {

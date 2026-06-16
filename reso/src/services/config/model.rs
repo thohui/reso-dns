@@ -82,8 +82,10 @@ pub enum Upstream {
     /// UDP and TCP
     Plain { endpoint: HostPort },
     /// DNS over TLS
+    #[allow(unused)]
     Tls { endpoint: HostPort },
     /// DNS over Https
+    #[allow(unused)]
     Doh { url: Url },
 }
 

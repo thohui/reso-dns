@@ -22,9 +22,6 @@ pub struct UserSession {
 /// The amount of days that a session can be inactive before it is considered expired.
 const INACTIVE_SESSION_TIMEOUT: i64 = 7 * 24 * 60 * 60 * 1000;
 
-/// The amount of days that must pass before a session's last active time is updated.
-pub const UPDATE_THRESHOLD: i64 = 24 * 60 * 60 * 1000;
-
 impl UserSession {
     pub fn new(user_id: EntityId<User>) -> Self {
         let now = now_millis();
@@ -55,37 +52,37 @@ impl UserSession {
     }
 
     pub async fn find_by_id(db: &CoreDatabasePool, id: EntityId<Self>) -> Result<Option<Self>, DatabaseError> {
-        Ok(db
-            .interact(move |c| {
-                c.query_row(
-                    "SELECT id, user_id,  created_at, expires_at FROM user_sessions WHERE id = ?1",
-                    params![id.id()],
-                    |f| {
-                        let session_id: Uuid = f.get(0)?;
-                        let user_id: Uuid = f.get(1)?;
-                        Ok(Self {
-                            id: EntityId::from(session_id),
-                            user_id: EntityId::from(user_id),
-                            created_at: f.get(2)?,
-                            expires_at: f.get(3)?,
-                        })
-                    },
-                )
-                .optional()
-            })
-            .await?)
+        db.interact(move |c| {
+            c.query_row(
+                "SELECT id, user_id,  created_at, expires_at FROM user_sessions WHERE id = ?1",
+                params![id.id()],
+                |f| {
+                    let session_id: Uuid = f.get(0)?;
+                    let user_id: Uuid = f.get(1)?;
+                    Ok(Self {
+                        id: EntityId::from(session_id),
+                        user_id: EntityId::from(user_id),
+                        created_at: f.get(2)?,
+                        expires_at: f.get(3)?,
+                    })
+                },
+            )
+            .optional()
+        })
+        .await
     }
 
     pub async fn delete(self, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
         let rows = db
-            .interact(move |c| Ok(c.execute("DELETE FROM user_sessions where id = ?", params![self.id.id()])?))
+            .interact(move |c| c.execute("DELETE FROM user_sessions where id = ?", params![self.id.id()]))
             .await?;
         Ok(rows > 0)
     }
 
+    #[allow(unused)]
     pub async fn delete_by_user_id(db: &CoreDatabasePool, user_id: EntityId<User>) -> Result<bool, DatabaseError> {
         let rows = db
-            .interact(move |c| Ok(c.execute("DELETE FROM user_sessions where user_id = ?", params![user_id.id()])?))
+            .interact(move |c| c.execute("DELETE FROM user_sessions where user_id = ?", params![user_id.id()]))
             .await?;
         Ok(rows > 0)
     }

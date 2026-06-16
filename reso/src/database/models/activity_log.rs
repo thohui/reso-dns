@@ -6,22 +6,33 @@ use crate::database::{DatabaseError, MetricsDatabasePool};
 
 #[derive(Debug, Clone)]
 pub struct ActivityLog {
-    pub ts_ms: i64,
-    pub kind: String,
-    // autoincremented by db.
+    /// Identifier, autoincremented by db
     pub id: i64,
+    /// Timestamp in milliseconds
+    pub ts_ms: i64,
+    /// Kind
+    pub kind: String,
+    // autoincremented by db
     pub transport: i64,
+    /// Client
     pub client: String,
-
+    /// Domain name
     pub qname: Option<String>,
+    /// Record type
     pub qtype: Option<i64>,
+    /// Response code
     pub rcode: Option<i64>,
+    /// Whether the request was blocked
     pub blocked: Option<bool>,
+    /// Whether the request's response was served by the cache
     pub cache_hit: Option<bool>,
+    /// Whether the request was rate limited.
     pub rate_limited: Option<bool>,
+    /// The duration in milliseconds.
     pub dur_ms: i64,
-
+    /// Error type
     pub error_type: Option<i64>,
+    /// Error message
     pub error_message: Option<String>,
 }
 
@@ -207,12 +218,11 @@ impl ActivityLog {
         dir: SortDir,
         include_count: bool,
     ) -> Result<Page<Self>, DatabaseError> {
-        Ok(db
-            .interact(move |c| {
-                let (where_clause, filter_params) = filter.build_where(2);
+        db.interact(move |c| {
+            let (where_clause, filter_params) = filter.build_where(2);
 
-                let select_sql = format!(
-                    r#"
+            let select_sql = format!(
+                r#"
                     SELECT
                       ts_ms,
                       kind,
@@ -233,34 +243,34 @@ impl ActivityLog {
                     ORDER BY {sort_col} {sort_dir}, kind ASC, id DESC
                     LIMIT ?1 OFFSET ?2
                     "#,
-                    sort_col = sort.as_sql(),
-                    sort_dir = dir.as_sql(),
-                );
+                sort_col = sort.as_sql(),
+                sort_dir = dir.as_sql(),
+            );
 
-                let mut list_params: Vec<Value> = vec![Value::Integer(limit), Value::Integer(offset)];
-                list_params.extend(filter_params);
+            let mut list_params: Vec<Value> = vec![Value::Integer(limit), Value::Integer(offset)];
+            list_params.extend(filter_params);
 
-                let tx = c.transaction()?;
+            let tx = c.transaction()?;
 
-                let items = {
-                    let mut stmt = tx.prepare(&select_sql)?;
-                    let iter = stmt.query_map(rusqlite::params_from_iter(&list_params), map_row)?;
-                    iter.collect::<Result<Vec<_>, rusqlite::Error>>()?
-                };
+            let items = {
+                let mut stmt = tx.prepare(&select_sql)?;
+                let iter = stmt.query_map(rusqlite::params_from_iter(&list_params), map_row)?;
+                iter.collect::<Result<Vec<_>, rusqlite::Error>>()?
+            };
 
-                let total = if include_count {
-                    let (count_where, count_params) = filter.build_where(0);
-                    let count_sql = format!("SELECT COUNT(*) FROM activity_log WHERE 1=1 {count_where}");
-                    Some(tx.query_row(&count_sql, rusqlite::params_from_iter(&count_params), |r| r.get(0))?)
-                } else {
-                    None
-                };
+            let total = if include_count {
+                let (count_where, count_params) = filter.build_where(0);
+                let count_sql = format!("SELECT COUNT(*) FROM activity_log WHERE 1=1 {count_where}");
+                Some(tx.query_row(&count_sql, rusqlite::params_from_iter(&count_params), |r| r.get(0))?)
+            } else {
+                None
+            };
 
-                tx.commit()?;
+            tx.commit()?;
 
-                Ok(Page { items, total })
-            })
-            .await?)
+            Ok(Page { items, total })
+        })
+        .await
     }
 
     pub async fn delete_before(db: &MetricsDatabasePool, cutoff_ts_ms: i64) -> Result<bool, DatabaseError> {

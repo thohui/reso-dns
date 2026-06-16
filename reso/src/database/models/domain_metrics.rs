@@ -46,49 +46,25 @@ impl DomainMetrics {
         Ok(())
     }
 
-    /// List all domain metrics buckets whose timestamp is in the range start_ts to end_ts
-    pub async fn list_range(db: &MetricsDatabasePool, start_ts: i64, end_ts: i64) -> Result<Vec<Self>, DatabaseError> {
-        Ok(db
-            .interact(move |c| {
-                let mut stmt = c.prepare(
-                    "SELECT bucket_ts, qname, total_count, blocked_count
-                     FROM metrics_by_domain
-                     WHERE bucket_ts >= ?1 AND bucket_ts < ?2
-                     ORDER BY bucket_ts",
-                )?;
-                let iter = stmt.query_map(params![start_ts, end_ts], |r| {
-                    Ok(Self {
-                        bucket_ts: r.get(0)?,
-                        qname: r.get(1)?,
-                        total_count: r.get(2)?,
-                        blocked_count: r.get(3)?,
-                    })
-                })?;
-                iter.collect()
-            })
-            .await?)
-    }
-
     /// List the top domains by total query count since the given timestamp, ordered by count desc.
     pub async fn top_domains(
         db: &MetricsDatabasePool,
         since: i64,
         limit: i64,
     ) -> Result<Vec<(String, i64)>, DatabaseError> {
-        Ok(db
-            .interact(move |c| {
-                let mut stmt = c.prepare(
-                    "SELECT qname, SUM(total_count) as count
+        db.interact(move |c| {
+            let mut stmt = c.prepare(
+                "SELECT qname, SUM(total_count) as count
                      FROM metrics_by_domain
                      WHERE bucket_ts >= ?1
                      GROUP BY qname
                      ORDER BY count DESC
                      LIMIT ?2",
-                )?;
-                let iter = stmt.query_map(params![since, limit], |r| Ok((r.get(0)?, r.get(1)?)))?;
-                iter.collect()
-            })
-            .await?)
+            )?;
+            let iter = stmt.query_map(params![since, limit], |r| Ok((r.get(0)?, r.get(1)?)))?;
+            iter.collect()
+        })
+        .await
     }
 
     /// List the top domains by blocked query count since the given timestamp, ordered by count desc.
@@ -97,20 +73,19 @@ impl DomainMetrics {
         since: i64,
         limit: i64,
     ) -> Result<Vec<(String, i64)>, DatabaseError> {
-        Ok(db
-            .interact(move |c| {
-                let mut stmt = c.prepare(
-                    "SELECT qname, SUM(blocked_count) as count
+        db.interact(move |c| {
+            let mut stmt = c.prepare(
+                "SELECT qname, SUM(blocked_count) as count
                      FROM metrics_by_domain
                      WHERE bucket_ts >= ?1 AND blocked_count > 0
                      GROUP BY qname
                      ORDER BY count DESC
                      LIMIT ?2",
-                )?;
-                let iter = stmt.query_map(params![since, limit], |r| Ok((r.get(0)?, r.get(1)?)))?;
-                iter.collect()
-            })
-            .await?)
+            )?;
+            let iter = stmt.query_map(params![since, limit], |r| Ok((r.get(0)?, r.get(1)?)))?;
+            iter.collect()
+        })
+        .await
     }
 
     /// Compress old metric buckets into larger ones to save space.
@@ -191,6 +166,31 @@ mod tests {
         }
     }
 
+    async fn list_range(
+        db: &MetricsDatabasePool,
+        start_ts: i64,
+        end_ts: i64,
+    ) -> Result<Vec<DomainMetrics>, DatabaseError> {
+        db.interact(move |c| {
+            let mut stmt = c.prepare(
+                "SELECT bucket_ts, qname, total_count, blocked_count
+                     FROM metrics_by_domain
+                     WHERE bucket_ts >= ?1 AND bucket_ts < ?2
+                     ORDER BY bucket_ts",
+            )?;
+            let iter = stmt.query_map(params![start_ts, end_ts], |r| {
+                Ok(DomainMetrics {
+                    bucket_ts: r.get(0)?,
+                    qname: r.get(1)?,
+                    total_count: r.get(2)?,
+                    blocked_count: r.get(3)?,
+                })
+            })?;
+            iter.collect()
+        })
+        .await
+    }
+
     #[tokio::test]
     async fn batch_upsert_accumulates_on_conflict() {
         let db = setup_metrics_test_db().await.unwrap();
@@ -198,7 +198,7 @@ mod tests {
         DomainMetrics::batch_upsert(&db.conn, &rows).await.unwrap();
         DomainMetrics::batch_upsert(&db.conn, &rows).await.unwrap();
 
-        let result = DomainMetrics::list_range(&db.conn, 0, 2000).await.unwrap();
+        let result = list_range(&db.conn, 0, 2000).await.unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].total_count, 20);
         assert_eq!(result[0].blocked_count, 6);
@@ -214,7 +214,7 @@ mod tests {
         ];
         DomainMetrics::batch_upsert(&db.conn, &rows).await.unwrap();
 
-        let result = DomainMetrics::list_range(&db.conn, 1500, 2500).await.unwrap();
+        let result = list_range(&db.conn, 1500, 2500).await.unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].bucket_ts, 2000);
     }
@@ -284,7 +284,7 @@ mod tests {
 
         DomainMetrics::compress_before(&db.conn, HOUR_MS * 3).await.unwrap();
 
-        let result = DomainMetrics::list_range(&db.conn, 0, HOUR_MS * 5).await.unwrap();
+        let result = list_range(&db.conn, 0, HOUR_MS * 5).await.unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].bucket_ts, HOUR_MS);
         assert_eq!(result[0].total_count, 15);
@@ -300,7 +300,7 @@ mod tests {
         DomainMetrics::compress_before(&db.conn, HOUR_MS * 3).await.unwrap();
         DomainMetrics::compress_before(&db.conn, HOUR_MS * 3).await.unwrap();
 
-        let result = DomainMetrics::list_range(&db.conn, 0, HOUR_MS * 5).await.unwrap();
+        let result = list_range(&db.conn, 0, HOUR_MS * 5).await.unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].total_count, 10);
     }

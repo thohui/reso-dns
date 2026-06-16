@@ -5,44 +5,47 @@ use rusqlite::params;
 use crate::database::{CoreDatabasePool, DatabaseError};
 
 pub struct ConfigSetting {
+    #[allow(unused)]
     pub key: String,
+    #[allow(unused)]
     pub value: String,
+    #[allow(unused)]
     pub updated_at: i64,
 }
 
 impl ConfigSetting {
+    #[allow(unused)]
     pub async fn get(db: &CoreDatabasePool, key: &str) -> Result<Option<String>, DatabaseError> {
         let key = key.to_string();
 
-        Ok(db
-            .interact(move |c| {
-                let mut stmt = c.prepare("SELECT value FROM config_settings WHERE key = ?1")?;
-                let mut rows = stmt.query(params![key])?;
-                let result = match rows.next()? {
-                    Some(row) => Some(row.get::<_, String>(0)?),
-                    None => None,
-                };
-                Ok::<_, rusqlite::Error>(result)
-            })
-            .await?)
+        db.interact(move |c| {
+            let mut stmt = c.prepare("SELECT value FROM config_settings WHERE key = ?1")?;
+            let mut rows = stmt.query(params![key])?;
+            let result = match rows.next()? {
+                Some(row) => Some(row.get::<_, String>(0)?),
+                None => None,
+            };
+            Ok::<_, rusqlite::Error>(result)
+        })
+        .await
     }
 
     pub async fn all(db: &CoreDatabasePool) -> Result<HashMap<String, String>, DatabaseError> {
-        Ok(db
-            .interact(move |c| {
-                let mut stmt = c.prepare("SELECT key, value FROM config_settings")?;
-                let iter = stmt.query_map(params![], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        db.interact(move |c| {
+            let mut stmt = c.prepare("SELECT key, value FROM config_settings")?;
+            let iter = stmt.query_map(params![], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
 
-                let mut map = HashMap::new();
-                for pair in iter {
-                    let (k, v) = pair?;
-                    map.insert(k, v);
-                }
-                Ok::<_, rusqlite::Error>(map)
-            })
-            .await?)
+            let mut map = HashMap::new();
+            for pair in iter {
+                let (k, v) = pair?;
+                map.insert(k, v);
+            }
+            Ok::<_, rusqlite::Error>(map)
+        })
+        .await
     }
 
+    #[allow(unused)]
     pub async fn set(db: &CoreDatabasePool, key: &str, value: &str) -> Result<(), DatabaseError> {
         let key = key.to_string();
         let value = value.to_string();
