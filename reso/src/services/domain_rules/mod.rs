@@ -491,11 +491,9 @@ fn validate_list_subscription_url(url: &str) -> Result<(), ServiceError> {
         if let std::net::IpAddr::V4(ipv4) = ip
             && ipv4.is_private()
         {
-            if ipv4.is_private() {
-                return Err(ServiceError::BadRequest(
-                    "URL host cannot be a private IP address".into(),
-                ));
-            }
+            return Err(ServiceError::BadRequest(
+                "URL host cannot be a private IP address".into(),
+            ));
         } else if let std::net::IpAddr::V6(ipv6) = ip
             && ipv6.is_unique_local()
         {

@@ -81,6 +81,7 @@ impl UpstreamResolveRequest {
                     tracing::warn!(
                         upstream = %upstream.addr,
                         req_type = ?req_type,
+                        error = %e,
                         "forward attempt failed"
                     );
 
