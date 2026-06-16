@@ -112,7 +112,7 @@ async fn static_handler(uri: Uri) -> Response<Body> {
                 .status(StatusCode::OK)
                 .header(header::CONTENT_TYPE, HeaderValue::from_str(mime.as_ref()).unwrap())
                 .header(header::CACHE_CONTROL, cache)
-                .body(Body::from(content.data.into_owned()))
+                .body(Body::from(content.data))
                 .unwrap()
         }
         None => StatusCode::NOT_FOUND.into_response(),
