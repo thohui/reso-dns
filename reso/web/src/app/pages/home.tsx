@@ -1,3 +1,7 @@
+import { Box, Button, HStack, Text } from '@chakra-ui/react';
+import { useQuery } from '@tanstack/react-query';
+import { AlertCircle, Ban, Clock, DatabaseBackup, Globe } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { QueryTimeline } from '@/components/dashboard/QueryTimeline';
 import { RecentActivity } from '@/components/dashboard/RecentActivity';
 import { StatCard } from '@/components/dashboard/StatCard';
@@ -6,10 +10,6 @@ import { useApiClient } from '@/contexts/ApiClientContext';
 import { useLiveStats } from '@/hooks/dashboard/useLiveStats';
 import { useUptime } from '@/hooks/useUptime';
 import type { TopRange } from '@/lib/api/stats';
-import { Box, Button, HStack, Text } from '@chakra-ui/react';
-import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, Ban, Clock, DatabaseBackup, Globe } from 'lucide-react';
-import { useMemo, useState } from 'react';
 
 const RANGE_OPTIONS: { value: TopRange; label: string }[] = [
 	{ value: '5min', label: '5M' },
@@ -112,30 +112,35 @@ export default function HomePage() {
 					value={totals.total}
 					icon={Globe}
 					accentColor='accent'
+					isLoading={timelineLoading}
 				/>
 				<StatCard
 					label='Queries Blocked'
 					value={totals.blocked}
 					icon={Ban}
 					accentColor='accent'
+					isLoading={timelineLoading}
 				/>
 				<StatCard
 					label='Total Errors'
 					value={totals.errors}
 					icon={AlertCircle}
 					accentColor='accent'
+					isLoading={timelineLoading}
 				/>
 				<StatCard
 					label='Queries Cached'
 					value={totals.cached}
 					icon={DatabaseBackup}
 					accentColor='accent'
+					isLoading={timelineLoading}
 				/>
 				<StatCard
 					label='Avg Response'
 					value={`${avgResponse} ms`}
 					icon={Clock}
 					accentColor='accent'
+					isLoading={timelineLoading}
 				/>
 			</Box>
 

@@ -6,9 +6,10 @@ interface Props {
 	value: string | number;
 	icon: typeof Activity;
 	accentColor: string;
+	isLoading?: boolean;
 }
 
-export function StatCard({ label, value, icon, accentColor }: Props) {
+export function StatCard({ label, value, icon, accentColor, isLoading }: Props) {
 	return (
 		<Box
 			bg='bg.panel'
@@ -43,7 +44,13 @@ export function StatCard({ label, value, icon, accentColor }: Props) {
 				</Text>
 				<Icon as={icon} boxSize='4' color='fg.faint' />
 			</HStack>
-			<Text fontSize='2xl' fontWeight='600' letterSpacing='-0.02em'>
+			<Text
+				fontSize='2xl'
+				fontWeight='600'
+				letterSpacing='-0.02em'
+				opacity={isLoading ? 0.3 : 1}
+				transition='opacity 0.2s'
+			>
 				{value}
 			</Text>
 		</Box>
