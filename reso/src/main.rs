@@ -37,6 +37,9 @@ mod server_builder;
 mod services;
 mod utils;
 
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 fn main() -> anyhow::Result<()> {
     let worker_threads = std::thread::available_parallelism()?.get();
     let runtime = Builder::new_multi_thread()
