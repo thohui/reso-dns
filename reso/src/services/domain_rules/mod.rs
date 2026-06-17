@@ -64,7 +64,7 @@ impl Matchers {
 
 const SUBSCRIPTION_SYNC_INTERVAL_SECS: u64 = 60 * 60 * 24; // 24 hours
 const SUBSCRIPTION_FETCH_TIMEOUT_SECS: u64 = 50;
-const SUBSCRIPTION_MAX_RESPONSE_BYTES: u64 = 50 * 1024 * 1024; // 50 MB
+const SUBSCRIPTION_MAX_RESPONSE_BYTES: u64 = 35 * 1024 * 1024; // 35 MB
 
 pub struct DomainRulesService {
     matchers: ArcSwap<Matchers>,
@@ -472,8 +472,8 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
             return Err(SubscriptionSyncError::TooLarge);
         }
 
-        let text = String::from_utf8_lossy(&chunk);
-        parser.push(&text, |domain| {
+        let text = str::from_utf8(&chunk).map_err(|_| SubscriptionSyncError::InvalidFormat)?;
+        parser.push(text, |domain| {
             if let Ok(normalized) = normalize_domain_pattern(domain) {
                 domains.push(normalized);
             }

@@ -182,7 +182,7 @@ impl ListSubscription {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::setup_core_test_db;
+    use crate::database::{models::domain_rule::DomainRule, setup_core_test_db};
 
     #[tokio::test]
     async fn test_insert_and_list() {
@@ -266,5 +266,21 @@ mod tests {
             .insert(&db.conn)
             .await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_list_with_domain_counts() {
+        let db = setup_core_test_db().await.unwrap();
+        let sub = ListSubscription::new("Test List".into(), "https://example.com/list.txt".into());
+        sub.clone().insert(&db.conn).await.unwrap();
+
+        let mut dn = DomainRule::new("test.com".into());
+        dn.subscription_id = Some(sub.id.clone());
+        dn.insert(&db.conn).await.unwrap();
+
+        let subs = ListSubscription::list_with_domain_counts(&db.conn).await.unwrap();
+        let (fetched_sub, domain_count) = subs.first().unwrap();
+        assert!(fetched_sub == &sub);
+        assert!(*domain_count == 1)
     }
 }
