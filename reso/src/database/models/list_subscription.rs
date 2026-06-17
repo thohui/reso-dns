@@ -19,9 +19,9 @@ pub struct ListSubscription {
     pub created_at: i64,
     pub enabled: bool,
     pub last_synced_at: Option<i64>,
-    pub domain_count: i64,
-    pub hash: Option<String>,
     pub sync_enabled: bool,
+    pub etag: Option<String>,
+    pub last_modified: Option<String>,
 }
 
 impl ListSubscription {
@@ -34,9 +34,9 @@ impl ListSubscription {
             created_at: now_millis(),
             enabled: true,
             last_synced_at: None,
-            domain_count: 0,
-            hash: None,
             sync_enabled: true,
+            etag: None,
+            last_modified: None,
         }
     }
 }
@@ -45,7 +45,7 @@ impl ListSubscription {
     pub async fn insert(self, db: &CoreDatabasePool) -> Result<(), DatabaseError> {
         db.interact(move |c| {
             c.execute(
-                "INSERT INTO list_subscriptions (id, name, url, list_type, created_at, enabled, hash, sync_enabled) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                "INSERT INTO list_subscriptions (id, name, url, list_type, created_at, enabled, sync_enabled) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![
                     self.id.id(),
                     self.name.as_str(),
@@ -53,7 +53,6 @@ impl ListSubscription {
                     self.list_type,
                     self.created_at,
                     self.enabled,
-                    self.hash.as_deref(),
                     self.sync_enabled,
                 ],
             )?;
@@ -67,7 +66,7 @@ impl ListSubscription {
         db
             .interact(move |c| {
                 let mut stmt = c.prepare(
-                    "SELECT id, name, url, list_type, created_at, enabled, last_synced_at, domain_count, hash, sync_enabled FROM list_subscriptions",
+                    "SELECT id, name, url, list_type, created_at, enabled, last_synced_at, sync_enabled, etag, last_modified FROM list_subscriptions",
                 )?;
                 let iter = stmt.query_map([], |r| {
                     Ok(Self {
@@ -78,14 +77,44 @@ impl ListSubscription {
                         created_at: r.get(4)?,
                         enabled: r.get(5)?,
                         last_synced_at: r.get(6)?,
-                        domain_count: r.get(7)?,
-                        hash: r.get(8)?,
-                        sync_enabled: r.get(9)?,
+                        sync_enabled: r.get(7)?,
+                        etag: r.get(8)?,
+                        last_modified: r.get(9)?,
                     })
                 })?;
                 iter.collect::<rusqlite::Result<Vec<_>>>()
             })
             .await
+    }
+
+    pub async fn list_with_domain_counts(db: &CoreDatabasePool) -> Result<Vec<(Self, i64)>, DatabaseError> {
+        db.interact(move |c| {
+            let mut stmt = c.prepare(
+                "SELECT ls.id, ls.name, ls.url, ls.list_type, ls.created_at, ls.enabled, ls.last_synced_at, ls.sync_enabled, ls.etag, ls.last_modified, COUNT(dr.id) \
+                 FROM list_subscriptions ls \
+                 LEFT JOIN domain_rules dr ON dr.subscription_id = ls.id \
+                 GROUP BY ls.id",
+            )?;
+            let iter = stmt.query_map([], |r| {
+                Ok((
+                    Self {
+                        id: EntityId::from(r.get::<_, Uuid>(0)?),
+                        name: r.get(1)?,
+                        url: r.get(2)?,
+                        list_type: r.get(3)?,
+                        created_at: r.get(4)?,
+                        enabled: r.get(5)?,
+                        last_synced_at: r.get(6)?,
+                        sync_enabled: r.get(7)?,
+                        etag: r.get(8)?,
+                        last_modified: r.get(9)?,
+                    },
+                    r.get::<_, i64>(10)?,
+                ))
+            })?;
+            iter.collect::<rusqlite::Result<Vec<_>>>()
+        })
+        .await
     }
 
     pub async fn delete_by_id(id: EntityId<Self>, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
@@ -133,15 +162,15 @@ impl ListSubscription {
 
     pub async fn update_after_sync(
         id: EntityId<ListSubscription>,
-        domain_count: i64,
-        hash: String,
+        etag: Option<String>,
+        last_modified: Option<String>,
         db: &CoreDatabasePool,
     ) -> Result<(), DatabaseError> {
         let now = now_millis();
         db.interact(move |c| {
             c.execute(
-                "UPDATE list_subscriptions SET last_synced_at = ?1, domain_count = ?2, hash = ?3 WHERE id = ?4",
-                params![now, domain_count, hash, id.id()],
+                "UPDATE list_subscriptions SET last_synced_at = ?1, etag = ?2, last_modified = ?3 WHERE id = ?4",
+                params![now, etag, last_modified, id.id()],
             )?;
             Ok(())
         })
@@ -153,7 +182,7 @@ impl ListSubscription {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::setup_core_test_db;
+    use crate::database::{models::domain_rule::DomainRule, setup_core_test_db};
 
     #[tokio::test]
     async fn test_insert_and_list() {
@@ -216,15 +245,13 @@ mod tests {
 
         let before = ListSubscription::list(&db.conn).await.unwrap();
         assert!(before[0].last_synced_at.is_none());
-        assert_eq!(before[0].domain_count, 0);
 
-        ListSubscription::update_after_sync(sub.id, 42, "abc123".into(), &db.conn)
+        ListSubscription::update_after_sync(sub.id, None, None, &db.conn)
             .await
             .unwrap();
 
         let after = ListSubscription::list(&db.conn).await.unwrap();
         assert!(after[0].last_synced_at.is_some());
-        assert_eq!(after[0].domain_count, 42);
     }
 
     #[tokio::test]
@@ -239,5 +266,21 @@ mod tests {
             .insert(&db.conn)
             .await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_list_with_domain_counts() {
+        let db = setup_core_test_db().await.unwrap();
+        let sub = ListSubscription::new("Test List".into(), "https://example.com/list.txt".into());
+        sub.clone().insert(&db.conn).await.unwrap();
+
+        let mut dn = DomainRule::new("test.com".into());
+        dn.subscription_id = Some(sub.id.clone());
+        dn.insert(&db.conn).await.unwrap();
+
+        let subs = ListSubscription::list_with_domain_counts(&db.conn).await.unwrap();
+        let (fetched_sub, domain_count) = subs.first().unwrap();
+        assert!(fetched_sub == &sub);
+        assert!(*domain_count == 1)
     }
 }

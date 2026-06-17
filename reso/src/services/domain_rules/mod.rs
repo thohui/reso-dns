@@ -1,9 +1,6 @@
 use futures::StreamExt;
 use std::{sync::Arc, time::Duration};
 
-const SUBSCRIPTION_FETCH_TIMEOUT_SECS: u64 = 30;
-const SUBSCRIPTION_MAX_RESPONSE_BYTES: u64 = 5 * 1024 * 1024; // 5 MB
-
 use arc_swap::ArcSwap;
 use reso_dns::domain_name::DomainName;
 use reso_list::DomainListMatcher;
@@ -14,7 +11,7 @@ use tokio::{
 
 use crate::{
     database::{
-        CoreDatabasePool,
+        CoreDatabasePool, DatabaseError,
         models::{ListAction, domain_rule::DomainRule, list_subscription::ListSubscription},
     },
     global::SharedGlobal,
@@ -23,12 +20,10 @@ use crate::{
 
 use super::ServiceError;
 
-const SUBSCRIPTION_SYNC_INTERVAL_SECS: u64 = 60 * 60 * 24; // 24 hours
-
-/// Validates and normalizes a domain pattern, supporting `*.example.com` wildcards.
+/// Validate and normalize a domain pattern.
 /// Returns the canonical stored form, e.g. `*.example.com` or `example.com`.
 fn normalize_domain_pattern(input: &str) -> Result<String, ServiceError> {
-    // what we are doing here is kinda hacky, because DomainName doesn't support wildcard patterns, but we want to reuse its validation and normalization logic.
+    // what we are doing here is kinda hacky, since DomainName doesn't support wildcard patterns, but we want to reuse its validation and normalization logic.
     let (wildcard, base) = match input.strip_prefix("*.") {
         Some(rest) => (true, rest),
         None => (false, input),
@@ -52,6 +47,7 @@ pub struct Matchers {
 }
 
 impl Matchers {
+    /// Load the matchers from db.
     pub async fn load(db: &CoreDatabasePool) -> anyhow::Result<Self> {
         let allow_list = DomainRule::list_enabled_by_action(ListAction::Allow, db).await?;
         let block_list = DomainRule::list_enabled_by_action(ListAction::Block, db).await?;
@@ -66,6 +62,10 @@ impl Matchers {
     }
 }
 
+const SUBSCRIPTION_SYNC_INTERVAL_SECS: u64 = 60 * 60 * 24; // 24 hours
+const SUBSCRIPTION_FETCH_TIMEOUT_SECS: u64 = 50;
+const SUBSCRIPTION_MAX_RESPONSE_BYTES: u64 = 35 * 1024 * 1024; // 35 MB
+
 pub struct DomainRulesService {
     matchers: ArcSwap<Matchers>,
     write_lock: Mutex<()>,
@@ -74,6 +74,7 @@ pub struct DomainRulesService {
 }
 
 impl DomainRulesService {
+    /// Initialize a `DomainRulesService` instance.
     pub async fn initialize(connection: Arc<CoreDatabasePool>) -> anyhow::Result<Self> {
         Ok(Self {
             matchers: ArcSwap::new(Matchers::load(&connection).await?.into()),
@@ -85,7 +86,7 @@ impl DomainRulesService {
         })
     }
 
-    /// Adds a new domain rule with the given domain pattern and action.
+    /// Add a new domain rule with the given domain pattern and action.
     pub async fn add_domain(&self, domain: &str, action: ListAction) -> Result<(), ServiceError> {
         let domain = normalize_domain_pattern(domain)?;
 
@@ -108,7 +109,7 @@ impl DomainRulesService {
         Ok(())
     }
 
-    /// Removes a domain rule by domain pattern.
+    /// Remove a domain rule by domain pattern.
     pub async fn remove_domain(&self, domain: &str) -> Result<(), ServiceError> {
         let domain = normalize_domain_pattern(domain)?;
 
@@ -122,7 +123,7 @@ impl DomainRulesService {
         Ok(())
     }
 
-    /// Updates the action of an existing domain rule.
+    /// Update the action of an existing domain rule.
     pub async fn update_domain_action(&self, domain: &str, action: ListAction) -> Result<(), ServiceError> {
         let domain = normalize_domain_pattern(domain)?;
 
@@ -136,7 +137,7 @@ impl DomainRulesService {
         Ok(())
     }
 
-    /// Toggles the enabled state of an individual domain rule.
+    /// Toggle the enabled state of an individual domain rule.
     pub async fn toggle_domain(&self, domain: &str) -> Result<(), ServiceError> {
         let domain = normalize_domain_pattern(domain)?;
 
@@ -151,6 +152,7 @@ impl DomainRulesService {
         Ok(())
     }
 
+    /// Reload both the blocklist and allowlist.
     async fn reload_all(&self) -> Result<(), ServiceError> {
         let _guard = self.write_lock.lock().await;
 
@@ -163,6 +165,7 @@ impl DomainRulesService {
         Ok(())
     }
 
+    /// Reload the allow list
     async fn reload_allow_list(&self) -> Result<(), ServiceError> {
         let _guard = self.write_lock.lock().await;
 
@@ -181,6 +184,7 @@ impl DomainRulesService {
         Ok(())
     }
 
+    /// Reload the blocklist.
     async fn reload_blocklist(&self) -> Result<(), ServiceError> {
         let _guard = self.write_lock.lock().await;
         let rules = DomainRule::list_enabled_by_action(ListAction::Block, &self.connection).await?;
@@ -196,8 +200,7 @@ impl DomainRulesService {
 
         Ok(())
     }
-
-    /// Checks if a given domain is blocked by the current rules.
+    /// Check if a given domain name is blocked by the matcher.
     pub fn is_blocked(&self, name: &str) -> bool {
         let matchers = self.matchers.load();
         if matchers.blocklist_matcher.exists(name) {
@@ -206,12 +209,12 @@ impl DomainRulesService {
         false
     }
 
-    /// Lists all subscriptions.
-    pub async fn list_subscriptions(&self) -> Result<Vec<ListSubscription>, ServiceError> {
-        Ok(ListSubscription::list(&self.connection).await?)
+    /// List all subscriptions with their current domain counts (derived from domain_rules).
+    pub async fn list_subscriptions_with_counts(&self) -> Result<Vec<(ListSubscription, i64)>, ServiceError> {
+        Ok(ListSubscription::list_with_domain_counts(&self.connection).await?)
     }
 
-    /// Removes a list subscription by ID.
+    /// Remove a list subscription by ID.
     pub async fn remove_list_subscription(&self, id: EntityId<ListSubscription>) -> Result<(), ServiceError> {
         let changed = ListSubscription::delete_by_id(id, &self.connection).await?;
         if !changed {
@@ -221,7 +224,7 @@ impl DomainRulesService {
         Ok(())
     }
 
-    /// Toggles the enabled state of a list subscription by ID.
+    /// Toggle the enabled state of a list subscription by ID.
     /// This also causes all the underlying domain rules from the subscription to be toggled to the same value.
     pub async fn toggle_list_subscription(&self, id: EntityId<ListSubscription>) -> Result<(), ServiceError> {
         let changed = ListSubscription::toggle_enabled(id, &self.connection).await?;
@@ -244,7 +247,7 @@ impl DomainRulesService {
         Ok(())
     }
 
-    /// Syncs all list subscriptions, fetching updated rules from their URLs if needed.
+    /// Sync ALL list subscriptions, fetching updated rules from their URLs if needed.
     pub async fn sync_subscriptions(&self) {
         let subscriptions = match ListSubscription::list(&self.connection).await {
             Ok(subs) => subs,
@@ -279,7 +282,7 @@ impl DomainRulesService {
         }
     }
 
-    /// Adds a new list subscription with the given URL and list type.
+    /// Add a new list subscription with the given URL and list type.
     /// This will also trigger an immediate sync for the new subscription.
     pub async fn add_list_subscription(&self, list_subscription: ListSubscription) -> Result<(), ServiceError> {
         validate_list_subscription_url(&list_subscription.url)?;
@@ -336,10 +339,12 @@ impl DomainRulesService {
             fetch_domain_rules_from_list_subscription_task(&list_subscription, &self.http_client, &self.connection)
                 .await
         {
+            // rollback
+            if let Err(e) = ListSubscription::delete_by_id(list_subscription.id, &self.connection).await {
+                tracing::error!("failed to delete list subscription after failing sync: {}", e);
+            }
             tracing::error!("failed to fetch domain rules from subscription after adding: {}", e);
-            return Err(ServiceError::Internal(anyhow::anyhow!(
-                "Failed to fetch domain rules from subscription after adding",
-            )));
+            return Err(ServiceError::from(e));
         }
 
         self.reload_all().await?;
@@ -371,98 +376,160 @@ pub async fn run_subscription_sync(global: SharedGlobal, shutdown: tokio_util::s
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum SubscriptionSyncError {
+    #[error("request failed: {0}")]
+    Request(#[from] reqwest::Error),
+
+    #[error("server returned {0}")]
+    HttpStatus(reqwest::StatusCode),
+
+    #[error("response exceeded size limit")]
+    TooLarge,
+
+    #[error("database error: {0}")]
+    Database(#[from] DatabaseError),
+
+    #[error("invalid format")]
+    InvalidFormat,
+}
+
+impl From<SubscriptionSyncError> for ServiceError {
+    fn from(e: SubscriptionSyncError) -> Self {
+        match e {
+            SubscriptionSyncError::TooLarge => {
+                ServiceError::BadRequest("Subscription response exceeded size limit".into())
+            }
+            SubscriptionSyncError::HttpStatus(s) if s.is_client_error() => {
+                ServiceError::BadRequest(format!("Subscription URL returned {s}"))
+            }
+            SubscriptionSyncError::Request(ref re) if re.is_connect() || re.is_timeout() => {
+                ServiceError::BadRequest("Subscription URL is not reachable".into())
+            }
+            SubscriptionSyncError::InvalidFormat => {
+                ServiceError::BadRequest("The content contains an unsupported format".into())
+            }
+            _ => ServiceError::Internal(e.into()),
+        }
+    }
+}
+
 /// Fetches the domain rules from a list subscription URL, and updates the database if there are changes.
 pub async fn fetch_domain_rules_from_list_subscription_task(
     subscription: &ListSubscription,
     http_client: &reqwest::Client,
     db: &Arc<CoreDatabasePool>,
-) -> anyhow::Result<bool> {
-    let response = match http_client.get(&subscription.url).send().await {
-        Ok(r) => r,
-        Err(e) => {
-            anyhow::bail!("failed to fetch list subscription: {}: {:?}", subscription.url, e);
-        }
-    };
+) -> Result<bool, SubscriptionSyncError> {
+    let mut request = http_client.get(&subscription.url);
 
-    if let Err(e) = response.error_for_status_ref() {
-        anyhow::bail!("list subscription returned error status: {}: {:?}", subscription.url, e);
+    // prefer ETag; fall back to Last-Modified if that's all we have
+    if let Some(etag) = &subscription.etag {
+        request = request.header(reqwest::header::IF_NONE_MATCH, etag);
+    } else if let Some(lm) = &subscription.last_modified {
+        request = request.header(reqwest::header::IF_MODIFIED_SINCE, lm);
     }
 
-    let content_length = response.content_length();
+    let response = request.send().await?;
 
-    if let Some(len) = content_length
-        && len > SUBSCRIPTION_MAX_RESPONSE_BYTES
-    {
-        anyhow::bail!(
-            "list subscription {} response exceeded size limit before download ({} bytes)",
-            subscription.url,
-            len
-        );
-    }
-
-    let mut stream = response.bytes_stream();
-    let initial_capacity = content_length
-        .and_then(|len| usize::try_from(len).ok())
-        .map(|len| len.min(SUBSCRIPTION_MAX_RESPONSE_BYTES as usize))
-        .unwrap_or(64 * 1024); // 64KB
-
-    let mut buf = Vec::with_capacity(initial_capacity);
-
-    // read the response stream in chunks, so we can enforce the max size limit better
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk?;
-        buf.extend_from_slice(&chunk);
-        if buf.len() as u64 > SUBSCRIPTION_MAX_RESPONSE_BYTES {
-            anyhow::bail!(
-                "list subscription {} response exceeded size limit during streaming ({} bytes), aborting",
-                subscription.url,
-                buf.len()
-            );
-        }
-    }
-
-    let text = match String::from_utf8(buf) {
-        Ok(t) => t,
-        Err(e) => anyhow::bail!("list subscription {} is not valid UTF-8: {:?}", subscription.url, e),
-    };
-
-    let content_hash: String = reso_list::parser::calculate_hash(&text);
-
-    if subscription.hash.as_deref() == Some(&content_hash) {
-        tracing::debug!("list subscription {} unchanged, skipping sync", subscription.url);
+    if response.status() == reqwest::StatusCode::NOT_MODIFIED {
+        tracing::debug!("list subscription {} unchanged (304), skipping sync", subscription.url);
         return Ok(false);
     }
 
-    let domains: Vec<String> = reso_list::parser::ListParser::new(&text)
-        .parse()
-        .into_iter()
-        .map(str::to_owned)
-        .filter_map(|d| normalize_domain_pattern(&d).ok())
-        .collect();
+    let status = response.status();
+    if !status.is_success() {
+        return Err(SubscriptionSyncError::HttpStatus(status));
+    }
+
+    if response
+        .content_length()
+        .is_some_and(|len| len > SUBSCRIPTION_MAX_RESPONSE_BYTES)
+    {
+        return Err(SubscriptionSyncError::TooLarge);
+    }
+
+    // extract cache headers before consuming the response body
+    let etag = response
+        .headers()
+        .get(reqwest::header::ETAG)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned);
+    let last_modified = response
+        .headers()
+        .get(reqwest::header::LAST_MODIFIED)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned);
+
+    let mut stream = response.bytes_stream();
+    let mut total_bytes: u64 = 0;
+    let mut domains: Vec<String> = Vec::new();
+    let mut parser = reso_list::parser::ListParser::new();
+
+    // bytes carried over from the previous chunk due to a multibyte sequence split at the boundary.
+    let mut utf8_buf: Vec<u8> = Vec::new();
+
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk?;
+        total_bytes += chunk.len() as u64;
+        if total_bytes > SUBSCRIPTION_MAX_RESPONSE_BYTES {
+            return Err(SubscriptionSyncError::TooLarge);
+        }
+
+        utf8_buf.extend_from_slice(&chunk);
+
+        // Decode as much valid UTF-8 as possible. if the end holds an incomplete
+        // multibyte sequence split at a chunk boundary, carry those bytes over to the next iteration
+        match std::str::from_utf8(&utf8_buf) {
+            Ok(text) => {
+                parser.push(text, |domain| {
+                    if let Ok(normalized) = normalize_domain_pattern(domain) {
+                        domains.push(normalized);
+                    }
+                });
+                utf8_buf.clear();
+            }
+            Err(e) if e.error_len().is_none() => {
+                // incomplete multibyte sequence at the end: decode the valid prefix and carry the remaining bytes over for the next chunk.
+                let valid_up_to = e.valid_up_to();
+                if let Ok(text) = std::str::from_utf8(&utf8_buf[..valid_up_to]) {
+                    parser.push(text, |domain| {
+                        if let Ok(normalized) = normalize_domain_pattern(domain) {
+                            domains.push(normalized);
+                        }
+                    });
+                }
+                utf8_buf.drain(..valid_up_to);
+            }
+            Err(_) => return Err(SubscriptionSyncError::InvalidFormat),
+        }
+    }
+
+    let has_no_format = parser.format.is_none();
+
+    parser.flush(|domain| {
+        if let Ok(normalized) = normalize_domain_pattern(domain) {
+            domains.push(normalized);
+        }
+    });
+
+    // no format detected.
+    if has_no_format && domains.is_empty() {
+        return Err(SubscriptionSyncError::InvalidFormat);
+    }
 
     if domains.is_empty() {
         tracing::warn!("list subscription {} contained no valid domains", subscription.url);
     }
 
-    let count = match DomainRule::sync_subscription(subscription.id.clone(), subscription.list_type, domains, db).await
-    {
-        Ok(count) => count,
-        Err(e) => {
-            return Err(anyhow::anyhow!(
-                "failed to sync domain rules from subscription {}: {:?}",
-                subscription.url,
-                e
-            ));
-        }
-    };
+    let count = DomainRule::sync_subscription(subscription.id.clone(), subscription.list_type, domains, db).await?;
 
-    if let Err(e) = ListSubscription::update_after_sync(subscription.id.clone(), count, content_hash, db).await {
-        anyhow::bail!(
-            "failed to update list subscription {} after sync: {:?}",
-            subscription.url,
-            e
-        );
-    }
+    ListSubscription::update_after_sync(subscription.id.clone(), etag, last_modified, db).await?;
+
+    tracing::info!(
+        "synced {} domains from list subscription: '{}'",
+        count,
+        subscription.name
+    );
 
     Ok(true)
 }

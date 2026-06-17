@@ -44,8 +44,8 @@ pub struct ListSubscriptionResponse {
     pub sync_enabled: bool,
 }
 
-impl From<ListSubscription> for ListSubscriptionResponse {
-    fn from(s: ListSubscription) -> Self {
+impl ListSubscriptionResponse {
+    fn from_with_count(s: ListSubscription, domain_count: i64) -> Self {
         Self {
             id: s.id,
             name: s.name,
@@ -54,15 +54,19 @@ impl From<ListSubscription> for ListSubscriptionResponse {
             enabled: s.enabled,
             created_at: s.created_at,
             last_synced_at: s.last_synced_at,
-            domain_count: s.domain_count,
+            domain_count,
             sync_enabled: s.sync_enabled,
         }
     }
 }
 
 pub async fn list(global: State<SharedGlobal>) -> Result<Json<Vec<ListSubscriptionResponse>>, ApiError> {
-    let subs = global.domain_rules.list_subscriptions().await?;
-    Ok(Json(subs.into_iter().map(ListSubscriptionResponse::from).collect()))
+    let subs = global.domain_rules.list_subscriptions_with_counts().await?;
+    Ok(Json(
+        subs.into_iter()
+            .map(|(s, count)| ListSubscriptionResponse::from_with_count(s, count))
+            .collect(),
+    ))
 }
 
 #[derive(Deserialize)]
