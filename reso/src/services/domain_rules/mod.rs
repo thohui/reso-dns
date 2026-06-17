@@ -465,6 +465,9 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
     let mut domains: Vec<String> = Vec::new();
     let mut parser = reso_list::parser::ListParser::new();
 
+    // bytes carried over from the previous chunk due to a multibyte sequence split at the boundary.
+    let mut utf8_buf: Vec<u8> = Vec::new();
+
     while let Some(chunk) = stream.next().await {
         let chunk = chunk?;
         total_bytes += chunk.len() as u64;
@@ -472,12 +475,33 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
             return Err(SubscriptionSyncError::TooLarge);
         }
 
-        let text = str::from_utf8(&chunk).map_err(|_| SubscriptionSyncError::InvalidFormat)?;
-        parser.push(text, |domain| {
-            if let Ok(normalized) = normalize_domain_pattern(domain) {
-                domains.push(normalized);
+        utf8_buf.extend_from_slice(&chunk);
+
+        // Decode as much valid UTF-8 as possible. if the end holds an incomplete
+        // multibyte sequence split at a chunk boundary, carry those bytes over to the next iteration
+        match std::str::from_utf8(&utf8_buf) {
+            Ok(text) => {
+                parser.push(text, |domain| {
+                    if let Ok(normalized) = normalize_domain_pattern(domain) {
+                        domains.push(normalized);
+                    }
+                });
+                utf8_buf.clear();
             }
-        });
+            Err(e) if e.error_len().is_none() => {
+                // incomplete multibyte sequence at the end: decode the valid prefix and carry the remaining bytes over for the next chunk.
+                let valid_up_to = e.valid_up_to();
+                if let Ok(text) = std::str::from_utf8(&utf8_buf[..valid_up_to]) {
+                    parser.push(text, |domain| {
+                        if let Ok(normalized) = normalize_domain_pattern(domain) {
+                            domains.push(normalized);
+                        }
+                    });
+                }
+                utf8_buf.drain(..valid_up_to);
+            }
+            Err(_) => return Err(SubscriptionSyncError::InvalidFormat),
+        }
     }
 
     let has_no_format = parser.format.is_none();
