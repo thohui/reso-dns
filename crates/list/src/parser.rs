@@ -80,7 +80,7 @@ fn detect_line_format(line: &str) -> Option<ListFormat> {
     }
     let mut parts = line.split_ascii_whitespace();
     let first = parts.next()?;
-    if matches!(first, "0.0.0.0" | "127.0.0.1") {
+    if first.parse::<std::net::IpAddr>().is_ok() {
         Some(ListFormat::Hosts)
     } else if validate_domain(first).is_some() {
         // only call it Plain if the token actually looks like a domain,
