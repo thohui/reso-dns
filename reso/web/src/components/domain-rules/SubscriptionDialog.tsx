@@ -2,20 +2,21 @@ import {
 	Button,
 	Dialog,
 	Field,
-	HStack,
 	Heading,
+	HStack,
 	Icon,
 	IconButton,
 	Input,
 	Switch,
+	Text,
 } from '@chakra-ui/react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import z from 'zod';
-import { getErrorMessage } from '@/lib/api/error';
 import { FormError } from '@/components/FormError';
 import type { ListAction } from '@/lib/api/domain-rules';
+import { getErrorMessage } from '@/lib/api/error';
 
 interface SubscriptionDialogProps {
 	onClose: () => void;
@@ -85,8 +86,12 @@ export function SubscriptionDialog({
 								</IconButton>
 							</HStack>
 						</Dialog.Header>
-
 						<Dialog.Body px='6' pb='0' pt='4'>
+							<Text color='fg.muted' fontSize='sm' mb='5'>
+								Subscribe to a remote blocklist. Domains on the list will be
+								imported, and the list can be kept in sync automatically. Only
+								hosts file and domain list formats are supported.
+							</Text>
 							<Field.Root invalid={!!form.formState.errors.name} mb='4'>
 								<Field.Label color='fg.muted' fontSize='sm'>
 									Name
@@ -110,7 +115,7 @@ export function SubscriptionDialog({
 
 							<Field.Root invalid={!!form.formState.errors.url} mb='6'>
 								<Field.Label color='fg.muted' fontSize='sm'>
-									URL
+									Blocklist URL
 								</Field.Label>
 								<Input
 									placeholder='https://example.com/list.txt'

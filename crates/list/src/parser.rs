@@ -1,5 +1,3 @@
-use sha2::{Digest, Sha256};
-
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ListFormat {
     /// 0.0.0.0 domain.com
@@ -9,47 +7,95 @@ pub enum ListFormat {
     // TODO: add support for more formats like adblock plus.
 }
 
-/// A simple parser for blocklist content in various formats.
-pub struct ListParser<'a> {
-    content: &'a str,
+/// Parser for blocklist content in various formats.
+pub struct ListParser {
+    pub format: Option<ListFormat>,
+    leftover: String,
 }
 
-impl<'a> ListParser<'a> {
-    pub fn new(content: &'a str) -> Self {
-        Self { content }
-    }
-
-    pub fn parse(&self) -> Vec<&'a str> {
-        let format = detect_format(self.content).unwrap_or(ListFormat::Plain);
-        self.content
-            .lines()
-            .filter_map(|line| match format {
-                ListFormat::Hosts => parse_hosts_line(line),
-                ListFormat::Plain => parse_plain_line(line),
-            })
-            .collect()
+impl Default for ListParser {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-pub fn calculate_hash(content: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(content.as_bytes());
-    format!("{:x}", hasher.finalize())
-}
-
-pub fn detect_format(content: &str) -> Option<ListFormat> {
-    for line in content.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
+impl ListParser {
+    pub fn new() -> Self {
+        Self {
+            format: None,
+            leftover: String::new(),
         }
-        let mut parts = line.split_ascii_whitespace();
-        if matches!(parts.next(), Some("0.0.0.0" | "127.0.0.1")) {
-            return Some(ListFormat::Hosts);
-        }
-        return Some(ListFormat::Plain);
     }
-    None
+
+    /// Process a text chunk, calling `callback` for each parsed domain.
+    pub fn push<F: FnMut(&str)>(&mut self, chunk: &str, mut callback: F) {
+        self.leftover.push_str(chunk);
+
+        let mut start = 0;
+        while let Some(rel_pos) = self.leftover[start..].find('\n') {
+            let end = start + rel_pos;
+            let line = self.leftover[start..end].trim_end_matches('\r');
+
+            // detect format from first non comment or non empty line
+            if self.format.is_none() {
+                self.format = detect_line_format(line);
+            }
+            if let Some(fmt) = self.format
+                && let Some(domain) = parse_line(line, fmt)
+            {
+                callback(domain);
+            }
+
+            start = end + 1;
+        }
+
+        // keep the incomplete line for the next chunk
+        self.leftover.drain(..start);
+    }
+
+    /// Process any remaining incomplete line after the last chunk.
+    pub fn flush<F: FnMut(&str)>(mut self, mut callback: F) {
+        if !self.leftover.is_empty() {
+            // file with no trailing newline
+            let leftover = std::mem::take(&mut self.leftover);
+            let line = leftover.trim_end_matches('\r');
+            if self.format.is_none() {
+                self.format = detect_line_format(line);
+            }
+            if let Some(fmt) = self.format
+                && let Some(domain) = parse_line(line, fmt)
+            {
+                callback(domain);
+            }
+        }
+    }
+}
+
+/// Detect the format from a single line.
+/// Returns `None` for blank/comment lines or unrecognized formats.
+fn detect_line_format(line: &str) -> Option<ListFormat> {
+    let line = line.trim();
+    if line.is_empty() || line.starts_with('#') {
+        return None;
+    }
+    let mut parts = line.split_ascii_whitespace();
+    let first = parts.next()?;
+    if matches!(first, "0.0.0.0" | "127.0.0.1") {
+        Some(ListFormat::Hosts)
+    } else if validate_domain(first).is_some() {
+        // only call it Plain if the token actually looks like a domain,
+        // so we don't misidentify adblock or other unsupported formats
+        Some(ListFormat::Plain)
+    } else {
+        None
+    }
+}
+
+fn parse_line(line: &str, format: ListFormat) -> Option<&str> {
+    match format {
+        ListFormat::Hosts => parse_hosts_line(line),
+        ListFormat::Plain => parse_plain_line(line),
+    }
 }
 
 fn strip_comment(line: &str) -> &str {
@@ -59,12 +105,11 @@ fn strip_comment(line: &str) -> &str {
     }
 }
 
-fn validate(s: &str) -> Option<&str> {
+fn validate_domain(s: &str) -> Option<&str> {
     if s.is_empty() || s.len() > 253 {
         return None;
     }
 
-    // basic validation, the full validation is up to the consumer.
     if !s
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | '*'))
@@ -93,14 +138,14 @@ fn parse_hosts_line(line: &str) -> Option<&str> {
         return None;
     }
     let mut parts = line.split_ascii_whitespace();
-    parts.next()?; // skip ip addr
+    parts.next()?; // skip the ip address
     let domain = parts.next()?;
 
     if LOCAL_DOMAINS.iter().any(|d| d.eq_ignore_ascii_case(domain)) {
         return None;
     }
 
-    validate(domain)
+    validate_domain(domain)
 }
 
 fn parse_plain_line(line: &str) -> Option<&str> {
@@ -112,7 +157,7 @@ fn parse_plain_line(line: &str) -> Option<&str> {
         return None;
     }
 
-    validate(domain)
+    validate_domain(domain)
 }
 
 #[cfg(test)]
@@ -122,52 +167,75 @@ mod tests {
     const HOSTS: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/testdata/hosts.txt"));
     const PLAIN: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/testdata/plain.txt"));
 
+    fn parse_all(content: &str) -> Vec<String> {
+        let mut parser = ListParser::new();
+        let mut domains = Vec::new();
+        parser.push(content, |d| domains.push(d.to_owned()));
+        parser.flush(|d| domains.push(d.to_owned()));
+        domains
+    }
+
     #[test]
     fn detects_hosts_format() {
-        assert!(matches!(detect_format(HOSTS), Some(ListFormat::Hosts)));
+        let mut parser = ListParser::new();
+        parser.push(HOSTS, |_| {});
+        assert!(matches!(parser.format, Some(ListFormat::Hosts)));
     }
 
     #[test]
     fn detects_plain_format() {
-        assert!(matches!(detect_format(PLAIN), Some(ListFormat::Plain)));
+        let mut parser = ListParser::new();
+        parser.push(PLAIN, |_| {});
+        assert!(matches!(parser.format, Some(ListFormat::Plain)));
     }
 
     #[test]
     fn detects_none_for_empty() {
-        assert!(detect_format("").is_none());
-        assert!(detect_format("# just a comment\n").is_none());
+        let mut parser = ListParser::new();
+        parser.push("# just a comment\n", |_| {});
+        assert!(parser.format.is_none());
     }
 
     #[test]
     fn parses_hosts() {
-        let domains = ListParser::new(HOSTS).parse();
-        assert!(domains.contains(&"ads.example.com"));
-        assert!(domains.contains(&"tracker.example.com"));
-        assert!(domains.contains(&"telemetry.example.com"));
-        assert!(domains.contains(&"metrics.example.com"));
-        assert!(domains.contains(&"spacing.example.com"));
-        assert!(domains.contains(&"another.example.com"));
+        let domains = parse_all(HOSTS);
+        assert!(domains.iter().any(|d| d == "ads.example.com"));
+        assert!(domains.iter().any(|d| d == "tracker.example.com"));
+        assert!(domains.iter().any(|d| d == "telemetry.example.com"));
+        assert!(domains.iter().any(|d| d == "metrics.example.com"));
+        assert!(domains.iter().any(|d| d == "spacing.example.com"));
+        assert!(domains.iter().any(|d| d == "another.example.com"));
     }
 
     #[test]
     fn hosts_filters_local_domains() {
-        let domains = ListParser::new(HOSTS).parse();
-        assert!(!domains.contains(&"localhost"));
-        assert!(!domains.contains(&"localhost.localdomain"));
-        assert!(!domains.contains(&"local"));
-        assert!(!domains.contains(&"broadcasthost"));
-        assert!(!domains.contains(&"ip6-localhost"));
-        assert!(!domains.contains(&"ip6-loopback"));
+        let domains = parse_all(HOSTS);
+        assert!(!domains.iter().any(|d| d == "localhost"));
+        assert!(!domains.iter().any(|d| d == "localhost.localdomain"));
+        assert!(!domains.iter().any(|d| d == "local"));
+        assert!(!domains.iter().any(|d| d == "broadcasthost"));
+        assert!(!domains.iter().any(|d| d == "ip6-localhost"));
+        assert!(!domains.iter().any(|d| d == "ip6-loopback"));
     }
 
     #[test]
     fn parses_plain() {
-        let domains = ListParser::new(PLAIN).parse();
-        assert!(domains.contains(&"ads.example.com"));
-        assert!(domains.contains(&"tracker.example.com"));
-        assert!(domains.contains(&"telemetry.example.com"));
-        assert!(domains.contains(&"metrics.example.com"));
-        assert!(domains.contains(&"*.ads.example.com"));
-        assert!(domains.contains(&"another.example.com"));
+        let domains = parse_all(PLAIN);
+        assert!(domains.iter().any(|d| d == "ads.example.com"));
+        assert!(domains.iter().any(|d| d == "tracker.example.com"));
+        assert!(domains.iter().any(|d| d == "telemetry.example.com"));
+        assert!(domains.iter().any(|d| d == "metrics.example.com"));
+        assert!(domains.iter().any(|d| d == "*.ads.example.com"));
+        assert!(domains.iter().any(|d| d == "another.example.com"));
+    }
+
+    #[test]
+    fn handles_chunk_boundary_mid_line() {
+        let mut parser = ListParser::new();
+        let mut domains = Vec::new();
+        parser.push("example", |d| domains.push(d.to_owned()));
+        parser.push(".com\n", |d| domains.push(d.to_owned()));
+        parser.flush(|d| domains.push(d.to_owned()));
+        assert!(domains.iter().any(|d| d == "example.com"));
     }
 }
