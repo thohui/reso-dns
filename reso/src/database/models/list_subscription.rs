@@ -216,8 +216,18 @@ mod tests {
 
         DomainRule::sync_subscription(
             sub.id.clone(),
-            ListAction::Block,
-            vec!["a.com".into(), "b.com".into()],
+            vec![
+                (
+                    "a.com".into(),
+                    crate::database::models::MatchType::Domain,
+                    ListAction::Block,
+                ),
+                (
+                    "b.com".into(),
+                    crate::database::models::MatchType::Domain,
+                    ListAction::Block,
+                ),
+            ],
             &db.conn,
         )
         .await

@@ -1,5 +1,5 @@
 use crate::{
-    database::models::{ListAction, domain_rule::DomainRule},
+    database::models::{ListAction, MatchType, domain_rule::DomainRule},
     global::SharedGlobal,
 };
 use axum::{
@@ -64,8 +64,14 @@ pub async fn list(
 #[derive(Deserialize)]
 pub struct AddDomainPayload {
     domain: String,
+    #[serde(default = "default_match_type")]
+    match_type: MatchType,
     #[serde(default = "default_action")]
     action: ListAction,
+}
+
+fn default_match_type() -> MatchType {
+    MatchType::Domain
 }
 
 fn default_action() -> ListAction {
@@ -81,7 +87,10 @@ pub async fn add_domain(
     global: State<SharedGlobal>,
     Json(payload): Json<AddDomainPayload>,
 ) -> Result<StatusCode, ApiError> {
-    global.domain_rules.add_domain(&payload.domain, payload.action).await?;
+    global
+        .domain_rules
+        .add_domain(&payload.domain, payload.match_type, payload.action)
+        .await?;
     Ok(StatusCode::CREATED)
 }
 

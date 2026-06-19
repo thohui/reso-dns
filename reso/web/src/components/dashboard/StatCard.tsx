@@ -9,7 +9,13 @@ interface Props {
 	isLoading?: boolean;
 }
 
-export function StatCard({ label, value, icon, accentColor, isLoading }: Props) {
+export function StatCard({
+	label,
+	value,
+	icon,
+	accentColor,
+	isLoading,
+}: Props) {
 	return (
 		<Box
 			bg='bg.panel'

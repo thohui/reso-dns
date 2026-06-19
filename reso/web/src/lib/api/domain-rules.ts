@@ -2,6 +2,7 @@ import type { KyInstance } from 'ky';
 import type { PagedRequest, PagedResponse } from './pagination';
 
 export type ListAction = 'block' | 'allow';
+export type MatchType = 'exact' | 'wildcard' | 'domain';
 
 export class DomainRules {
 	private httpClient: KyInstance;
@@ -29,9 +30,13 @@ export class DomainRules {
 		await this.httpClient.delete('api/domain-rules', { json: { domain } });
 	}
 
-	public async create(domain: string, action: ListAction = 'block') {
+	public async create(
+		domain: string,
+		matchType: MatchType,
+		action: ListAction,
+	) {
 		await this.httpClient.post('api/domain-rules', {
-			json: { domain, action },
+			json: { domain, match_type: matchType, action },
 		});
 	}
 
@@ -50,6 +55,7 @@ export interface DomainRule {
 	id: string;
 	domain: string;
 	action: ListAction;
+	match_type: MatchType;
 	created_at: number;
 	enabled: boolean;
 	subscription_id: string | null;

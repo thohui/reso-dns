@@ -14,6 +14,7 @@ import { FormError } from '@/components/FormError';
 import { useState } from 'react';
 import type { DomainRule, ListAction } from '@/lib/api/domain-rules';
 import { ActionBadge } from '@/components/ActionBadge';
+import { MatchTypeBadge } from '@/components/MatchTypeBadge';
 
 interface EditRuleDialogProps {
 	rule: DomainRule;
@@ -116,6 +117,13 @@ export function EditRuleDialog({
 								>
 									{rule.domain}
 								</Text>
+							</Field.Root>
+
+							<Field.Root mb='5'>
+								<Field.Label color='fg.muted' fontSize='sm'>
+									Match
+								</Field.Label>
+								<MatchTypeBadge matchType={rule.match_type} />
 							</Field.Root>
 
 							<Field.Root mb='5'>

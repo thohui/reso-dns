@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 
 use arc_swap::ArcSwap;
 use reso_dns::domain_name::DomainName;
-use reso_list::DomainListMatcher;
+use reso_list::{DomainListMatcher, DomainPattern};
 use tokio::{
     sync::Mutex,
     time::{self, MissedTickBehavior},
@@ -12,7 +12,7 @@ use tokio::{
 use crate::{
     database::{
         CoreDatabasePool, DatabaseError,
-        models::{ListAction, domain_rule::DomainRule, list_subscription::ListSubscription},
+        models::{ListAction, MatchType, domain_rule::DomainRule, list_subscription::ListSubscription},
     },
     global::SharedGlobal,
     utils::uuid::EntityId,
@@ -20,25 +20,18 @@ use crate::{
 
 use super::ServiceError;
 
-/// Validate and normalize a domain pattern.
-/// Returns the canonical stored form, e.g. `*.example.com` or `example.com`.
-fn normalize_domain_pattern(input: &str) -> Result<String, ServiceError> {
-    // what we are doing here is kinda hacky, since DomainName doesn't support wildcard patterns, but we want to reuse its validation and normalization logic.
-    let (wildcard, base) = match input.strip_prefix("*.") {
-        Some(rest) => (true, rest),
-        None => (false, input),
-    };
-    if base.contains('*') {
-        return Err(ServiceError::BadRequest(
-            "Wildcards are only supported as a prefix (e.g. *.example.com)".into(),
-        ));
+/// Validate and normalize a bare domain string from user input.
+fn normalize_bare_domain(input: &str) -> Result<String, ServiceError> {
+    if input.contains('*') {
+        return Err(ServiceError::BadRequest("Domain must not contain wildcards".into()));
     }
-    let name = DomainName::from_user(base).map_err(|e| ServiceError::BadRequest(format!("Invalid domain: {e}")))?;
-    Ok(if wildcard {
-        format!("*.{name}")
-    } else {
-        name.to_string()
-    })
+    let name = DomainName::from_user(input).map_err(|e| ServiceError::BadRequest(format!("Invalid domain: {e}")))?;
+    Ok(name.to_string())
+}
+
+/// Normalize a plain domain string from the subscription parser.
+fn normalize_base(s: &str) -> Option<String> {
+    DomainName::from_user(s).ok().map(|n| n.to_string())
 }
 
 pub struct Matchers {
@@ -53,10 +46,10 @@ impl Matchers {
         let block_list = DomainRule::list_enabled_by_action(ListAction::Block, db).await?;
         Ok(Self {
             blocklist_matcher: Arc::new(DomainListMatcher::load(
-                block_list.iter().filter(|d| d.enabled).map(|d| d.domain.as_str()),
+                block_list.iter().filter(|d| d.enabled).map(|d| d.to_domain_pattern()),
             )?),
             allow_list_matcher: Arc::new(DomainListMatcher::load(
-                allow_list.iter().filter(|d| d.enabled).map(|d| d.domain.as_str()),
+                allow_list.iter().filter(|d| d.enabled).map(|d| d.to_domain_pattern()),
             )?),
         })
     }
@@ -86,12 +79,18 @@ impl DomainRulesService {
         })
     }
 
-    /// Add a new domain rule with the given domain pattern and action.
-    pub async fn add_domain(&self, domain: &str, action: ListAction) -> Result<(), ServiceError> {
-        let domain = normalize_domain_pattern(domain)?;
+    /// Add a new domain rule with the given domain, match type, and action.
+    pub async fn add_domain(
+        &self,
+        domain: &str,
+        match_type: MatchType,
+        action: ListAction,
+    ) -> Result<(), ServiceError> {
+        let domain = normalize_bare_domain(domain)?;
 
         let mut rule = DomainRule::new(domain);
         rule.action = action;
+        rule.match_type = match_type;
 
         rule.insert(&self.connection).await.map_err(|e| {
             if e.is_unique_constraint_violation() {
@@ -111,7 +110,7 @@ impl DomainRulesService {
 
     /// Remove a domain rule by domain pattern.
     pub async fn remove_domain(&self, domain: &str) -> Result<(), ServiceError> {
-        let domain = normalize_domain_pattern(domain)?;
+        let domain = normalize_bare_domain(domain)?;
 
         let changed = DomainRule::delete_by_domain(&domain, &self.connection).await?;
 
@@ -125,7 +124,7 @@ impl DomainRulesService {
 
     /// Update the action of an existing domain rule.
     pub async fn update_domain_action(&self, domain: &str, action: ListAction) -> Result<(), ServiceError> {
-        let domain = normalize_domain_pattern(domain)?;
+        let domain = normalize_bare_domain(domain)?;
 
         let changed = DomainRule::update_action(&domain, action, &self.connection).await?;
 
@@ -139,7 +138,7 @@ impl DomainRulesService {
 
     /// Toggle the enabled state of an individual domain rule.
     pub async fn toggle_domain(&self, domain: &str) -> Result<(), ServiceError> {
-        let domain = normalize_domain_pattern(domain)?;
+        let domain = normalize_bare_domain(domain)?;
 
         let changed = DomainRule::toggle(&domain, &self.connection).await?;
 
@@ -171,8 +170,9 @@ impl DomainRulesService {
 
         let rules = DomainRule::list_enabled_by_action(ListAction::Allow, &self.connection).await?;
 
-        let new_matcher =
-            Arc::new(DomainListMatcher::load(rules.iter().map(|r| r.domain.as_str())).map_err(ServiceError::Internal)?);
+        let new_matcher = Arc::new(
+            DomainListMatcher::load(rules.iter().map(|r| r.to_domain_pattern())).map_err(ServiceError::Internal)?,
+        );
 
         self.matchers.rcu(|current| {
             Arc::new(Matchers {
@@ -188,8 +188,9 @@ impl DomainRulesService {
     async fn reload_blocklist(&self) -> Result<(), ServiceError> {
         let _guard = self.write_lock.lock().await;
         let rules = DomainRule::list_enabled_by_action(ListAction::Block, &self.connection).await?;
-        let new_matcher =
-            Arc::new(DomainListMatcher::load(rules.iter().map(|r| r.domain.as_str())).map_err(ServiceError::Internal)?);
+        let new_matcher = Arc::new(
+            DomainListMatcher::load(rules.iter().map(|r| r.to_domain_pattern())).map_err(ServiceError::Internal)?,
+        );
 
         self.matchers.rcu(|current| {
             Arc::new(Matchers {
@@ -462,7 +463,7 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
 
     let mut stream = response.bytes_stream();
     let mut total_bytes: u64 = 0;
-    let mut domains: Vec<String> = Vec::new();
+    let mut domains: Vec<(String, MatchType, ListAction)> = Vec::new();
     let mut parser = reso_list::parser::ListParser::new();
 
     // bytes carried over from the previous chunk due to a multibyte sequence split at the boundary.
@@ -481,9 +482,14 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
         // multibyte sequence split at a chunk boundary, carry those bytes over to the next iteration
         match std::str::from_utf8(&utf8_buf) {
             Ok(text) => {
-                parser.push(text, |domain| {
-                    if let Ok(normalized) = normalize_domain_pattern(domain) {
-                        domains.push(normalized);
+                parser.push(text, |(pattern, rule_type)| {
+                    let (base, match_type) = match pattern {
+                        DomainPattern::Exact(s) => (s, MatchType::Exact),
+                        DomainPattern::Subdomain(s) => (s, MatchType::Wildcard),
+                        DomainPattern::Domain(s) => (s, MatchType::Domain),
+                    };
+                    if let Some(domain) = normalize_base(base) {
+                        domains.push((domain, match_type, ListAction::from(rule_type)));
                     }
                 });
                 utf8_buf.clear();
@@ -492,9 +498,14 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
                 // incomplete multibyte sequence at the end: decode the valid prefix and carry the remaining bytes over for the next chunk.
                 let valid_up_to = e.valid_up_to();
                 if let Ok(text) = std::str::from_utf8(&utf8_buf[..valid_up_to]) {
-                    parser.push(text, |domain| {
-                        if let Ok(normalized) = normalize_domain_pattern(domain) {
-                            domains.push(normalized);
+                    parser.push(text, |(pattern, rule_type)| {
+                        let (base, match_type) = match pattern {
+                            DomainPattern::Exact(s) => (s, MatchType::Exact),
+                            DomainPattern::Subdomain(s) => (s, MatchType::Wildcard),
+                            DomainPattern::Domain(s) => (s, MatchType::Domain),
+                        };
+                        if let Some(domain) = normalize_base(base) {
+                            domains.push((domain, match_type, ListAction::from(rule_type)));
                         }
                     });
                 }
@@ -506,9 +517,14 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
 
     let has_no_format = parser.format.is_none();
 
-    parser.flush(|domain| {
-        if let Ok(normalized) = normalize_domain_pattern(domain) {
-            domains.push(normalized);
+    parser.flush(|(pattern, rule_type)| {
+        let (base, match_type) = match pattern {
+            DomainPattern::Exact(s) => (s, MatchType::Exact),
+            DomainPattern::Subdomain(s) => (s, MatchType::Wildcard),
+            DomainPattern::Domain(s) => (s, MatchType::Domain),
+        };
+        if let Some(domain) = normalize_base(base) {
+            domains.push((domain, match_type, ListAction::from(rule_type)));
         }
     });
 
@@ -521,7 +537,7 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
         tracing::warn!("list subscription {} contained no valid domains", subscription.url);
     }
 
-    let count = DomainRule::sync_subscription(subscription.id.clone(), subscription.list_type, domains, db).await?;
+    let count = DomainRule::sync_subscription(subscription.id.clone(), domains, db).await?;
 
     ListSubscription::update_after_sync(subscription.id.clone(), etag, last_modified, db).await?;
 

@@ -18,7 +18,7 @@ import { useToggleSubscription } from '@/hooks/domain-rules/useToggleSubscriptio
 import { useToggleSubscriptionSync } from '@/hooks/domain-rules/useToggleSubscriptionSync';
 import { useUpdateDomainRule } from '@/hooks/domain-rules/useUpdateDomainRule';
 import { useDebounce } from '@/hooks/useDebounce';
-import type { DomainRule, ListAction } from '@/lib/api/domain-rules';
+import type { DomainRule, ListAction, MatchType } from '@/lib/api/domain-rules';
 import type { ListSubscription } from '@/lib/api/list-subscriptions';
 import type { PagedResponse } from '@/lib/api/pagination';
 import { Box, Button, Icon, Tabs, Text } from '@chakra-ui/react';
@@ -74,8 +74,12 @@ export default function DomainRulesPage() {
 		setPage(0);
 	};
 
-	const handleAddRule = async (domain: string, action: ListAction) => {
-		await addRule.mutateAsync({ domain, action });
+	const handleAddRule = async (
+		domain: string,
+		matchType: MatchType,
+		action: ListAction,
+	) => {
+		await addRule.mutateAsync({ domain, matchType, action });
 		invalidateRules();
 		setShowRuleDialog(false);
 	};

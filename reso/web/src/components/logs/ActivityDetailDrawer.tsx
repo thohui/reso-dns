@@ -1,3 +1,15 @@
+import {
+	Box,
+	Button,
+	CloseButton,
+	Drawer,
+	HStack,
+	Icon,
+	Portal,
+	Text,
+	VStack,
+} from '@chakra-ui/react';
+import { Ban } from 'lucide-react';
 import { StatusBadge } from '@/components/StatusBadge';
 import { toastError } from '@/components/Toaster';
 import { useAddDomainRule } from '@/hooks/domain-rules/useAddDomainRule';
@@ -11,18 +23,6 @@ import {
 } from '@/lib/api/activity';
 import { recordTypeName } from '@/lib/dns';
 import { getStatusInfo } from '@/lib/status-info';
-import {
-	Box,
-	Button,
-	CloseButton,
-	Drawer,
-	HStack,
-	Icon,
-	Portal,
-	Text,
-	VStack,
-} from '@chakra-ui/react';
-import { Ban } from 'lucide-react';
 
 function DetailRow({ label, value }: { label: string; value: string }) {
 	return (
@@ -67,8 +67,8 @@ export function ActivityDetailDrawer({
 	if (!activity) return null;
 
 	const statusInfo = getStatusInfo(activity);
-	const canBlock =
-		activity.kind === 'query' && activity.qname && !activity.d.blocked;
+	const showBlockFooter =
+		activity.kind === 'query' && activity.qname !== null && !activity.d.blocked;
 
 	const time = new Date(activity.timestamp).toLocaleString('en-US', {
 		hour12: false,
@@ -259,7 +259,7 @@ export function ActivityDetailDrawer({
 							</VStack>
 						</Drawer.Body>
 
-						{canBlock && (
+						{showBlockFooter && activity.qname !== null && (
 							<Drawer.Footer
 								borderTopWidth='1px'
 								borderColor='border'
@@ -279,7 +279,11 @@ export function ActivityDetailDrawer({
 									}}
 									onClick={() => {
 										addDomainRule.mutate(
-											{ domain: activity.qname!, action: 'block' },
+											{
+												domain: activity.qname,
+												matchType: 'domain',
+												action: 'block',
+											},
 											{
 												onError: toastError,
 												onSuccess: () => onClose(),

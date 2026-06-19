@@ -1,9 +1,18 @@
 pub mod parser;
 
+#[derive(Debug, Clone)]
+pub enum DomainPattern<'a> {
+    /// Matches exactly this domain.
+    Exact(&'a str),
+    /// Matches any subdomain of this domain but not the domain itself (e.g. `*.example.com`).
+    Subdomain(&'a str),
+    /// Matches this domain and all its subdomains (adblock `||domain^` semantics).
+    Domain(&'a str),
+}
+
 /// Node in the trie structure, representing a domain list entry.
 #[derive(Debug, Clone, Default)]
 struct Node {
-    /// The label for this node.
     label: Box<str>,
     /// Indicates if this node represents a wildcard pattern.
     wildcard: bool,
@@ -65,23 +74,20 @@ impl DomainListMatcher {
     }
 
     /// Load a list of domain patterns into the matcher.
-    pub fn load<'a, I>(patterns: I) -> anyhow::Result<Self>
-    where
-        I: IntoIterator<Item = &'a str>,
-    {
+    pub fn load<'a>(patterns: impl IntoIterator<Item = DomainPattern<'a>>) -> anyhow::Result<Self> {
         let mut root = Node::default();
 
         for pat in patterns {
-            let pat = pat.trim();
-            if pat.is_empty() {
+            let (name, set_terminal, set_wildcard) = match pat {
+                DomainPattern::Exact(s) => (s, true, false),
+                DomainPattern::Subdomain(s) => (s, false, true),
+                DomainPattern::Domain(s) => (s, true, true),
+            };
+
+            let name = name.trim();
+            if name.is_empty() {
                 continue;
             }
-
-            let (is_wildcard, name) = if let Some(rest) = pat.strip_prefix("*.") {
-                (true, rest)
-            } else {
-                (false, pat)
-            };
 
             let labels = normalize(name)?;
             if labels.0.is_empty() {
@@ -93,10 +99,11 @@ impl DomainListMatcher {
                 node = node.child_mut(label);
             }
 
-            if is_wildcard {
-                node.wildcard = true;
-            } else {
+            if set_terminal {
                 node.terminal = true;
+            }
+            if set_wildcard {
+                node.wildcard = true;
             }
         }
 
@@ -129,7 +136,11 @@ mod tests {
 
     #[test]
     pub fn test_patterns() {
-        let patterns: Vec<&str> = vec!["google.com", "yahoo.com", "*.bla.com"];
+        let patterns = vec![
+            DomainPattern::Exact("google.com"),
+            DomainPattern::Exact("yahoo.com"),
+            DomainPattern::Subdomain("bla.com"),
+        ];
         let matcher = DomainListMatcher::load(patterns).unwrap();
         assert!(matcher.exists("google.com"));
         assert!(matcher.exists("yahoo.com"));
@@ -138,10 +149,23 @@ mod tests {
 
     #[test]
     fn test_normalization() {
-        let patterns: Vec<&str> = vec!["  *.Example.COM.  ", "foo.bar.com"];
+        let patterns = vec![
+            DomainPattern::Subdomain("  Example.COM.  "),
+            DomainPattern::Exact("foo.bar.com"),
+        ];
         let matcher = DomainListMatcher::load(patterns).unwrap();
         assert!(matcher.exists("a.example.com"));
         assert!(matcher.exists("foo.bar.com"));
         assert!(!matcher.exists("example.com"));
+    }
+
+    #[test]
+    fn test_domain_pattern_matches_domain_and_subdomains() {
+        let patterns = vec![DomainPattern::Domain("example.com")];
+        let matcher = DomainListMatcher::load(patterns).unwrap();
+        assert!(matcher.exists("example.com"));
+        assert!(matcher.exists("sub.example.com"));
+        assert!(matcher.exists("deep.sub.example.com"));
+        assert!(!matcher.exists("notexample.com"));
     }
 }
