@@ -49,7 +49,6 @@ impl DomainRule {
 }
 
 impl DomainRule {
-    /// Inserts this domain rule into the database.
     pub async fn insert(self, db: &CoreDatabasePool) -> Result<(), DatabaseError> {
         db.interact(move |c| {
             c.execute(
@@ -70,7 +69,6 @@ impl DomainRule {
         Ok(())
     }
 
-    /// Deletes a domain rule by domain name.
     pub async fn delete_by_domain(domain: &str, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
         let domain = domain.to_string();
         let rows = db
@@ -79,7 +77,6 @@ impl DomainRule {
         Ok(rows > 0)
     }
 
-    /// Lists domain rules with pagination and optional search by domain name.
     pub async fn list(
         db: &CoreDatabasePool,
         limit: i64,
@@ -122,7 +119,6 @@ impl DomainRule {
         .await
     }
 
-    /// Lists all enabled domain rules for a given action. Used for building matchers.
     pub async fn list_enabled_by_action(action: ListAction, db: &CoreDatabasePool) -> Result<Vec<Self>, DatabaseError> {
         db.interact(move |c| {
             let mut stmt = c.prepare(
@@ -145,7 +141,6 @@ impl DomainRule {
         .await
     }
 
-    /// Lists all domain rules without pagination.
     #[allow(unused)]
     pub async fn list_all(db: &CoreDatabasePool) -> Result<Vec<Self>, DatabaseError> {
         db.interact(move |c| {
@@ -172,7 +167,6 @@ impl DomainRule {
         .await
     }
 
-    /// Updates the action of a domain rule. It will also clear the subscription_id to disassociate it from any subscription.
     pub async fn update_action(domain: &str, action: ListAction, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
         let domain = domain.to_string();
         let rows = db
@@ -186,7 +180,6 @@ impl DomainRule {
         Ok(rows > 0)
     }
 
-    /// Toggles the enabled state of a domain rule. If the rule is enabled, it will be disabled, and vice versa.
     pub async fn toggle(domain: &str, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
         let domain = domain.to_string();
         let rows = db
@@ -200,7 +193,6 @@ impl DomainRule {
         Ok(rows > 0)
     }
 
-    /// Syncs a list of domains for a subscription. It will insert new domains, delete removed domains, and update existing ones.
     pub async fn sync_subscription(
         subscription_id: EntityId<ListSubscription>,
         domains: Vec<(String, MatchType, ListAction)>,
@@ -219,7 +211,14 @@ impl DomainRule {
                 tx.execute_batch("DELETE FROM temp.domain_rules_sync_staging")?;
 
                 {
-                    let mut stmt = tx.prepare("INSERT OR IGNORE INTO temp.domain_rules_sync_staging VALUES (?1, ?2, ?3)")?;
+
+                    // allow rules win over block rules regardless of order in the source file
+                    let mut stmt = tx.prepare(
+                        "INSERT INTO temp.domain_rules_sync_staging VALUES (?1, ?2, ?3)
+                         ON CONFLICT(domain) DO UPDATE SET
+                             action     = CASE WHEN excluded.action = 'allow' THEN 'allow'             ELSE domain_rules_sync_staging.action     END,
+                             match_type = CASE WHEN excluded.action = 'allow' THEN excluded.match_type ELSE domain_rules_sync_staging.match_type END",
+                    )?;
                     for (domain, match_type, action) in &domains {
                         stmt.execute(params![domain, action, match_type])?;
                     }
@@ -252,6 +251,16 @@ impl DomainRule {
                     }
                 }
 
+                // refresh action and match_type for domains that already existed and were skipped by the INSERT above
+                tx.execute(
+                    "UPDATE domain_rules
+                     SET action     = (SELECT s.action     FROM temp.domain_rules_sync_staging s WHERE s.domain = domain_rules.domain),
+                         match_type = (SELECT s.match_type FROM temp.domain_rules_sync_staging s WHERE s.domain = domain_rules.domain)
+                     WHERE subscription_id = ?1
+                       AND domain IN (SELECT domain FROM temp.domain_rules_sync_staging)",
+                    params![subscription_id.id()],
+                )?;
+
                 let count: i64 = tx.query_row(
                     "SELECT COUNT(*) FROM domain_rules WHERE subscription_id = ?1",
                     params![subscription_id.id()],
@@ -264,7 +273,6 @@ impl DomainRule {
             .await
     }
 
-    /// Counts the total number of domain rules, optionally filtered by a search term.
     pub async fn row_count(db: &CoreDatabasePool, search: Option<String>) -> Result<i64, DatabaseError> {
         db.interact(move |c| {
             let mut b = WhereBuilder::new(0);
@@ -369,7 +377,6 @@ mod tests {
         let sub = ListSubscription::new("Test".into(), "https://example.com/list.txt".into());
         sub.clone().insert(&db.conn).await.unwrap();
 
-        // first sync
         let count = DomainRule::sync_subscription(
             sub.id.clone(),
             vec![
@@ -383,7 +390,6 @@ mod tests {
         .unwrap();
         assert_eq!(count, 3);
 
-        // second sync: one new, one removed, one unchanged
         let count = DomainRule::sync_subscription(
             sub.id,
             vec![

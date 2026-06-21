@@ -180,18 +180,14 @@ export function AddRuleDialog({ onClose, onSubmit }: AddRuleDialogProps) {
 								</Field.Label>
 								<HStack gap='2'>
 									{matchTypeOptions.map(({ value, label }) => (
-										<chakra.button
+										<Button
 											key={value}
 											type='button'
 											onClick={() => setMatchType(value)}
-											px='2.5'
-											py='1'
-											fontSize='xs'
-											fontWeight='500'
-											fontFamily="'Mozilla Text', sans-serif"
+											aria-pressed={matchType === value}
+											size='xs'
 											borderRadius='md'
 											borderWidth='1px'
-											transition='all 0.15s'
 											bg={matchType === value ? 'accent.muted' : 'bg.subtle'}
 											color={matchType === value ? 'accent.fg' : 'fg.muted'}
 											borderColor={
@@ -204,7 +200,7 @@ export function AddRuleDialog({ onClose, onSubmit }: AddRuleDialogProps) {
 											}}
 										>
 											{label}
-										</chakra.button>
+										</Button>
 									))}
 								</HStack>
 								<Text color='fg.subtle' fontSize='xs' mt='2'>

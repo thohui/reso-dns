@@ -5,7 +5,6 @@ use uuid::Uuid;
 use serde::Serialize;
 
 use crate::{
-    database::models::ListAction,
     database::{CoreDatabasePool, DatabaseError},
     utils::uuid::EntityId,
 };
@@ -15,7 +14,6 @@ pub struct ListSubscription {
     pub id: EntityId<Self>,
     pub name: String,
     pub url: String,
-    pub list_type: ListAction,
     pub created_at: i64,
     pub enabled: bool,
     pub last_synced_at: Option<i64>,
@@ -30,7 +28,6 @@ impl ListSubscription {
             id: EntityId::new(),
             name,
             url,
-            list_type: ListAction::Block,
             created_at: now_millis(),
             enabled: true,
             last_synced_at: None,
@@ -45,12 +42,11 @@ impl ListSubscription {
     pub async fn insert(self, db: &CoreDatabasePool) -> Result<(), DatabaseError> {
         db.interact(move |c| {
             c.execute(
-                "INSERT INTO list_subscriptions (id, name, url, list_type, created_at, enabled, sync_enabled) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                "INSERT INTO list_subscriptions (id, name, url, created_at, enabled, sync_enabled) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
                     self.id.id(),
                     self.name.as_str(),
                     self.url.as_str(),
-                    self.list_type,
                     self.created_at,
                     self.enabled,
                     self.sync_enabled,
@@ -66,20 +62,19 @@ impl ListSubscription {
         db
             .interact(move |c| {
                 let mut stmt = c.prepare(
-                    "SELECT id, name, url, list_type, created_at, enabled, last_synced_at, sync_enabled, etag, last_modified FROM list_subscriptions",
+                    "SELECT id, name, url, created_at, enabled, last_synced_at, sync_enabled, etag, last_modified FROM list_subscriptions",
                 )?;
                 let iter = stmt.query_map([], |r| {
                     Ok(Self {
                         id: EntityId::from(r.get::<_, Uuid>(0)?),
                         name: r.get(1)?,
                         url: r.get(2)?,
-                        list_type: r.get(3)?,
-                        created_at: r.get(4)?,
-                        enabled: r.get(5)?,
-                        last_synced_at: r.get(6)?,
-                        sync_enabled: r.get(7)?,
-                        etag: r.get(8)?,
-                        last_modified: r.get(9)?,
+                        created_at: r.get(3)?,
+                        enabled: r.get(4)?,
+                        last_synced_at: r.get(5)?,
+                        sync_enabled: r.get(6)?,
+                        etag: r.get(7)?,
+                        last_modified: r.get(8)?,
                     })
                 })?;
                 iter.collect::<rusqlite::Result<Vec<_>>>()
@@ -90,9 +85,9 @@ impl ListSubscription {
     pub async fn list_with_domain_counts(db: &CoreDatabasePool) -> Result<Vec<(Self, i64)>, DatabaseError> {
         db.interact(move |c| {
             let mut stmt = c.prepare(
-                "SELECT ls.id, ls.name, ls.url, ls.list_type, ls.created_at, ls.enabled, ls.last_synced_at, ls.sync_enabled, ls.etag, ls.last_modified, COUNT(dr.id) \
-                 FROM list_subscriptions ls \
-                 LEFT JOIN domain_rules dr ON dr.subscription_id = ls.id \
+                "SELECT ls.id, ls.name, ls.url, ls.created_at, ls.enabled, ls.last_synced_at, ls.sync_enabled, ls.etag, ls.last_modified, COUNT(dr.id)
+                 FROM list_subscriptions ls
+                 LEFT JOIN domain_rules dr ON dr.subscription_id = ls.id
                  GROUP BY ls.id",
             )?;
             let iter = stmt.query_map([], |r| {
@@ -101,15 +96,14 @@ impl ListSubscription {
                         id: EntityId::from(r.get::<_, Uuid>(0)?),
                         name: r.get(1)?,
                         url: r.get(2)?,
-                        list_type: r.get(3)?,
-                        created_at: r.get(4)?,
-                        enabled: r.get(5)?,
-                        last_synced_at: r.get(6)?,
-                        sync_enabled: r.get(7)?,
-                        etag: r.get(8)?,
-                        last_modified: r.get(9)?,
+                        created_at: r.get(3)?,
+                        enabled: r.get(4)?,
+                        last_synced_at: r.get(5)?,
+                        sync_enabled: r.get(6)?,
+                        etag: r.get(7)?,
+                        last_modified: r.get(8)?,
                     },
-                    r.get::<_, i64>(10)?,
+                    r.get::<_, i64>(9)?,
                 ))
             })?;
             iter.collect::<rusqlite::Result<Vec<_>>>()
@@ -143,7 +137,6 @@ impl ListSubscription {
         Ok(rows > 0)
     }
 
-    /// Toggles the sync_enabled state of a subscription.
     pub async fn toggle_sync_enabled(
         id: EntityId<ListSubscription>,
         db: &CoreDatabasePool,
@@ -181,8 +174,10 @@ impl ListSubscription {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::database::{models::domain_rule::DomainRule, setup_core_test_db};
+    use crate::database::{
+        models::{ListAction, domain_rule::DomainRule, list_subscription::ListSubscription},
+        setup_core_test_db,
+    };
 
     #[tokio::test]
     async fn test_insert_and_list() {
@@ -290,7 +285,7 @@ mod tests {
 
         let subs = ListSubscription::list_with_domain_counts(&db.conn).await.unwrap();
         let (fetched_sub, domain_count) = subs.first().unwrap();
-        assert!(fetched_sub == &sub);
+        assert!(*fetched_sub == sub);
         assert!(*domain_count == 1)
     }
 }

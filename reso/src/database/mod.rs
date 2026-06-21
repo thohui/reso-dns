@@ -19,6 +19,9 @@ pub enum DatabaseError {
 
     #[error("query error: {0}")]
     Query(#[from] rusqlite::Error),
+
+    #[error("migration error: {0}")]
+    Migration(#[from] rusqlite_migration::Error),
 }
 
 impl DatabaseError {
@@ -130,22 +133,17 @@ pub async fn connect_metrics_db(db_path: &str) -> anyhow::Result<MetricsDatabase
 static CORE_MIGRATIONS: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 static METRICS_MIGRATIONS: Dir = include_dir!("$CARGO_MANIFEST_DIR/metrics_migrations");
 
-pub async fn run_core_db_migrations(connection: &CoreDatabasePool) -> anyhow::Result<()> {
+pub async fn run_core_db_migrations(connection: &CoreDatabasePool) -> Result<(), DatabaseError> {
     let migrations = MigrationsBuilder::from_directory(&CORE_MIGRATIONS)?.finalize();
     let conn = connection.conn().await?;
-    conn.interact(move |c| migrations.to_latest(c))
-        .await
-        .map_err(|e| anyhow::anyhow!("interact error: {}", e))??;
+    _ = conn.interact(move |c| migrations.to_latest(c)).await?;
     Ok(())
 }
 
-pub async fn run_metrics_db_migrations(connection: &MetricsDatabasePool) -> anyhow::Result<()> {
+pub async fn run_metrics_db_migrations(connection: &MetricsDatabasePool) -> Result<(), DatabaseError> {
     let migrations = MigrationsBuilder::from_directory(&METRICS_MIGRATIONS)?.finalize();
     let conn = connection.conn().await?;
-    conn.interact(move |c| migrations.to_latest(c))
-        .await
-        .map_err(|e| anyhow::anyhow!("interact error: {}", e))??;
-
+    _ = conn.interact(move |c| migrations.to_latest(c)).await?;
     Ok(())
 }
 

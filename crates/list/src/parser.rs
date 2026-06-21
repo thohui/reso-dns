@@ -66,7 +66,7 @@ impl ListParser {
     pub fn flush<F: FnMut((DomainPattern<'_>, RuleType))>(mut self, mut callback: F) {
         if !self.leftover.is_empty() {
             // file with no trailing newline
-            let leftover = std::mem::take(&mut self.leftover);
+            let leftover = self.leftover;
             let line = leftover.trim_end_matches('\r');
             if self.format.is_none() {
                 self.format = detect_line_format(line);
@@ -80,15 +80,12 @@ impl ListParser {
     }
 }
 
-/// Detect the format from a single line.
-/// Returns `None` for blank/comment lines or unrecognized formats.
 fn detect_line_format(line: &str) -> Option<ListFormat> {
     let line = line.trim();
 
     if line.is_empty() || line.starts_with('#') {
         return None;
     }
-    // Hosts/Plain boundaries are newlines; AdblockPlus uses ^ as the intra line domain boundary.
     if line.starts_with('!') || line.starts_with("[Adblock") {
         return Some(ListFormat::Adblock);
     }
@@ -97,7 +94,7 @@ fn detect_line_format(line: &str) -> Option<ListFormat> {
     let first = parts.next()?;
     if first.parse::<std::net::IpAddr>().is_ok() {
         Some(ListFormat::Hosts)
-    } else if first.starts_with("||") && first.contains('^') {
+    } else if (first.starts_with("||") || first.starts_with("@@")) && first.contains('^') {
         Some(ListFormat::Adblock)
     } else if validate_domain(first).is_some() {
         // only call it Plain if the token actually looks like a domain,
@@ -201,13 +198,10 @@ fn parse_adblock_line(line: &str) -> Option<(DomainPattern<'_>, RuleType)> {
         (line, RuleType::Block)
     };
 
-    // Only handle domain-anchor rules: ||domain^
     let rest = line.strip_prefix("||")?;
-
-    // ^ is the boundary char; everything before it is the domain, after is options
     let domain = rest.split_once('^').map(|(d, _)| d)?;
 
-    // Skip rules with path components
+    // skip rules with path components
     if domain.contains('/') {
         return None;
     }
@@ -223,33 +217,36 @@ mod tests {
     const PLAIN: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/testdata/plain.txt"));
     const ADBLOCK: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/testdata/adblock.txt"));
 
-    fn parse_all(content: &str) -> Vec<(String, RuleType)> {
+    #[derive(Debug, PartialEq)]
+    enum PatternKind { Exact, Subdomain, Domain }
+
+    fn parse_all(content: &str) -> Vec<(String, RuleType, PatternKind)> {
         let mut parser = ListParser::new();
         let mut domains = Vec::new();
         parser.push(content, |(pat, rule_type)| {
-            let s = match pat {
-                DomainPattern::Exact(s) => s.to_owned(),
-                DomainPattern::Subdomain(s) => s.to_owned(),
-                DomainPattern::Domain(s) => s.to_owned(),
+            let (s, kind) = match pat {
+                DomainPattern::Exact(s) => (s.to_owned(), PatternKind::Exact),
+                DomainPattern::Subdomain(s) => (s.to_owned(), PatternKind::Subdomain),
+                DomainPattern::Domain(s) => (s.to_owned(), PatternKind::Domain),
             };
-            domains.push((s, rule_type));
+            domains.push((s, rule_type, kind));
         });
         parser.flush(|(pat, rule_type)| {
-            let s = match pat {
-                DomainPattern::Exact(s) => s.to_owned(),
-                DomainPattern::Subdomain(s) => s.to_owned(),
-                DomainPattern::Domain(s) => s.to_owned(),
+            let (s, kind) = match pat {
+                DomainPattern::Exact(s) => (s.to_owned(), PatternKind::Exact),
+                DomainPattern::Subdomain(s) => (s.to_owned(), PatternKind::Subdomain),
+                DomainPattern::Domain(s) => (s.to_owned(), PatternKind::Domain),
             };
-            domains.push((s, rule_type));
+            domains.push((s, rule_type, kind));
         });
         domains
     }
 
-    fn cmp_block((domain, rule_type): &(String, RuleType), expected: &str) -> bool {
+    fn cmp_block((domain, rule_type, _): &(String, RuleType, PatternKind), expected: &str) -> bool {
         domain == expected && *rule_type == RuleType::Block
     }
 
-    fn cmp_allow((domain, rule_type): &(String, RuleType), expected: &str) -> bool {
+    fn cmp_allow((domain, rule_type, _): &(String, RuleType, PatternKind), expected: &str) -> bool {
         domain == expected && *rule_type == RuleType::Allow
     }
 
@@ -303,9 +300,8 @@ mod tests {
         assert!(domains.iter().any(|d| cmp_block(d, "tracker.example.com")));
         assert!(domains.iter().any(|d| cmp_block(d, "telemetry.example.com")));
         assert!(domains.iter().any(|d| cmp_block(d, "metrics.example.com")));
-        assert!(domains.iter().any(|d| cmp_block(d, "ads.example.com")));
+        assert!(domains.iter().any(|(d, rt, kind)| d == "ads.example.com" && *rt == RuleType::Block && *kind == PatternKind::Subdomain));
         assert!(domains.iter().any(|d| cmp_block(d, "another.example.com")));
-        println!("{:?}", domains);
     }
 
     #[test]
@@ -346,7 +342,6 @@ mod tests {
     fn adblock_ignores_non_domain_rules() {
         let domains = parse_all(ADBLOCK);
         assert!(!domains.iter().any(|d| d.0 == "example.com"));
-        assert!(!domains.iter().any(|d| d.0 == "example.com"));
         assert!(!domains.iter().any(|d| d.0.contains('/')));
     }
 
@@ -356,17 +351,17 @@ mod tests {
         let mut domains = Vec::new();
         parser.push("example", |(pat, rt)| {
             if let DomainPattern::Domain(s) = pat {
-                domains.push((s.to_owned(), rt));
+                domains.push((s.to_owned(), rt, PatternKind::Domain));
             }
         });
         parser.push(".com\n", |(pat, rt)| {
             if let DomainPattern::Domain(s) = pat {
-                domains.push((s.to_owned(), rt));
+                domains.push((s.to_owned(), rt, PatternKind::Domain));
             }
         });
         parser.flush(|(pat, rt)| {
             if let DomainPattern::Domain(s) = pat {
-                domains.push((s.to_owned(), rt));
+                domains.push((s.to_owned(), rt, PatternKind::Domain));
             }
         });
         assert!(domains.iter().any(|d| cmp_block(d, "example.com")));

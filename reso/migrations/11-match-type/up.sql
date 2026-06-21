@@ -5,3 +5,5 @@ ALTER TABLE domain_rules ADD COLUMN match_type TEXT NOT NULL DEFAULT 'domain'
 UPDATE domain_rules
     SET match_type = 'wildcard', domain = SUBSTR(domain, 3)
     WHERE domain LIKE '*.%';
+
+ALTER TABLE list_subscriptions DROP COLUMN list_type;

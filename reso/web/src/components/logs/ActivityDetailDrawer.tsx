@@ -278,17 +278,19 @@ export function ActivityDetailDrawer({
 										color: 'status.error',
 									}}
 									onClick={() => {
-										addDomainRule.mutate(
-											{
-												domain: activity.qname,
-												matchType: 'domain',
-												action: 'block',
-											},
-											{
-												onError: toastError,
-												onSuccess: () => onClose(),
-											},
-										);
+										if (activity.qname !== null) {
+											addDomainRule.mutate(
+												{
+													domain: activity.qname,
+													matchType: 'domain',
+													action: 'block',
+												},
+												{
+													onError: toastError,
+													onSuccess: () => onClose(),
+												},
+											);
+										}
 									}}
 									loading={addDomainRule.isPending}
 								>

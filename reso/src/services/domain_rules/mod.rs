@@ -423,7 +423,6 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
 ) -> Result<bool, SubscriptionSyncError> {
     let mut request = http_client.get(&subscription.url);
 
-    // prefer ETag; fall back to Last-Modified if that's all we have
     if let Some(etag) = &subscription.etag {
         request = request.header(reqwest::header::IF_NONE_MATCH, etag);
     } else if let Some(lm) = &subscription.last_modified {
@@ -449,7 +448,6 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
         return Err(SubscriptionSyncError::TooLarge);
     }
 
-    // extract cache headers before consuming the response body
     let etag = response
         .headers()
         .get(reqwest::header::ETAG)

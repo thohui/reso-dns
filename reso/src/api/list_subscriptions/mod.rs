@@ -7,11 +7,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    database::models::{ListAction, list_subscription::ListSubscription},
-    global::SharedGlobal,
-    utils::uuid::EntityId,
-};
+use crate::{database::models::list_subscription::ListSubscription, global::SharedGlobal, utils::uuid::EntityId};
 
 use super::{
     auth::{AllowedAuthMethods, middleware::auth_middleware},
@@ -36,7 +32,6 @@ pub struct ListSubscriptionResponse {
     pub id: EntityId<ListSubscription>,
     pub name: String,
     pub url: String,
-    pub list_type: ListAction,
     pub enabled: bool,
     pub created_at: i64,
     pub last_synced_at: Option<i64>,
@@ -50,7 +45,6 @@ impl ListSubscriptionResponse {
             id: s.id,
             name: s.name,
             url: s.url,
-            list_type: s.list_type,
             enabled: s.enabled,
             created_at: s.created_at,
             last_synced_at: s.last_synced_at,
@@ -73,14 +67,8 @@ pub async fn list(global: State<SharedGlobal>) -> Result<Json<Vec<ListSubscripti
 pub struct AddPayload {
     name: String,
     url: String,
-    #[serde(default = "default_list_type")]
-    list_type: ListAction,
     #[serde(default = "default_sync_enabled")]
     sync_enabled: bool,
-}
-
-fn default_list_type() -> ListAction {
-    ListAction::Block
 }
 
 fn default_sync_enabled() -> bool {
@@ -89,7 +77,6 @@ fn default_sync_enabled() -> bool {
 
 pub async fn add(global: State<SharedGlobal>, Json(payload): Json<AddPayload>) -> Result<StatusCode, ApiError> {
     let mut sub = ListSubscription::new(payload.name, payload.url);
-    sub.list_type = payload.list_type;
     sub.sync_enabled = payload.sync_enabled;
     global.domain_rules.add_list_subscription(sub).await?;
     Ok(StatusCode::CREATED)
