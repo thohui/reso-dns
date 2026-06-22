@@ -1,8 +1,8 @@
 use reso_dns::{DnsMessage, DnsMessageBuilder, Edns};
 
 pub mod block_resolver_privacy;
-pub mod domain_rules;
 pub mod cache;
+pub mod domain_rules;
 pub mod local_records;
 pub mod metrics;
 pub mod ratelimit;

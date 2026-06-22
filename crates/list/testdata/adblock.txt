@@ -1,0 +1,20 @@
+! AdblockPlus test list
+! Title: Test List
+[Adblock Plus 2.0]
+
+! block rules
+||ads.example.com^
+||tracker.example.com^
+||telemetry.example.com^$third-party
+||metrics.example.com^$important,third-party
+
+! allow/exception rules
+@@||safe.example.com^
+@@||cdn.example.com^$third-party
+
+! should be ignored: cosmetic filters, URL patterns, regex
+example.com##.ad-banner
+||example.com/specific/path^
+/regex-filter/
+|https://specific-url.example.com
+example.com#@#.ad

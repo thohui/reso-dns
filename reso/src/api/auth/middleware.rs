@@ -60,8 +60,12 @@ pub async fn auth_middleware(
     Err(ApiError::authentication_required())
 }
 
-async fn try_session_auth(global: &SharedGlobal, cookie_value: String) -> Result<(EntityId<UserSession>, EntityId<User>), ApiError> {
-    let session_id = decrypt_session_cookie(&global.cipher, &cookie_value).map_err(|_| ApiError::invalid_credentials())?;
+async fn try_session_auth(
+    global: &SharedGlobal,
+    cookie_value: String,
+) -> Result<(EntityId<UserSession>, EntityId<User>), ApiError> {
+    let session_id =
+        decrypt_session_cookie(&global.cipher, &cookie_value).map_err(|_| ApiError::invalid_credentials())?;
     let user_id = global.auth.verify_session(session_id.clone()).await?;
     Ok((session_id, user_id))
 }

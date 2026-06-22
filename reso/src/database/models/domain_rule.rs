@@ -4,10 +4,12 @@ use uuid::Uuid;
 
 use rusqlite::types::Value;
 
+use reso_list::DomainPattern;
+
 use crate::{
     database::{
         CoreDatabasePool, DatabaseError,
-        models::{ListAction, list_subscription::ListSubscription},
+        models::{ListAction, MatchType, list_subscription::ListSubscription},
         query::WhereBuilder,
     },
     utils::{now_millis, uuid::EntityId},
@@ -18,6 +20,7 @@ pub struct DomainRule {
     pub id: EntityId<Self>,
     pub domain: String,
     pub action: ListAction,
+    pub match_type: MatchType,
     pub created_at: i64,
     pub enabled: bool,
     pub subscription_id: Option<EntityId<ListSubscription>>,
@@ -29,23 +32,32 @@ impl DomainRule {
             id: EntityId::new(),
             domain,
             action: ListAction::Block,
+            match_type: MatchType::Domain,
             created_at: now_millis(),
             enabled: true,
             subscription_id: None,
         }
     }
+
+    pub fn to_domain_pattern(&self) -> DomainPattern<'_> {
+        match self.match_type {
+            MatchType::Exact => DomainPattern::Exact(&self.domain),
+            MatchType::Wildcard => DomainPattern::Subdomain(&self.domain),
+            MatchType::Domain => DomainPattern::Domain(&self.domain),
+        }
+    }
 }
 
 impl DomainRule {
-    /// Inserts this domain rule into the database.
     pub async fn insert(self, db: &CoreDatabasePool) -> Result<(), DatabaseError> {
         db.interact(move |c| {
             c.execute(
-                "INSERT INTO domain_rules (id, domain, action, created_at, enabled, subscription_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO domain_rules (id, domain, action, match_type, created_at, enabled, subscription_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![
                     self.id.id(),
                     self.domain.as_str(),
                     self.action,
+                    self.match_type,
                     self.created_at,
                     self.enabled,
                     self.subscription_id.as_ref().map(|id| *id.id()),
@@ -57,7 +69,6 @@ impl DomainRule {
         Ok(())
     }
 
-    /// Deletes a domain rule by domain name.
     pub async fn delete_by_domain(domain: &str, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
         let domain = domain.to_string();
         let rows = db
@@ -66,7 +77,6 @@ impl DomainRule {
         Ok(rows > 0)
     }
 
-    /// Lists domain rules with pagination and optional search by domain name.
     pub async fn list(
         db: &CoreDatabasePool,
         limit: i64,
@@ -82,7 +92,7 @@ impl DomainRule {
 
             let sql = format!(
                 r#"
-                    SELECT id, domain, action, created_at, enabled, subscription_id
+                    SELECT id, domain, action, match_type, created_at, enabled, subscription_id
                     FROM domain_rules
                     WHERE 1=1 {where_clause}
                     ORDER BY created_at DESC
@@ -98,9 +108,10 @@ impl DomainRule {
                     id: EntityId::from(r.get::<_, Uuid>(0)?),
                     domain: r.get(1)?,
                     action: r.get(2)?,
-                    created_at: r.get(3)?,
-                    enabled: r.get(4)?,
-                    subscription_id: r.get::<_, Option<Uuid>>(5)?.map(EntityId::from),
+                    match_type: r.get(3)?,
+                    created_at: r.get(4)?,
+                    enabled: r.get(5)?,
+                    subscription_id: r.get::<_, Option<Uuid>>(6)?.map(EntityId::from),
                 })
             })?;
             iter.collect::<rusqlite::Result<Vec<_>>>()
@@ -108,11 +119,10 @@ impl DomainRule {
         .await
     }
 
-    /// Lists all enabled domain rules for a given action. Used for building matchers.
     pub async fn list_enabled_by_action(action: ListAction, db: &CoreDatabasePool) -> Result<Vec<Self>, DatabaseError> {
         db.interact(move |c| {
             let mut stmt = c.prepare(
-                "SELECT id, domain, action, created_at, enabled, subscription_id \
+                "SELECT id, domain, action, match_type, created_at, enabled, subscription_id \
                  FROM domain_rules WHERE action = ?1 AND enabled = 1 ORDER BY created_at",
             )?;
             let iter = stmt.query_map(params![action], |r| {
@@ -120,9 +130,10 @@ impl DomainRule {
                     id: EntityId::from(r.get::<_, Uuid>(0)?),
                     domain: r.get(1)?,
                     action: r.get(2)?,
-                    created_at: r.get(3)?,
-                    enabled: r.get(4)?,
-                    subscription_id: r.get::<_, Option<Uuid>>(5)?.map(EntityId::from),
+                    match_type: r.get(3)?,
+                    created_at: r.get(4)?,
+                    enabled: r.get(5)?,
+                    subscription_id: r.get::<_, Option<Uuid>>(6)?.map(EntityId::from),
                 })
             })?;
             iter.collect::<rusqlite::Result<Vec<_>>>()
@@ -130,13 +141,12 @@ impl DomainRule {
         .await
     }
 
-    /// Lists all domain rules without pagination.
     #[allow(unused)]
     pub async fn list_all(db: &CoreDatabasePool) -> Result<Vec<Self>, DatabaseError> {
         db.interact(move |c| {
             let mut stmt = c.prepare(
                 r#"
-                    SELECT id, domain, action, created_at, enabled, subscription_id
+                    SELECT id, domain, action, match_type, created_at, enabled, subscription_id
                     FROM domain_rules
                     ORDER BY created_at
                     "#,
@@ -146,9 +156,10 @@ impl DomainRule {
                     id: EntityId::from(r.get::<_, Uuid>(0)?),
                     domain: r.get(1)?,
                     action: r.get(2)?,
-                    created_at: r.get(3)?,
-                    enabled: r.get(4)?,
-                    subscription_id: r.get::<_, Option<Uuid>>(5)?.map(EntityId::from),
+                    match_type: r.get(3)?,
+                    created_at: r.get(4)?,
+                    enabled: r.get(5)?,
+                    subscription_id: r.get::<_, Option<Uuid>>(6)?.map(EntityId::from),
                 })
             })?;
             iter.collect::<rusqlite::Result<Vec<_>>>()
@@ -156,7 +167,6 @@ impl DomainRule {
         .await
     }
 
-    /// Updates the action of a domain rule. It will also clear the subscription_id to disassociate it from any subscription.
     pub async fn update_action(domain: &str, action: ListAction, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
         let domain = domain.to_string();
         let rows = db
@@ -170,7 +180,6 @@ impl DomainRule {
         Ok(rows > 0)
     }
 
-    /// Toggles the enabled state of a domain rule. If the rule is enabled, it will be disabled, and vice versa.
     pub async fn toggle(domain: &str, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
         let domain = domain.to_string();
         let rows = db
@@ -184,11 +193,9 @@ impl DomainRule {
         Ok(rows > 0)
     }
 
-    /// Syncs a list of domains for a subscription. It will insert new domains, delete removed domains, and update existing ones.
     pub async fn sync_subscription(
         subscription_id: EntityId<ListSubscription>,
-        action: ListAction,
-        domains: Vec<String>,
+        domains: Vec<(String, MatchType, ListAction)>,
         db: &CoreDatabasePool,
     ) -> Result<i64, DatabaseError> {
         let now = now_millis();
@@ -199,14 +206,21 @@ impl DomainRule {
                 // using a temporary table to reduce the number of queries.
                 // sqlite has a variable limit which would be hit if we directly insert into domain_rules with a large list.
                 tx.execute_batch(
-                    "CREATE TEMP TABLE IF NOT EXISTS temp.domain_rules_sync_staging (domain TEXT PRIMARY KEY)",
+                    "CREATE TEMP TABLE IF NOT EXISTS temp.domain_rules_sync_staging (domain TEXT PRIMARY KEY, action TEXT, match_type TEXT)",
                 )?;
                 tx.execute_batch("DELETE FROM temp.domain_rules_sync_staging")?;
 
                 {
-                    let mut stmt = tx.prepare("INSERT OR IGNORE INTO temp.domain_rules_sync_staging VALUES (?1)")?;
-                    for domain in &domains {
-                        stmt.execute(params![domain])?;
+
+                    // allow rules win over block rules regardless of order in the source file
+                    let mut stmt = tx.prepare(
+                        "INSERT INTO temp.domain_rules_sync_staging VALUES (?1, ?2, ?3)
+                         ON CONFLICT(domain) DO UPDATE SET
+                             action     = CASE WHEN excluded.action = 'allow' THEN 'allow'             ELSE domain_rules_sync_staging.action     END,
+                             match_type = CASE WHEN excluded.action = 'allow' THEN excluded.match_type ELSE domain_rules_sync_staging.match_type END",
+                    )?;
+                    for (domain, match_type, action) in &domains {
+                        stmt.execute(params![domain, action, match_type])?;
                     }
                 }
 
@@ -216,24 +230,36 @@ impl DomainRule {
                 )?;
 
                 {
-                    let new_ids: Vec<(Uuid, String)> = {
+                    let new_ids: Vec<(Uuid, String, MatchType, ListAction)> = {
                         let mut stmt = tx.prepare(
-                            "SELECT s.domain FROM temp.domain_rules_sync_staging s WHERE NOT EXISTS (SELECT 1 FROM domain_rules WHERE domain = s.domain)",
+                            "SELECT s.domain, s.action, s.match_type FROM temp.domain_rules_sync_staging s WHERE NOT EXISTS (SELECT 1 FROM domain_rules WHERE domain = s.domain)",
                         )?;
-                        stmt.query_map([], |r| r.get::<_, String>(0))?
-                            .collect::<rusqlite::Result<Vec<_>>>()?
-                            .into_iter()
-                            .map(|d| (Uuid::now_v7(), d))
-                            .collect()
+                        stmt.query_map([], |r| {
+                            Ok((r.get::<_, String>(0)?, r.get::<_, ListAction>(1)?, r.get::<_, MatchType>(2)?))
+                        })?
+                        .collect::<rusqlite::Result<Vec<_>>>()?
+                        .into_iter()
+                        .map(|(domain, action, match_type)| (Uuid::now_v7(), domain, match_type, action))
+                        .collect()
                     };
 
                     let mut stmt = tx.prepare(
-                        "INSERT INTO domain_rules (id, domain, action, created_at, enabled, subscription_id) VALUES (?1, ?2, ?3, ?4, 1, ?5)",
+                        "INSERT INTO domain_rules (id, domain, action, match_type, created_at, enabled, subscription_id) VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6)",
                     )?;
-                    for (id, domain) in &new_ids {
-                        stmt.execute(params![id, domain.as_str(), &action, now, subscription_id.id()])?;
+                    for (id, domain, match_type, action) in &new_ids {
+                        stmt.execute(params![id, domain.as_str(), action, match_type, now, subscription_id.id()])?;
                     }
                 }
+
+                // refresh action and match_type for domains that already existed and were skipped by the INSERT above
+                tx.execute(
+                    "UPDATE domain_rules
+                     SET action     = (SELECT s.action     FROM temp.domain_rules_sync_staging s WHERE s.domain = domain_rules.domain),
+                         match_type = (SELECT s.match_type FROM temp.domain_rules_sync_staging s WHERE s.domain = domain_rules.domain)
+                     WHERE subscription_id = ?1
+                       AND domain IN (SELECT domain FROM temp.domain_rules_sync_staging)",
+                    params![subscription_id.id()],
+                )?;
 
                 let count: i64 = tx.query_row(
                     "SELECT COUNT(*) FROM domain_rules WHERE subscription_id = ?1",
@@ -247,7 +273,6 @@ impl DomainRule {
             .await
     }
 
-    /// Counts the total number of domain rules, optionally filtered by a search term.
     pub async fn row_count(db: &CoreDatabasePool, search: Option<String>) -> Result<i64, DatabaseError> {
         db.interact(move |c| {
             let mut b = WhereBuilder::new(0);
@@ -266,6 +291,15 @@ impl DomainRule {
 mod tests {
     use super::*;
     use crate::database::{models::list_subscription::ListSubscription, setup_core_test_db};
+
+    fn cmp_block((domain, action): &(String, ListAction), expected: &str) -> bool {
+        domain == expected && *action == ListAction::Block
+    }
+
+    #[allow(unused)]
+    fn cmp_allow((domain, action): &(String, ListAction), expected: &str) -> bool {
+        domain == expected && *action == ListAction::Allow
+    }
 
     #[tokio::test]
     async fn test_insert_and_list() {
@@ -343,22 +377,26 @@ mod tests {
         let sub = ListSubscription::new("Test".into(), "https://example.com/list.txt".into());
         sub.clone().insert(&db.conn).await.unwrap();
 
-        // first sync
         let count = DomainRule::sync_subscription(
             sub.id.clone(),
-            ListAction::Block,
-            vec!["a.com".into(), "b.com".into(), "c.com".into()],
+            vec![
+                ("a.com".into(), MatchType::Domain, ListAction::Block),
+                ("b.com".into(), MatchType::Domain, ListAction::Block),
+                ("c.com".into(), MatchType::Domain, ListAction::Block),
+            ],
             &db.conn,
         )
         .await
         .unwrap();
         assert_eq!(count, 3);
 
-        // second sync: one new, one removed, one unchanged
         let count = DomainRule::sync_subscription(
             sub.id,
-            ListAction::Block,
-            vec!["a.com".into(), "b.com".into(), "d.com".into()],
+            vec![
+                ("a.com".into(), MatchType::Domain, ListAction::Block),
+                ("b.com".into(), MatchType::Domain, ListAction::Block),
+                ("d.com".into(), MatchType::Domain, ListAction::Block),
+            ],
             &db.conn,
         )
         .await
@@ -366,10 +404,10 @@ mod tests {
         assert_eq!(count, 3);
 
         let all = DomainRule::list_all(&db.conn).await.unwrap();
-        let domains: Vec<&str> = all.iter().map(|d| d.domain.as_str()).collect();
-        assert!(domains.contains(&"a.com"));
-        assert!(domains.contains(&"b.com"));
-        assert!(domains.contains(&"d.com"));
-        assert!(!domains.contains(&"c.com"));
+        let entries: Vec<_> = all.iter().map(|r| (r.domain.clone(), r.action)).collect();
+        assert!(entries.iter().any(|e| cmp_block(e, "a.com")));
+        assert!(entries.iter().any(|e| cmp_block(e, "b.com")));
+        assert!(entries.iter().any(|e| cmp_block(e, "d.com")));
+        assert!(!entries.iter().any(|e| cmp_block(e, "c.com")));
     }
 }

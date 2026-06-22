@@ -46,7 +46,6 @@ export interface ListSubscription {
 	id: string;
 	name: string;
 	url: string;
-	list_type: ListAction;
 	enabled: boolean;
 	created_at: number;
 	last_synced_at: number | null;

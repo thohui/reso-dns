@@ -1,4 +1,5 @@
 import { ActionBadge } from '@/components/ActionBadge';
+import { MatchTypeBadge } from '@/components/MatchTypeBadge';
 import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
 import { GridPage } from '@/components/GridPage';
 import { ToggleButton } from '@/components/ToggleButton';
@@ -59,6 +60,14 @@ export function DomainRulesGrid({
 						>
 							{getValue()}
 						</Text>
+					</Table.Cell>
+				),
+			}),
+			columnHelper.accessor('match_type', {
+				header: 'Match',
+				cell: ({ getValue }) => (
+					<Table.Cell py='3.5' px='4'>
+						<MatchTypeBadge matchType={getValue()} />
 					</Table.Cell>
 				),
 			}),

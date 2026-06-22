@@ -1,10 +1,19 @@
+use crate::DomainPattern;
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ListFormat {
-    /// 0.0.0.0 domain.com
+    /// Hosts file format (https://deepwiki.com/hagezi/dns-blocklists/5.3-hosts-format)
     Hosts,
-    /// domain.com (one per line)
+    /// Plain (domains) format (https://deepwiki.com/hagezi/dns-blocklists/5.2-domains-format)
     Plain,
-    // TODO: add support for more formats like adblock plus.
+    /// Adblock format (https://deepwiki.com/hagezi/dns-blocklists/5.5-adblock-format)
+    Adblock,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum RuleType {
+    Allow,
+    Block,
 }
 
 /// Parser for blocklist content in various formats.
@@ -28,7 +37,7 @@ impl ListParser {
     }
 
     /// Process a text chunk, calling `callback` for each parsed domain.
-    pub fn push<F: FnMut(&str)>(&mut self, chunk: &str, mut callback: F) {
+    pub fn push<F: FnMut((DomainPattern<'_>, RuleType))>(&mut self, chunk: &str, mut callback: F) {
         self.leftover.push_str(chunk);
 
         let mut start = 0;
@@ -41,9 +50,9 @@ impl ListParser {
                 self.format = detect_line_format(line);
             }
             if let Some(fmt) = self.format
-                && let Some(domain) = parse_line(line, fmt)
+                && let Some(entry) = parse_line(line, fmt)
             {
-                callback(domain);
+                callback(entry);
             }
 
             start = end + 1;
@@ -54,34 +63,39 @@ impl ListParser {
     }
 
     /// Process any remaining incomplete line after the last chunk.
-    pub fn flush<F: FnMut(&str)>(mut self, mut callback: F) {
+    pub fn flush<F: FnMut((DomainPattern<'_>, RuleType))>(mut self, mut callback: F) {
         if !self.leftover.is_empty() {
             // file with no trailing newline
-            let leftover = std::mem::take(&mut self.leftover);
+            let leftover = self.leftover;
             let line = leftover.trim_end_matches('\r');
             if self.format.is_none() {
                 self.format = detect_line_format(line);
             }
             if let Some(fmt) = self.format
-                && let Some(domain) = parse_line(line, fmt)
+                && let Some(entry) = parse_line(line, fmt)
             {
-                callback(domain);
+                callback(entry);
             }
         }
     }
 }
 
-/// Detect the format from a single line.
-/// Returns `None` for blank/comment lines or unrecognized formats.
 fn detect_line_format(line: &str) -> Option<ListFormat> {
     let line = line.trim();
+
     if line.is_empty() || line.starts_with('#') {
         return None;
     }
+    if line.starts_with('!') || line.starts_with("[Adblock") {
+        return Some(ListFormat::Adblock);
+    }
+
     let mut parts = line.split_ascii_whitespace();
     let first = parts.next()?;
     if first.parse::<std::net::IpAddr>().is_ok() {
         Some(ListFormat::Hosts)
+    } else if (first.starts_with("||") || first.starts_with("@@")) && first.contains('^') {
+        Some(ListFormat::Adblock)
     } else if validate_domain(first).is_some() {
         // only call it Plain if the token actually looks like a domain,
         // so we don't misidentify adblock or other unsupported formats
@@ -91,10 +105,11 @@ fn detect_line_format(line: &str) -> Option<ListFormat> {
     }
 }
 
-fn parse_line(line: &str, format: ListFormat) -> Option<&str> {
+fn parse_line(line: &str, format: ListFormat) -> Option<(DomainPattern<'_>, RuleType)> {
     match format {
-        ListFormat::Hosts => parse_hosts_line(line),
-        ListFormat::Plain => parse_plain_line(line),
+        ListFormat::Hosts => parse_hosts_line(line).map(|pat| (pat, RuleType::Block)),
+        ListFormat::Plain => parse_plain_line(line).map(|pat| (pat, RuleType::Block)),
+        ListFormat::Adblock => parse_adblock_line(line),
     }
 }
 
@@ -132,7 +147,7 @@ const LOCAL_DOMAINS: &[&str] = &[
     "ip6-allrouters",
 ];
 
-fn parse_hosts_line(line: &str) -> Option<&str> {
+fn parse_hosts_line(line: &str) -> Option<DomainPattern<'_>> {
     let line = strip_comment(line).trim();
     if line.is_empty() {
         return None;
@@ -141,14 +156,17 @@ fn parse_hosts_line(line: &str) -> Option<&str> {
     parts.next()?; // skip the ip address
     let domain = parts.next()?;
 
+    // TODO: add support for compressed formats
+    // some block lists can have more than one domain on a single line.
+
     if LOCAL_DOMAINS.iter().any(|d| d.eq_ignore_ascii_case(domain)) {
         return None;
     }
 
-    validate_domain(domain)
+    validate_domain(domain).map(DomainPattern::Exact)
 }
 
-fn parse_plain_line(line: &str) -> Option<&str> {
+fn parse_plain_line(line: &str) -> Option<DomainPattern<'_>> {
     let line = strip_comment(line).trim();
     let mut parts = line.split_ascii_whitespace();
     let domain = parts.next()?;
@@ -157,7 +175,49 @@ fn parse_plain_line(line: &str) -> Option<&str> {
         return None;
     }
 
-    validate_domain(domain)
+    let domain = validate_domain(domain)?;
+    if let Some(rest) = domain.strip_prefix("*.") {
+        Some(DomainPattern::Subdomain(rest))
+    } else {
+        Some(DomainPattern::Domain(domain))
+    }
+}
+
+fn parse_adblock_line(line: &str) -> Option<(DomainPattern<'_>, RuleType)> {
+    let line = line.trim();
+
+    // AdblockPlus uses ! for comments and [ for metadata headers like [Adblock Plus 2.0]
+    if line.is_empty() || line.starts_with('!') || line.starts_with('[') {
+        return None;
+    }
+
+    // Check for exception (allowlist) rule: @@||domain^
+    let (line, rule_type) = if let Some(rest) = line.strip_prefix("@@") {
+        (rest, RuleType::Allow)
+    } else {
+        (line, RuleType::Block)
+    };
+
+    let rest = line.strip_prefix("||")?;
+    let domain = rest.split_once('^').map(|(d, _)| d)?;
+
+    // skip rules with path components
+    if domain.contains('/') {
+        return None;
+    }
+
+    let domain = validate_domain(domain)?;
+
+    if LOCAL_DOMAINS.iter().any(|d| d.eq_ignore_ascii_case(domain)) {
+        return None;
+    }
+
+    let pattern = if let Some(base) = domain.strip_prefix("*.") {
+        DomainPattern::Subdomain(base)
+    } else {
+        DomainPattern::Domain(domain)
+    };
+    Some((pattern, rule_type))
 }
 
 #[cfg(test)]
@@ -166,13 +226,43 @@ mod tests {
 
     const HOSTS: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/testdata/hosts.txt"));
     const PLAIN: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/testdata/plain.txt"));
+    const ADBLOCK: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/testdata/adblock.txt"));
 
-    fn parse_all(content: &str) -> Vec<String> {
+    #[derive(Debug, PartialEq)]
+    enum PatternKind {
+        Exact,
+        Subdomain,
+        Domain,
+    }
+
+    fn parse_all(content: &str) -> Vec<(String, RuleType, PatternKind)> {
         let mut parser = ListParser::new();
         let mut domains = Vec::new();
-        parser.push(content, |d| domains.push(d.to_owned()));
-        parser.flush(|d| domains.push(d.to_owned()));
+        parser.push(content, |(pat, rule_type)| {
+            let (s, kind) = match pat {
+                DomainPattern::Exact(s) => (s.to_owned(), PatternKind::Exact),
+                DomainPattern::Subdomain(s) => (s.to_owned(), PatternKind::Subdomain),
+                DomainPattern::Domain(s) => (s.to_owned(), PatternKind::Domain),
+            };
+            domains.push((s, rule_type, kind));
+        });
+        parser.flush(|(pat, rule_type)| {
+            let (s, kind) = match pat {
+                DomainPattern::Exact(s) => (s.to_owned(), PatternKind::Exact),
+                DomainPattern::Subdomain(s) => (s.to_owned(), PatternKind::Subdomain),
+                DomainPattern::Domain(s) => (s.to_owned(), PatternKind::Domain),
+            };
+            domains.push((s, rule_type, kind));
+        });
         domains
+    }
+
+    fn cmp_block((domain, rule_type, _): &(String, RuleType, PatternKind), expected: &str) -> bool {
+        domain == expected && *rule_type == RuleType::Block
+    }
+
+    fn cmp_allow((domain, rule_type, _): &(String, RuleType, PatternKind), expected: &str) -> bool {
+        domain == expected && *rule_type == RuleType::Allow
     }
 
     #[test]
@@ -199,43 +289,100 @@ mod tests {
     #[test]
     fn parses_hosts() {
         let domains = parse_all(HOSTS);
-        assert!(domains.iter().any(|d| d == "ads.example.com"));
-        assert!(domains.iter().any(|d| d == "tracker.example.com"));
-        assert!(domains.iter().any(|d| d == "telemetry.example.com"));
-        assert!(domains.iter().any(|d| d == "metrics.example.com"));
-        assert!(domains.iter().any(|d| d == "spacing.example.com"));
-        assert!(domains.iter().any(|d| d == "another.example.com"));
+        assert!(domains.iter().any(|d| cmp_block(d, "ads.example.com")));
+        assert!(domains.iter().any(|d| cmp_block(d, "tracker.example.com")));
+        assert!(domains.iter().any(|d| cmp_block(d, "telemetry.example.com")));
+        assert!(domains.iter().any(|d| cmp_block(d, "metrics.example.com")));
+        assert!(domains.iter().any(|d| cmp_block(d, "spacing.example.com")));
+        assert!(domains.iter().any(|d| cmp_block(d, "another.example.com")));
     }
 
     #[test]
     fn hosts_filters_local_domains() {
         let domains = parse_all(HOSTS);
-        assert!(!domains.iter().any(|d| d == "localhost"));
-        assert!(!domains.iter().any(|d| d == "localhost.localdomain"));
-        assert!(!domains.iter().any(|d| d == "local"));
-        assert!(!domains.iter().any(|d| d == "broadcasthost"));
-        assert!(!domains.iter().any(|d| d == "ip6-localhost"));
-        assert!(!domains.iter().any(|d| d == "ip6-loopback"));
+        assert!(!domains.iter().any(|d| cmp_block(d, "localhost")));
+        assert!(!domains.iter().any(|d| cmp_block(d, "localhost.localdomain")));
+        assert!(!domains.iter().any(|d| cmp_block(d, "local")));
+        assert!(!domains.iter().any(|d| cmp_block(d, "broadcasthost")));
+        assert!(!domains.iter().any(|d| cmp_block(d, "ip6-localhost")));
+        assert!(!domains.iter().any(|d| cmp_block(d, "ip6-loopback")));
     }
 
     #[test]
     fn parses_plain() {
         let domains = parse_all(PLAIN);
-        assert!(domains.iter().any(|d| d == "ads.example.com"));
-        assert!(domains.iter().any(|d| d == "tracker.example.com"));
-        assert!(domains.iter().any(|d| d == "telemetry.example.com"));
-        assert!(domains.iter().any(|d| d == "metrics.example.com"));
-        assert!(domains.iter().any(|d| d == "*.ads.example.com"));
-        assert!(domains.iter().any(|d| d == "another.example.com"));
+        assert!(domains.iter().any(|d| cmp_block(d, "ads.example.com")));
+        assert!(domains.iter().any(|d| cmp_block(d, "tracker.example.com")));
+        assert!(domains.iter().any(|d| cmp_block(d, "telemetry.example.com")));
+        assert!(domains.iter().any(|d| cmp_block(d, "metrics.example.com")));
+        assert!(
+            domains.iter().any(|(d, rt, kind)| d == "ads.example.com"
+                && *rt == RuleType::Block
+                && *kind == PatternKind::Subdomain)
+        );
+        assert!(domains.iter().any(|d| cmp_block(d, "another.example.com")));
+    }
+
+    #[test]
+    fn detects_adblock_format() {
+        let mut parser = ListParser::new();
+        parser.push(ADBLOCK, |_| {});
+        assert!(matches!(parser.format, Some(ListFormat::Adblock)));
+    }
+
+    #[test]
+    fn detects_adblock_from_header_before_rules() {
+        let mut parser = ListParser::new();
+        parser.push("! Title: My List\n", |_| {});
+        assert!(matches!(parser.format, Some(ListFormat::Adblock)));
+
+        let mut parser = ListParser::new();
+        parser.push("[Adblock Plus 2.0]\n", |_| {});
+        assert!(matches!(parser.format, Some(ListFormat::Adblock)));
+    }
+
+    #[test]
+    fn parses_adblock_block_rules() {
+        let domains = parse_all(ADBLOCK);
+        assert!(domains.iter().any(|d| cmp_block(d, "ads.example.com")));
+        assert!(domains.iter().any(|d| cmp_block(d, "tracker.example.com")));
+        assert!(domains.iter().any(|d| cmp_block(d, "telemetry.example.com")));
+        assert!(domains.iter().any(|d| cmp_block(d, "metrics.example.com")));
+    }
+
+    #[test]
+    fn parses_adblock_allow_rules() {
+        let domains = parse_all(ADBLOCK);
+        assert!(domains.iter().any(|d| cmp_allow(d, "safe.example.com")));
+        assert!(domains.iter().any(|d| cmp_allow(d, "cdn.example.com")));
+    }
+
+    #[test]
+    fn adblock_ignores_non_domain_rules() {
+        let domains = parse_all(ADBLOCK);
+        assert!(!domains.iter().any(|d| d.0 == "example.com"));
+        assert!(!domains.iter().any(|d| d.0.contains('/')));
     }
 
     #[test]
     fn handles_chunk_boundary_mid_line() {
         let mut parser = ListParser::new();
         let mut domains = Vec::new();
-        parser.push("example", |d| domains.push(d.to_owned()));
-        parser.push(".com\n", |d| domains.push(d.to_owned()));
-        parser.flush(|d| domains.push(d.to_owned()));
-        assert!(domains.iter().any(|d| d == "example.com"));
+        parser.push("example", |(pat, rt)| {
+            if let DomainPattern::Domain(s) = pat {
+                domains.push((s.to_owned(), rt, PatternKind::Domain));
+            }
+        });
+        parser.push(".com\n", |(pat, rt)| {
+            if let DomainPattern::Domain(s) = pat {
+                domains.push((s.to_owned(), rt, PatternKind::Domain));
+            }
+        });
+        parser.flush(|(pat, rt)| {
+            if let DomainPattern::Domain(s) = pat {
+                domains.push((s.to_owned(), rt, PatternKind::Domain));
+            }
+        });
+        assert!(domains.iter().any(|d| cmp_block(d, "example.com")));
     }
 }

@@ -1,9 +1,10 @@
 import {
 	Button,
+	chakra,
 	Dialog,
 	Field,
-	HStack,
 	Heading,
+	HStack,
 	Icon,
 	IconButton,
 	Input,
@@ -11,36 +12,91 @@ import {
 } from '@chakra-ui/react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, X } from 'lucide-react';
-import { ActionBadge } from '@/components/ActionBadge';
+import type { ReactNode } from 'react';
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import z from 'zod';
-import { getErrorMessage } from '@/lib/api/error';
+import { ActionBadge } from '@/components/ActionBadge';
 import { FormError } from '@/components/FormError';
-import type { ListAction } from '@/lib/api/domain-rules';
+import type { ListAction, MatchType } from '@/lib/api/domain-rules';
+import { getErrorMessage } from '@/lib/api/error';
 
 interface AddRuleDialogProps {
 	onClose: () => void;
-	onSubmit: (domain: string, action: ListAction) => Promise<void>;
+	onSubmit: (
+		domain: string,
+		matchType: MatchType,
+		action: ListAction,
+	) => Promise<void>;
 }
 
 const schema = z.object({
 	domain: z.string().trim().min(1),
 });
 
+const matchTypeOptions: { value: MatchType; label: string }[] = [
+	{ value: 'domain', label: 'Domain' },
+	{ value: 'wildcard', label: 'Wildcard' },
+	{ value: 'exact', label: 'Exact' },
+];
+
+function D({ children }: { children: ReactNode }) {
+	return (
+		<chakra.span fontFamily='monospace' color='fg' fontWeight='500'>
+			{children}
+		</chakra.span>
+	);
+}
+
+function getMatchDescription(
+	domain: string,
+	matchType: MatchType,
+	action: ListAction,
+): ReactNode {
+	const d = domain.trim().replace(/^\*\./, '') || 'example.com';
+	const verb = action === 'block' ? 'Blocks' : 'Allows';
+	const verb2 = action === 'block' ? 'blocked' : 'allowed';
+	if (matchType === 'domain') {
+		return (
+			<>
+				{verb} <D>{d}</D> and all subdomains like <D>www.{d}</D> and{' '}
+				<D>mail.{d}</D>.
+			</>
+		);
+	}
+	if (matchType === 'wildcard') {
+		return (
+			<>
+				{verb} subdomains like <D>www.{d}</D> and <D>mail.{d}</D>, but not{' '}
+				<D>{d}</D> itself.
+			</>
+		);
+	}
+	return (
+		<>
+			{verb} <D>{d}</D> only. Subdomains like <D>www.{d}</D> are not {verb2}.
+		</>
+	);
+}
+
 export function AddRuleDialog({ onClose, onSubmit }: AddRuleDialogProps) {
 	const [action, setAction] = useState<ListAction>('block');
+	const [matchType, setMatchType] = useState<MatchType>('domain');
 
 	const {
 		register,
 		handleSubmit,
 		setError,
+		control,
 		formState: { errors, isSubmitting },
 	} = useForm({ resolver: zodResolver(schema) });
 
+	const domainValue = useWatch({ control, name: 'domain', defaultValue: '' });
+
 	const onSubmitHandler = handleSubmit(async ({ domain }) => {
 		try {
-			await onSubmit(domain.trim().toLowerCase(), action);
+			const bare = domain.trim().toLowerCase().replace(/^\*\./, '');
+			await onSubmit(bare, matchType, action);
 		} catch (e) {
 			setError('root', { message: await getErrorMessage(e) });
 		}
@@ -97,12 +153,12 @@ export function AddRuleDialog({ onClose, onSubmit }: AddRuleDialogProps) {
 								</HStack>
 							</Field.Root>
 
-							<Field.Root invalid={!!errors.domain} mb='6'>
+							<Field.Root invalid={!!errors.domain} mb='5'>
 								<Field.Label color='fg.muted' fontSize='sm'>
 									Domain
 								</Field.Label>
 								<Input
-									placeholder='e.g. ads.example.com or *.example.com'
+									placeholder='e.g. ads.example.com'
 									bg='bg.input'
 									borderColor='border.input'
 									_placeholder={{ color: 'fg.subtle' }}
@@ -117,12 +173,47 @@ export function AddRuleDialog({ onClose, onSubmit }: AddRuleDialogProps) {
 									</Field.ErrorText>
 								)}
 							</Field.Root>
+
+							<Field.Root mb='5'>
+								<Field.Label color='fg.muted' fontSize='sm'>
+									Match
+								</Field.Label>
+								<HStack gap='2'>
+									{matchTypeOptions.map(({ value, label }) => (
+										<Button
+											key={value}
+											type='button'
+											onClick={() => setMatchType(value)}
+											aria-pressed={matchType === value}
+											size='xs'
+											borderRadius='md'
+											borderWidth='1px'
+											bg={matchType === value ? 'accent.muted' : 'bg.subtle'}
+											color={matchType === value ? 'accent.fg' : 'fg.muted'}
+											borderColor={
+												matchType === value ? 'accent.subtle' : 'border.input'
+											}
+											_hover={{
+												bg: 'accent.muted',
+												color: 'accent.fg',
+												borderColor: 'accent.subtle',
+											}}
+										>
+											{label}
+										</Button>
+									))}
+								</HStack>
+								<Text color='fg.subtle' fontSize='xs' mt='2'>
+									{getMatchDescription(domainValue ?? '', matchType, action)}
+								</Text>
+							</Field.Root>
+
 							<FormError message={errors.root?.message} />
 
 							<Text color='fg.muted' fontSize='xs' mb='5'>
 								{action === 'block'
-									? 'All DNS queries to this domain will be denied.'
-									: 'This domain will always resolve, bypassing any block rules.'}
+									? 'Matching DNS queries will be denied.'
+									: 'Matching domains will always resolve, bypassing any block rules.'}
 							</Text>
 						</Dialog.Body>
 
@@ -140,8 +231,12 @@ export function AddRuleDialog({ onClose, onSubmit }: AddRuleDialogProps) {
 								</Button>
 								<Button
 									type='submit'
-									bg={action === 'block' ? 'status.error' : 'status.success'}
-									color='white'
+									bg={
+										action === 'block'
+											? 'status.errorMuted'
+											: 'status.successMuted'
+									}
+									color={action === 'block' ? 'status.error' : 'status.success'}
 									_hover={{ opacity: 0.85 }}
 									px='5'
 									loading={isSubmitting}

@@ -90,7 +90,8 @@ export function SubscriptionDialog({
 							<Text color='fg.muted' fontSize='sm' mb='5'>
 								Subscribe to a remote blocklist. Domains on the list will be
 								imported, and the list can be kept in sync automatically. Only
-								hosts file and domain list formats are supported.
+								hosts file, Adblock Plus and domain list formats are currently
+								supported.
 							</Text>
 							<Field.Root invalid={!!form.formState.errors.name} mb='4'>
 								<Field.Label color='fg.muted' fontSize='sm'>
