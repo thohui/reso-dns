@@ -14,11 +14,11 @@ pub enum DomainPattern<'a> {
 #[derive(Debug, Clone, Default)]
 struct Node {
     label: Box<str>,
-    /// Indicates if this node represents a wildcard pattern.
-    wildcard: bool,
-    /// Indicates if this node represents the end of a pattern.
-    terminal: bool,
-    /// Child nodes, sorted by label for efficient lookup.
+    /// Any further labels still match
+    subdomain_match: bool,
+    /// Stopping here is a valid match
+    pattern_end: bool,
+    /// Children, sorted by label for efficient lookup
     children: Vec<Node>,
 }
 
@@ -26,8 +26,8 @@ impl Node {
     fn new(label: &str) -> Self {
         Self {
             label: label.into(),
-            wildcard: false,
-            terminal: false,
+            subdomain_match: false,
+            pattern_end: false,
             children: Vec::new(),
         }
     }
@@ -60,7 +60,7 @@ impl DomainListMatcher {
         let mut node = &self.root;
 
         for label in labels.rev_labels() {
-            if node.wildcard {
+            if node.subdomain_match {
                 return true;
             }
 
@@ -70,7 +70,7 @@ impl DomainListMatcher {
             }
         }
 
-        node.terminal
+        node.pattern_end
     }
 
     /// Load a list of domain patterns into the matcher.
@@ -78,7 +78,7 @@ impl DomainListMatcher {
         let mut root = Node::default();
 
         for pat in patterns {
-            let (name, set_terminal, set_wildcard) = match pat {
+            let (name, pattern_end, subdomain_match) = match pat {
                 DomainPattern::Exact(s) => (s, true, false),
                 DomainPattern::Subdomain(s) => (s, false, true),
                 DomainPattern::Domain(s) => (s, true, true),
@@ -99,11 +99,11 @@ impl DomainListMatcher {
                 node = node.child_mut(label);
             }
 
-            if set_terminal {
-                node.terminal = true;
+            if pattern_end {
+                node.pattern_end = true;
             }
-            if set_wildcard {
-                node.wildcard = true;
+            if subdomain_match {
+                node.subdomain_match = true;
             }
         }
 
