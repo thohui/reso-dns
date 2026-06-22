@@ -13,7 +13,7 @@ pub enum DomainPattern<'a> {
 /// Node in the trie structure, representing a domain list entry.
 #[derive(Debug, Clone, Default)]
 struct Node {
-    label: Box<str>,
+    label: smol_str::SmolStr,
     /// Any further labels still match
     subdomain_match: bool,
     /// Stopping here is a valid match
@@ -32,7 +32,7 @@ impl Node {
         }
     }
     fn child_mut(&mut self, label: &str) -> &mut Node {
-        match self.children.binary_search_by(|l| l.label.as_ref().cmp(label)) {
+        match self.children.binary_search_by(|l| l.label.as_str().cmp(label)) {
             Ok(i) => &mut self.children[i],
             Err(i) => {
                 self.children.insert(i, Node::new(label));
@@ -64,7 +64,7 @@ impl DomainListMatcher {
                 return true;
             }
 
-            match node.children.binary_search_by(|n| n.label.as_ref().cmp(label)) {
+            match node.children.binary_search_by(|n| n.label.as_str().cmp(label)) {
                 Ok(i) => node = &node.children[i],
                 Err(_) => return false,
             }

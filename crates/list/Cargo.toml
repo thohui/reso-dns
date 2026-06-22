@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow.workspace = true
 idna.workspace = true
+smol_str = "0.3.6"
 
 [lib]
 name = "reso_list"
