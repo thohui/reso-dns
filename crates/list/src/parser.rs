@@ -206,7 +206,18 @@ fn parse_adblock_line(line: &str) -> Option<(DomainPattern<'_>, RuleType)> {
         return None;
     }
 
-    validate_domain(domain).map(|d| (DomainPattern::Domain(d), rule_type))
+    let domain = validate_domain(domain)?;
+
+    if LOCAL_DOMAINS.iter().any(|d| d.eq_ignore_ascii_case(domain)) {
+        return None;
+    }
+
+    let pattern = if let Some(base) = domain.strip_prefix("*.") {
+        DomainPattern::Subdomain(base)
+    } else {
+        DomainPattern::Domain(domain)
+    };
+    Some((pattern, rule_type))
 }
 
 #[cfg(test)]
@@ -218,7 +229,11 @@ mod tests {
     const ADBLOCK: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/testdata/adblock.txt"));
 
     #[derive(Debug, PartialEq)]
-    enum PatternKind { Exact, Subdomain, Domain }
+    enum PatternKind {
+        Exact,
+        Subdomain,
+        Domain,
+    }
 
     fn parse_all(content: &str) -> Vec<(String, RuleType, PatternKind)> {
         let mut parser = ListParser::new();
@@ -300,7 +315,11 @@ mod tests {
         assert!(domains.iter().any(|d| cmp_block(d, "tracker.example.com")));
         assert!(domains.iter().any(|d| cmp_block(d, "telemetry.example.com")));
         assert!(domains.iter().any(|d| cmp_block(d, "metrics.example.com")));
-        assert!(domains.iter().any(|(d, rt, kind)| d == "ads.example.com" && *rt == RuleType::Block && *kind == PatternKind::Subdomain));
+        assert!(
+            domains.iter().any(|(d, rt, kind)| d == "ads.example.com"
+                && *rt == RuleType::Block
+                && *kind == PatternKind::Subdomain)
+        );
         assert!(domains.iter().any(|d| cmp_block(d, "another.example.com")));
     }
 

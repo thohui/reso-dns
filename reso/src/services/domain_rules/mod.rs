@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 
 use arc_swap::ArcSwap;
 use reso_dns::domain_name::DomainName;
-use reso_list::{DomainListMatcher, DomainPattern};
+use reso_list::{DomainListMatcher, DomainPattern, parser::RuleType};
 use tokio::{
     sync::Mutex,
     time::{self, MissedTickBehavior},
@@ -467,6 +467,17 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
     // bytes carried over from the previous chunk due to a multibyte sequence split at the boundary.
     let mut utf8_buf: Vec<u8> = Vec::new();
 
+    let mut callback = |(pattern, rule_type): (DomainPattern, RuleType)| {
+        let (base, match_type) = match pattern {
+            DomainPattern::Exact(s) => (s, MatchType::Exact),
+            DomainPattern::Subdomain(s) => (s, MatchType::Wildcard),
+            DomainPattern::Domain(s) => (s, MatchType::Domain),
+        };
+        if let Some(domain) = normalize_base(base) {
+            domains.push((domain, match_type, ListAction::from(rule_type)));
+        }
+    };
+
     while let Some(chunk) = stream.next().await {
         let chunk = chunk?;
         total_bytes += chunk.len() as u64;
@@ -480,32 +491,14 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
         // multibyte sequence split at a chunk boundary, carry those bytes over to the next iteration
         match std::str::from_utf8(&utf8_buf) {
             Ok(text) => {
-                parser.push(text, |(pattern, rule_type)| {
-                    let (base, match_type) = match pattern {
-                        DomainPattern::Exact(s) => (s, MatchType::Exact),
-                        DomainPattern::Subdomain(s) => (s, MatchType::Wildcard),
-                        DomainPattern::Domain(s) => (s, MatchType::Domain),
-                    };
-                    if let Some(domain) = normalize_base(base) {
-                        domains.push((domain, match_type, ListAction::from(rule_type)));
-                    }
-                });
+                parser.push(text, &mut callback);
                 utf8_buf.clear();
             }
             Err(e) if e.error_len().is_none() => {
                 // incomplete multibyte sequence at the end: decode the valid prefix and carry the remaining bytes over for the next chunk.
                 let valid_up_to = e.valid_up_to();
                 if let Ok(text) = std::str::from_utf8(&utf8_buf[..valid_up_to]) {
-                    parser.push(text, |(pattern, rule_type)| {
-                        let (base, match_type) = match pattern {
-                            DomainPattern::Exact(s) => (s, MatchType::Exact),
-                            DomainPattern::Subdomain(s) => (s, MatchType::Wildcard),
-                            DomainPattern::Domain(s) => (s, MatchType::Domain),
-                        };
-                        if let Some(domain) = normalize_base(base) {
-                            domains.push((domain, match_type, ListAction::from(rule_type)));
-                        }
-                    });
+                    parser.push(text, &mut callback);
                 }
                 utf8_buf.drain(..valid_up_to);
             }
@@ -515,16 +508,7 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
 
     let has_no_format = parser.format.is_none();
 
-    parser.flush(|(pattern, rule_type)| {
-        let (base, match_type) = match pattern {
-            DomainPattern::Exact(s) => (s, MatchType::Exact),
-            DomainPattern::Subdomain(s) => (s, MatchType::Wildcard),
-            DomainPattern::Domain(s) => (s, MatchType::Domain),
-        };
-        if let Some(domain) = normalize_base(base) {
-            domains.push((domain, match_type, ListAction::from(rule_type)));
-        }
-    });
+    parser.flush(callback);
 
     // no format detected.
     if has_no_format && domains.is_empty() {
