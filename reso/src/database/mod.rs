@@ -136,14 +136,14 @@ static METRICS_MIGRATIONS: Dir = include_dir!("$CARGO_MANIFEST_DIR/metrics_migra
 pub async fn run_core_db_migrations(connection: &CoreDatabasePool) -> Result<(), DatabaseError> {
     let migrations = MigrationsBuilder::from_directory(&CORE_MIGRATIONS)?.finalize();
     let conn = connection.conn().await?;
-    _ = conn.interact(move |c| migrations.to_latest(c)).await?;
+    conn.interact(move |c| migrations.to_latest(c)).await??;
     Ok(())
 }
 
 pub async fn run_metrics_db_migrations(connection: &MetricsDatabasePool) -> Result<(), DatabaseError> {
     let migrations = MigrationsBuilder::from_directory(&METRICS_MIGRATIONS)?.finalize();
     let conn = connection.conn().await?;
-    _ = conn.interact(move |c| migrations.to_latest(c)).await?;
+    conn.interact(move |c| migrations.to_latest(c)).await??;
     Ok(())
 }
 
