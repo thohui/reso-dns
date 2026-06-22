@@ -40,6 +40,13 @@ impl Node {
             }
         }
     }
+
+    fn shrink(&mut self) {
+        self.children.shrink_to_fit();
+        for node in &mut self.children {
+            node.shrink();
+        }
+    }
 }
 
 /// Trie implementation of a domain list matcher. Used for allowlists and blocklists.
@@ -106,6 +113,8 @@ impl DomainListMatcher {
                 node.subdomain_match = true;
             }
         }
+
+        root.shrink();
 
         Ok(Self { root })
     }

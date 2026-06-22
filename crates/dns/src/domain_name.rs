@@ -6,20 +6,13 @@ use std::sync::Arc;
 
 use idna::AsciiDenyList;
 
-/// Turns raw label bytes into a printable string (RFC 4343 `\DDD` escaping).
-///
-/// Normal printable ASCII goes through as-is, but weird characters (non-ASCII,
-/// control chars, `\`, `.`) gets escaped to `\DDD` decimal form.
-/// This is to prevent different byte sequences from looking like the same domain name when turned into a string with lossy utf-8 conversion.
-pub fn escape_label(bytes: &[u8]) -> String {
+fn escape_label(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len());
 
     for &byte in bytes {
         if is_plain_ascii(byte) {
-            // normal char, just keep it
             out.push(byte as char);
         } else {
-            // not safe to store directly, escape it (e.g. 0xFF → \255)
             write_decimal_escape(&mut out, byte);
         }
     }
@@ -27,13 +20,11 @@ pub fn escape_label(bytes: &[u8]) -> String {
     out
 }
 
-/// Returns True for printable ASCII that we can keep unescaped.
-/// `\` and `.` are excluded since they're meaningful in domain name strings.
+// \ and . are excluded since they're meaningful in domain name strings
 fn is_plain_ascii(byte: u8) -> bool {
     matches!(byte, 0x21..=0x7E if byte != b'\\' && byte != b'.')
 }
 
-/// Push a `\DDD` escape onto `out` (e.g. `.` => `\046`).
 fn write_decimal_escape(out: &mut String, byte: u8) {
     let hundreds = byte / 100;
     let tens = (byte / 10) % 10;
@@ -45,38 +36,32 @@ fn write_decimal_escape(out: &mut String, byte: u8) {
     out.push((b'0' + ones) as char);
 }
 
-/// Turns an escaped string back into raw bytes.
-///
-/// `\DDD` becomes a single byte, `\X` becomes `X`, and everything else
-/// passes through unchanged. Used when writing labels back to wire format.
+/// Reverses escape_label, \DDD becomes a byte value and \X becomes X
 pub fn unescape_label(label: &str) -> Vec<u8> {
     let mut out = Vec::with_capacity(label.len());
     let raw = label.as_bytes();
     let mut i = 0;
 
     while i < raw.len() {
-        // not a backslash, just a regular char
         if raw[i] != b'\\' {
             out.push(raw[i]);
             i += 1;
             continue;
         }
 
-        // got a backslash, try \DDD (3-digit decimal) first
         if let Some(byte) = try_parse_decimal_escape(raw, i + 1) {
             out.push(byte);
-            i += 4; // skip past \ + 3 digits
+            i += 4; // skip \ + 3 digits
             continue;
         }
 
-        // not \DDD, so it's \X, just take the next char
         if i + 1 < raw.len() {
             out.push(raw[i + 1]);
             i += 2;
             continue;
         }
 
-        // lone backslash at the very end, nothing to do but keep it
+        // lone backslash at end
         out.push(b'\\');
         i += 1;
     }
@@ -84,8 +69,6 @@ pub fn unescape_label(label: &str) -> Vec<u8> {
     out
 }
 
-/// Tries to parsing a `\DDD` escape sequence at the given position. Returns the byte value if successful, or None if it doesn't match the expected format.
-/// e.g. "255" at pos => Some(0xFF), "abc" => None.
 fn try_parse_decimal_escape(bytes: &[u8], pos: usize) -> Option<u8> {
     if pos + 3 > bytes.len() {
         return None;
@@ -102,38 +85,33 @@ fn try_parse_decimal_escape(bytes: &[u8], pos: usize) -> Option<u8> {
     Some(value as u8)
 }
 
-/// Convert an ASCII digit char to its numeric value (e.g. b'3' => 3).
-/// Returns None if the byte isn't '0'-'9'.
 fn ascii_digit_value(byte: u8) -> Option<u8> {
     if byte.is_ascii_digit() { Some(byte - b'0') } else { None }
 }
 
-/// Builds a display string from raw label bytes (dot-separated, escaped).
-fn build_display(labels: &[Box<[u8]>]) -> Arc<str> {
-    if labels.is_empty() {
-        return Arc::from(".");
-    }
-
-    let mut s = String::with_capacity(128); // just a guess to avoid too many reallocations
-    for (i, label) in labels.iter().enumerate() {
-        if i > 0 {
-            s.push('.');
-        }
-        s.push_str(&escape_label(label));
-    }
-
-    Arc::from(s.as_str())
+struct LabelIter<'a> {
+    data: &'a [u8],
 }
 
-/// A wrapper type for domain names.
-///
-/// Stores raw label bytes internally, only escaping for display.
-/// The labels are stored as lowercase to allow case-insensitive comparisons.
+impl<'a> Iterator for LabelIter<'a> {
+    type Item = &'a [u8];
+
+    fn next(&mut self) -> Option<&'a [u8]> {
+        let len = *self.data.first()? as usize;
+        if len == 0 {
+            return None;
+        }
+        self.data = &self.data[1..];
+        let label = &self.data[..len];
+        self.data = &self.data[len..];
+        Some(label)
+    }
+}
+
+/// Labels are stored in DNS wire format, lowercased for case-insensitive comparison
 #[derive(Debug, Clone)]
 pub struct DomainName {
-    /// Raw label bytes (already ASCII-lowercased). Root = empty slice.
-    labels: Arc<[Box<[u8]>]>,
-    /// Pre computed human-readable form for as_str()/Display/Deref.
+    labels: Arc<[u8]>,
     display: Arc<str>,
 }
 
@@ -152,57 +130,61 @@ impl PartialEq for DomainName {
 impl Eq for DomainName {}
 
 impl DomainName {
-    /// Create a new `DomainName` from raw labels.
     pub fn from_labels(raw_labels: Vec<Vec<u8>>) -> ReadResult<Self> {
         if raw_labels.is_empty() {
             return Ok(Self::root());
         }
 
-        let mut wire_len: usize = 1; // trailing root label (0 byte)
-        let mut labels = Vec::with_capacity(raw_labels.len());
+        let mut wire_len: usize = 1; // root terminator
 
-        for mut label in raw_labels {
+        for label in &raw_labels {
             if label.is_empty() {
                 return Err(DnsReadError::EmptyLabel);
             }
             if label.len() > 63 {
                 return Err(DnsReadError::LabelTooLong { len: label.len() });
             }
-
-            wire_len += 1 + label.len(); // length byte + label data
-
-            label.make_ascii_lowercase();
-            labels.push(label.into_boxed_slice());
+            wire_len += 1 + label.len();
         }
 
         if wire_len > 255 {
             return Err(DnsReadError::NameTooLong { len: wire_len });
         }
 
-        let display = build_display(&labels);
-        let labels: Arc<[Box<[u8]>]> = Arc::from(labels);
+        let display_cap = raw_labels.iter().map(|l| l.len()).sum::<usize>() + raw_labels.len().saturating_sub(1);
+        let mut wire = Vec::with_capacity(wire_len);
+        let mut display = String::with_capacity(display_cap);
 
-        Ok(Self { labels, display })
+        for (i, mut label) in raw_labels.into_iter().enumerate() {
+            label.make_ascii_lowercase();
+
+            wire.push(label.len() as u8);
+            wire.extend_from_slice(&label);
+
+            if i > 0 {
+                display.push('.');
+            }
+            display.push_str(&escape_label(&label));
+        }
+        wire.push(0);
+
+        Ok(Self {
+            labels: Arc::from(wire.as_slice()),
+            display: Arc::from(display.as_str()),
+        })
     }
 
-    /// Create a new `DomainName` from an ASCII string.
-    /// The domain name is validated according to RFC 1035.
-    ///
-    /// NOTE: This function does not support Unicode domain names and should only be called with ASCII input.
     pub fn from_ascii(s: impl AsRef<str>) -> ReadResult<Self> {
         let s = s.as_ref();
 
-        // Handle root
         if s == "." || s.is_empty() {
             return Ok(Self::root());
         }
 
-        // Remove trailing dot if present.
         let s = s.strip_suffix('.').unwrap_or(s);
 
         let raw_labels: Vec<Vec<u8>> = s.split('.').map(unescape_label).collect();
 
-        // Validate no empty labels
         for label in raw_labels.iter() {
             if label.is_empty() {
                 return Err(DnsReadError::EmptyLabel);
@@ -212,8 +194,6 @@ impl DomainName {
         Self::from_labels(raw_labels)
     }
 
-    /// Create a new `DomainName` from a user input string.
-    /// This function supports Unicode domain names and performs IDNA conversion.
     pub fn from_user(s: impl AsRef<str>) -> ReadResult<Self> {
         let input = s.as_ref().trim();
 
@@ -227,7 +207,6 @@ impl DomainName {
             input
         };
 
-        // IDNA to ASCII
         let ascii =
             idna::domain_to_ascii_cow(name.as_bytes(), AsciiDenyList::URL).map_err(|e| DnsReadError::InvalidIdna {
                 input: input.to_string(),
@@ -237,36 +216,27 @@ impl DomainName {
         Self::from_ascii(&ascii)
     }
 
-    /// Create a root `DomainName`
     pub fn root() -> Self {
         Self {
-            labels: Arc::from([]),
+            labels: Arc::from([0u8].as_slice()),
             display: Arc::from("."),
         }
     }
 
-    /// Returns true if this is the root domain name.
     pub fn is_root(&self) -> bool {
-        self.labels.is_empty()
+        self.labels.len() == 1
     }
 
-    /// Get the string representation of the DomainName.
     pub fn as_str(&self) -> &str {
         &self.display
     }
 
-    /// Exact wire format byte count for this domain name.
     pub fn wire_len(&self) -> usize {
-        if self.labels.is_empty() {
-            return 1; // just the root label (0 byte)
-        }
-        // each label: 1 length byte + data bytes, plus 1 trailing root byte
-        self.labels.iter().map(|l| 1 + l.len()).sum::<usize>() + 1
+        self.labels.len()
     }
 
-    /// Get an iterator of raw label bytes.
     pub fn label_iter(&self) -> impl Iterator<Item = &[u8]> {
-        self.labels.iter().map(|l| l.as_ref())
+        LabelIter { data: &self.labels }
     }
 }
 
