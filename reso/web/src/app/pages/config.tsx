@@ -1,3 +1,8 @@
+import { Box, Button, HStack, Icon } from '@chakra-ui/react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
+import { RotateCcw, Save } from 'lucide-react';
+import { useForm } from 'react-hook-form';
 import { LogRetentionSection } from '@/components/config/sections/LogRetentionSection';
 import { RateLimitSection } from '@/components/config/sections/RateLimitSection';
 import { SecuritySection } from '@/components/config/sections/SecuritySection';
@@ -8,11 +13,6 @@ import { useConfig, useConfigQueryKey } from '@/hooks/config/useConfig';
 import { useUpdateConfig } from '@/hooks/config/useUpdateConfig';
 import type { ConfigModel } from '@/lib/api/config';
 import { configSchema } from '@/lib/config/schema';
-import { Box, Button, HStack, Icon } from '@chakra-ui/react';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useQueryClient } from '@tanstack/react-query';
-import { RotateCcw, Save } from 'lucide-react';
-import { useForm } from 'react-hook-form';
 
 export default function ConfigPage() {
 	const config = useConfig();
@@ -60,6 +60,8 @@ export default function ConfigPage() {
 
 	const { control, formState } = form;
 
+	const { isDirty, isValid, isLoading } = formState;
+
 	return (
 		<Box>
 			<HStack justify='flex-end' mb='4' gap='3'>
@@ -68,7 +70,7 @@ export default function ConfigPage() {
 					color='fg.muted'
 					_hover={{ bg: 'bg.subtle' }}
 					onClick={() => form.reset()}
-					disabled={!formState.isDirty}
+					disabled={!isDirty}
 					px='4'
 					h='9'
 					fontSize='sm'
@@ -81,8 +83,8 @@ export default function ConfigPage() {
 					color='fg'
 					_hover={{ bg: 'accent.hover' }}
 					onClick={handleSave}
-					loading={formState.isLoading || updateConfig.isPending}
-					disabled={!formState.isDirty || !formState.isValid}
+					loading={isLoading || updateConfig.isPending}
+					disabled={!isDirty || !isValid}
 					px='5'
 					h='9'
 					fontSize='sm'

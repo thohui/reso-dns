@@ -1,6 +1,6 @@
-import type { FormValues } from '@/lib/config/schema';
 import { Switch } from '@chakra-ui/react';
 import { type Control, Controller, type Path } from 'react-hook-form';
+import type { FormValues } from '@/lib/config/schema';
 
 export function ConfigSwitch({
 	control,
@@ -17,6 +17,7 @@ export function ConfigSwitch({
 				<Switch.Root
 					checked={field.value as boolean}
 					onCheckedChange={({ checked }) => field.onChange(checked)}
+					onBlur={() => field.onBlur()}
 				>
 					<Switch.HiddenInput />
 					<Switch.Control
