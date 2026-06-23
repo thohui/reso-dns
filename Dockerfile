@@ -1,10 +1,10 @@
 # Build stage, needs Rust + Node.js for embedding the web UI assets into the binary
 FROM rust:1.93-bookworm AS builder
 
-# build.rs runs pnpm install + build, so we need Node.js and pnpm
+# build.rs runs pnpm install + build
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
-    && corepack enable && corepack prepare pnpm@latest --activate
+  && apt-get install -y --no-install-recommends nodejs \
+  && corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /build
 
@@ -19,11 +19,11 @@ FROM debian:bookworm-slim AS runtime
 
 # install ca-certificates for HTTPS support, libcap2-bin for setcap
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libcap2-bin \
-    && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/*
 
 # create a non-root user to run the server
 RUN useradd -r -s /usr/sbin/nologin reso \
-    && mkdir -p /data && chown reso:reso /data
+  && mkdir -p /data && chown reso:reso /data
 
 COPY --from=builder /build/target/release/reso /usr/local/bin/reso
 RUN setcap 'cap_net_bind_service=+ep' /usr/local/bin/reso
