@@ -1,9 +1,3 @@
-import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
-import { GridPage } from '@/components/GridPage';
-import { RecordTypeBadge } from '@/components/RecordTypeBadge';
-import { ToggleButton } from '@/components/ToggleButton';
-import type { LocalRecord } from '@/lib/api/local-records';
-import { formatTimeAgo } from '@/lib/time';
 import {
 	Box,
 	Button,
@@ -21,11 +15,18 @@ import {
 } from '@tanstack/react-table';
 import { Globe, Plus, Search } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
+import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
+import { GridPage } from '@/components/GridPage';
+import { RecordTypeBadge } from '@/components/RecordTypeBadge';
+import { ToggleButton } from '@/components/ToggleButton';
+import type { LocalRecord } from '@/lib/api/local-records';
+import { formatTimeAgo } from '@/lib/time';
 
 const columnHelper = createColumnHelper<LocalRecord>();
 
 interface LocalRecordsGridProps {
 	records: LocalRecord[];
+	isLoading?: boolean;
 	onRemove: (id: number) => void;
 	onToggle: (id: number) => void;
 	onAdd: () => void;
@@ -33,6 +34,7 @@ interface LocalRecordsGridProps {
 
 export function LocalRecordsGrid({
 	records,
+	isLoading,
 	onRemove,
 	onToggle,
 	onAdd,
@@ -177,6 +179,7 @@ export function LocalRecordsGrid({
 		<GridPage
 			toolbar={toolbar}
 			isEmpty={filtered.length === 0}
+			isLoading={isLoading}
 			emptyIcon={search ? Search : Globe}
 			emptyTitle={
 				search ? 'No records match your search' : 'No local records yet'
@@ -188,7 +191,7 @@ export function LocalRecordsGrid({
 			}
 		>
 			<Table.Root size='sm'>
-				<Table.Header>
+				<Table.Header position='sticky' top='0' zIndex='1'>
 					{table.getHeaderGroups().map((headerGroup) => (
 						<Table.Row key={headerGroup.id} bg='bg.subtle' borderColor='border'>
 							{headerGroup.headers.map((header) => (

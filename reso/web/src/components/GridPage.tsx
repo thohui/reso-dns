@@ -1,5 +1,6 @@
 import { Box, Button, HStack, Icon, Text } from '@chakra-ui/react';
 import { ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
+import { useRef } from 'react';
 
 interface GridPageProps {
 	children: React.ReactNode;
@@ -32,11 +33,10 @@ export function GridPage({
 	hasMore,
 	onPageChange,
 }: GridPageProps) {
+	const tableRef = useRef<HTMLDivElement>(null);
+
 	const handlePageChange = (newPage: number) => {
-		// this is a bit hacky
-		document
-			.getElementById('main-scroll')
-			?.scrollTo({ top: 0, behavior: 'auto' });
+		tableRef.current?.scrollTo({ top: 0, behavior: 'auto' });
 		onPageChange?.(newPage);
 	};
 
@@ -44,8 +44,12 @@ export function GridPage({
 		!!onPageChange && page != null && (totalPages == null || totalPages > 1);
 
 	return (
-		<Box>
-			{toolbar && <Box mb='4'>{toolbar}</Box>}
+		<Box display='flex' flexDir='column' flex='1' minH='0'>
+			{toolbar && (
+				<Box mb='4' flexShrink='0'>
+					{toolbar}
+				</Box>
+			)}
 			<Box
 				bg='bg.panel'
 				borderRadius='lg'
@@ -54,6 +58,10 @@ export function GridPage({
 				overflow='hidden'
 				opacity={isLoading ? 0.6 : 1}
 				transition='opacity 0.15s'
+				flex='1'
+				display='flex'
+				flexDir='column'
+				minH='0'
 			>
 				{isEmpty && !isLoading ? (
 					<Box py='14' textAlign='center'>
@@ -79,12 +87,14 @@ export function GridPage({
 						)}
 					</Box>
 				) : (
-					<Box overflowX='auto'>{children}</Box>
+					<Box ref={tableRef} flex='1' overflow='auto' minH='0'>
+						{children}
+					</Box>
 				)}
 			</Box>
 
 			{showPagination && (
-				<HStack justify='space-between' mt='4' px='1'>
+				<HStack flexShrink='0' justify='space-between' mt='4' px='1'>
 					<Text fontSize='xs' color='fg.muted'>
 						{total != null ? total.toLocaleString() : ''}
 						{totalLabel ? ` ${totalLabel}` : ''}

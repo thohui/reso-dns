@@ -11,16 +11,15 @@ import {
 import { useCreateApiKey } from '@/hooks/api-keys/useCreateApiKey';
 import { useDeleteApiKey } from '@/hooks/api-keys/useDeleteApiKey';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
 export default function ApiKeysPage() {
 	const [page, setPage] = useState(0);
 	const [search, setSearch] = useState('');
-	const cachedTotal = useRef<number | null>(null);
 
 	const debouncedSearch = useDebounce(search, 300);
 
-	const { data, refetch, isFetching } = useApiKeys(page, debouncedSearch);
+	const { data, isFetching } = useApiKeys(page, debouncedSearch);
 	const queryClient = useQueryClient();
 
 	const createMutation = useCreateApiKey();
@@ -29,11 +28,7 @@ export default function ApiKeysPage() {
 	const [showCreate, setShowCreate] = useState(false);
 	const [createdToken, setCreatedToken] = useState<string | null>(null);
 
-	if (data?.total != null) {
-		cachedTotal.current = data.total;
-	}
-
-	const total = data?.total ?? cachedTotal.current;
+	const total = data?.total;
 	const totalPages =
 		total != null ? Math.max(1, Math.ceil(total / API_KEYS_PAGE_SIZE)) : null;
 
@@ -42,6 +37,9 @@ export default function ApiKeysPage() {
 		setPage(0);
 	};
 
+	const invalidate = () =>
+		queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+
 	const handleCreate = async (payload: {
 		display_name: string;
 		expires_at?: number;
@@ -49,7 +47,7 @@ export default function ApiKeysPage() {
 		const key = await createMutation.mutateAsync(payload);
 		setShowCreate(false);
 		setCreatedToken(key.token);
-		refetch();
+		invalidate();
 	};
 
 	const handleDelete = async (id: string) => {
@@ -70,13 +68,13 @@ export default function ApiKeysPage() {
 
 		try {
 			await deleteMutation.mutateAsync(id);
-			await refetch();
+			invalidate();
 		} catch (e) {
 			queryClient.setQueryData(
 				apiKeysQueryKey(page, debouncedSearch),
 				previous,
 			);
-			await refetch();
+			invalidate();
 			toastError(e);
 		}
 	};

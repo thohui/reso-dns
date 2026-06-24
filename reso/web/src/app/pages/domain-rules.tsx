@@ -8,9 +8,13 @@ import { useAddDomainRule } from '@/hooks/domain-rules/useAddDomainRule';
 import { useAddSubscription } from '@/hooks/domain-rules/useAddSubscription';
 import {
 	DOMAIN_RULES_PAGE_SIZE,
+	domainRulesQueryKey,
 	useDomainRules,
 } from '@/hooks/domain-rules/useDomainRules';
-import { useListSubscriptions } from '@/hooks/domain-rules/useListSubscriptions';
+import {
+	listSubscriptionsQueryKey,
+	useListSubscriptions,
+} from '@/hooks/domain-rules/useListSubscriptions';
 import { useRemoveDomainRule } from '@/hooks/domain-rules/useRemoveDomainRule';
 import { useRemoveSubscription } from '@/hooks/domain-rules/useRemoveSubscription';
 import { useToggleDomainRule } from '@/hooks/domain-rules/useToggleDomainRule';
@@ -24,14 +28,13 @@ import type { PagedResponse } from '@/lib/api/pagination';
 import { Box, Button, Icon, Tabs, Text } from '@chakra-ui/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Ban, List, Plus } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
 export default function DomainRulesPage() {
 	const queryClient = useQueryClient();
 
 	const [page, setPage] = useState(0);
 	const [search, setSearch] = useState('');
-	const cachedTotal = useRef<number | null>(null);
 
 	const debouncedSearch = useDebounce(search, 300);
 
@@ -44,7 +47,7 @@ export default function DomainRulesPage() {
 	const invalidateRules = () =>
 		queryClient.invalidateQueries({ queryKey: ['domain-rules'] });
 	const invalidateSubs = () =>
-		queryClient.invalidateQueries({ queryKey: ['list-subscriptions'] });
+		queryClient.invalidateQueries({ queryKey: listSubscriptionsQueryKey });
 
 	const [showRuleDialog, setShowRuleDialog] = useState(false);
 	const [showSubscriptionDialog, setShowSubscriptionDialog] = useState(false);
@@ -59,11 +62,7 @@ export default function DomainRulesPage() {
 	const toggleSubscription = useToggleSubscription();
 	const toggleSubscriptionSync = useToggleSubscriptionSync();
 
-	if (rulesData?.total != null) {
-		cachedTotal.current = rulesData.total;
-	}
-
-	const total = rulesData?.total ?? cachedTotal.current;
+	const total = rulesData?.total;
 	const totalPages =
 		total != null
 			? Math.max(1, Math.ceil(total / DOMAIN_RULES_PAGE_SIZE))
@@ -85,19 +84,22 @@ export default function DomainRulesPage() {
 	};
 
 	const handleRemoveRule = async (domain: string) => {
-		await removeRule.mutateAsync(domain, { onError: toastError });
+		try {
+			await removeRule.mutateAsync(domain);
+		} catch (e) {
+			toastError(e);
+			return;
+		}
 		invalidateRules();
 		if (editingRule?.domain === domain) setEditingRule(null);
 	};
 
 	const handleToggleRule = async (domain: string) => {
-		const previous = queryClient.getQueryData<PagedResponse<DomainRule>>([
-			'domain-rules',
-			page,
-			debouncedSearch,
-		]);
+		const previous = queryClient.getQueryData<PagedResponse<DomainRule>>(
+			domainRulesQueryKey(page, debouncedSearch),
+		);
 		queryClient.setQueryData<PagedResponse<DomainRule>>(
-			['domain-rules', page, debouncedSearch],
+			domainRulesQueryKey(page, debouncedSearch),
 			(old) => {
 				if (!old) return old;
 				return {
@@ -113,7 +115,7 @@ export default function DomainRulesPage() {
 			await toggleRule.mutateAsync(domain);
 		} catch (e) {
 			queryClient.setQueryData(
-				['domain-rules', page, debouncedSearch],
+				domainRulesQueryKey(page, debouncedSearch),
 				previous,
 			);
 			toastError(e);
@@ -139,7 +141,12 @@ export default function DomainRulesPage() {
 	};
 
 	const handleRemoveSubscription = async (id: string) => {
-		await removeSubscription.mutateAsync(id, { onError: toastError });
+		try {
+			await removeSubscription.mutateAsync(id);
+		} catch (e) {
+			toastError(e);
+			return;
+		}
 		invalidateRules();
 		invalidateSubs();
 	};
@@ -183,8 +190,15 @@ export default function DomainRulesPage() {
 	const rules = rulesData?.items ?? [];
 
 	return (
-		<Box gap='8'>
-			<Tabs.Root defaultValue='rules' variant='line'>
+		<Box display='flex' flexDir='column' flex='1' minH='0'>
+			<Tabs.Root
+				defaultValue='rules'
+				variant='line'
+				display='flex'
+				flexDir='column'
+				flex='1'
+				minH='0'
+			>
 				<Box
 					display='flex'
 					flexDir={{ base: 'column', sm: 'row' }}
@@ -193,6 +207,7 @@ export default function DomainRulesPage() {
 					gap={{ base: '3', sm: '0' }}
 					mb='4'
 					w='full'
+					flexShrink='0'
 				>
 					<Tabs.List borderColor='border'>
 						<Tabs.Trigger
@@ -254,7 +269,15 @@ export default function DomainRulesPage() {
 						)}
 					</Tabs.Context>
 				</Box>
-				<Tabs.Content value='rules' pt='0'>
+				<Tabs.Content
+					value='rules'
+					pt='0'
+					flex='1'
+					minH='0'
+					overflow='hidden'
+					display='flex'
+					flexDir='column'
+				>
 					<DomainRulesGrid
 						rules={rules}
 						page={page}
@@ -270,7 +293,15 @@ export default function DomainRulesPage() {
 					/>
 				</Tabs.Content>
 
-				<Tabs.Content value='subscriptions' pt='0'>
+				<Tabs.Content
+					value='subscriptions'
+					pt='0'
+					flex='1'
+					minH='0'
+					overflow='hidden'
+					display='flex'
+					flexDir='column'
+				>
 					<SubscriptionsGrid
 						subscriptions={subscriptions ?? []}
 						onRemove={handleRemoveSubscription}

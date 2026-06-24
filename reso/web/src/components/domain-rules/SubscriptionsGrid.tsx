@@ -122,7 +122,7 @@ export function SubscriptionsGrid({
 			emptySubtitle='Click "Add Subscription" to subscribe to a domain list'
 		>
 			<Table.Root size='sm'>
-				<Table.Header>
+				<Table.Header position='sticky' top='0' zIndex='1'>
 					{table.getHeaderGroups().map((headerGroup) => (
 						<Table.Row key={headerGroup.id} bg='bg.subtle' borderColor='border'>
 							{headerGroup.headers.map((header) => (
