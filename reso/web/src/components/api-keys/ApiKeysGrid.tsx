@@ -1,7 +1,3 @@
-import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
-import { GridPage } from '@/components/GridPage';
-import type { ApiKey } from '@/lib/api/api-keys';
-import { formatTimeAgo } from '@/lib/time';
 import {
 	Box,
 	Button,
@@ -19,6 +15,10 @@ import {
 } from '@tanstack/react-table';
 import { Key, Plus, Search } from 'lucide-react';
 import React, { useMemo } from 'react';
+import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
+import { GridPage } from '@/components/GridPage';
+import type { ApiKey } from '@/lib/api/api-keys';
+import { formatTimeAgo } from '@/lib/time';
 
 const columnHelper = createColumnHelper<ApiKey>();
 
@@ -28,7 +28,7 @@ interface ApiKeysGridProps {
 	onAdd: () => void;
 	page: number;
 	totalPages: number | null;
-	total: number | null;
+	total?: number | null;
 	hasMore?: boolean;
 	isLoading?: boolean;
 	onPageChange: (page: number) => void;
@@ -172,7 +172,7 @@ export function ApiKeysGrid({
 			onPageChange={onPageChange}
 		>
 			<Table.Root size='sm'>
-				<Table.Header>
+				<Table.Header position='sticky' top='0' zIndex='1'>
 					{table.getHeaderGroups().map((headerGroup) => (
 						<Table.Row key={headerGroup.id} bg='bg.subtle' borderColor='border'>
 							{headerGroup.headers.map((header) => (

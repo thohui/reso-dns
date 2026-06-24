@@ -15,7 +15,7 @@ import type { LocalRecord } from '@/lib/api/local-records';
 import type { PagedResponse } from '@/lib/api/pagination';
 
 export default function LocalRecordsPage() {
-	const { data, refetch } = useLocalRecords();
+	const { data } = useLocalRecords();
 	const queryClient = useQueryClient();
 
 	const createMutation = useCreateLocalRecord();
@@ -24,6 +24,9 @@ export default function LocalRecordsPage() {
 
 	const [showDialog, setShowDialog] = useState(false);
 
+	const invalidate = () =>
+		queryClient.invalidateQueries({ queryKey: localRecordsQueryKey });
+
 	const handleSubmit = async (record: {
 		name: string;
 		record_type: number;
@@ -31,14 +34,14 @@ export default function LocalRecordsPage() {
 		ttl?: number;
 	}) => {
 		await createMutation.mutateAsync(record);
-		refetch();
+		invalidate();
 		setShowDialog(false);
 	};
 
 	const handleRemove = async (id: number) => {
 		try {
 			await removeMutation.mutateAsync(id);
-			await refetch();
+			invalidate();
 		} catch (e) {
 			toastError(e);
 		}
@@ -74,7 +77,7 @@ export default function LocalRecordsPage() {
 	const items = data?.items ?? [];
 
 	return (
-		<Box>
+		<Box display='flex' flexDir='column' flex='1' minH='0'>
 			{showDialog && (
 				<LocalRecordDialog
 					onClose={() => setShowDialog(false)}

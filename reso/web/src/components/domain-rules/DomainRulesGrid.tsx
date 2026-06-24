@@ -1,10 +1,3 @@
-import { ActionBadge } from '@/components/ActionBadge';
-import { MatchTypeBadge } from '@/components/MatchTypeBadge';
-import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
-import { GridPage } from '@/components/GridPage';
-import { ToggleButton } from '@/components/ToggleButton';
-import type { DomainRule } from '@/lib/api/domain-rules';
-import { formatTimeAgo } from '@/lib/time';
 import { Box, Icon, IconButton, Input, Table, Text } from '@chakra-ui/react';
 import {
 	createColumnHelper,
@@ -14,6 +7,13 @@ import {
 } from '@tanstack/react-table';
 import { Globe, Pencil, Search } from 'lucide-react';
 import React, { useMemo } from 'react';
+import { ActionBadge } from '@/components/ActionBadge';
+import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
+import { GridPage } from '@/components/GridPage';
+import { MatchTypeBadge } from '@/components/MatchTypeBadge';
+import { ToggleButton } from '@/components/ToggleButton';
+import type { DomainRule } from '@/lib/api/domain-rules';
+import { formatTimeAgo } from '@/lib/time';
 
 const columnHelper = createColumnHelper<DomainRule>();
 
@@ -21,7 +21,7 @@ interface DomainRulesGridProps {
 	rules: DomainRule[];
 	page: number;
 	totalPages: number | null;
-	total: number | null;
+	total?: number | null;
 	onPageChange: (page: number) => void;
 	search: string;
 	onSearchChange: (value: string) => void;
@@ -185,7 +185,7 @@ export function DomainRulesGrid({
 			onPageChange={onPageChange}
 		>
 			<Table.Root size='sm'>
-				<Table.Header>
+				<Table.Header position='sticky' top='0' zIndex='1'>
 					{table.getHeaderGroups().map((headerGroup) => (
 						<Table.Row key={headerGroup.id} bg='bg.subtle' borderColor='border'>
 							{headerGroup.headers.map((header) => (

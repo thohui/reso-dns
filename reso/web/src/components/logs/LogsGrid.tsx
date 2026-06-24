@@ -376,7 +376,7 @@ export function LogsGrid({
 	);
 
 	return (
-		<Box>
+		<Box display='flex' flexDir='column' flex='1' minH='0'>
 			<GridPage
 				toolbar={toolbar}
 				isLoading={isLoading}
@@ -388,7 +388,7 @@ export function LogsGrid({
 				onPageChange={onPageChange}
 			>
 				<Table.Root size='sm'>
-					<Table.Header>
+					<Table.Header position='sticky' top='0' zIndex='1'>
 						{table.getHeaderGroups().map((headerGroup) => (
 							<Table.Row key={headerGroup.id} bg='bg.subtle'>
 								{headerGroup.headers.map((header) => {
@@ -408,8 +408,9 @@ export function LogsGrid({
 											px='4'
 											fontSize='xs'
 											textTransform='uppercase'
-											letterSpacing='wider'
-											color={sorted ? 'fg' : 'fg.muted'}
+											letterSpacing='0.05em'
+											fontWeight='600'
+											color={sorted ? 'fg' : 'fg.subtle'}
 											cursor={canSort ? 'pointer' : 'default'}
 											userSelect={canSort ? 'none' : undefined}
 											_hover={canSort ? { color: 'fg' } : undefined}

@@ -1,18 +1,19 @@
+import { Box, Grid } from '@chakra-ui/react';
+import { AlertCircle, Ban, DatabaseBackup, Globe } from 'lucide-react';
+import { useRef, useState } from 'react';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { LogsGrid, type SearchField } from '@/components/logs/LogsGrid';
-import { useActivities } from '@/hooks/logs/useActivities';
 import { useLiveStats } from '@/hooks/dashboard/useLiveStats';
+import {
+	ACTIVITIES_PAGE_SIZE,
+	useActivities,
+} from '@/hooks/logs/useActivities';
 import { useDebounce } from '@/hooks/useDebounce';
 import type {
 	ActivityListFilter,
 	SortColumn,
 	SortDir,
 } from '@/lib/api/activity';
-import { Grid } from '@chakra-ui/react';
-import { AlertCircle, Ban, DatabaseBackup, Globe } from 'lucide-react';
-import { useRef, useState } from 'react';
-
-const PAGE_SIZE = 50;
 
 export default function LogsPage() {
 	const [page, setPage] = useState(0);
@@ -33,8 +34,8 @@ export default function LogsPage() {
 	const needsCount = page === 0;
 
 	const { data, isFetching: isLoading } = useActivities({
-		top: PAGE_SIZE,
-		skip: page * PAGE_SIZE,
+		top: ACTIVITIES_PAGE_SIZE,
+		skip: page * ACTIVITIES_PAGE_SIZE,
 		filter,
 		sort,
 		dir,
@@ -49,7 +50,7 @@ export default function LogsPage() {
 
 	const total = data?.total ?? cachedTotal.current;
 	const totalPages =
-		total != null ? Math.max(1, Math.ceil(total / PAGE_SIZE)) : null;
+		total != null ? Math.max(1, Math.ceil(total / ACTIVITIES_PAGE_SIZE)) : null;
 
 	function handlePresetChange(next: ActivityListFilter) {
 		setPresetFilter(next);
@@ -73,8 +74,8 @@ export default function LogsPage() {
 	}
 
 	return (
-		<>
-			<Grid templateColumns='repeat(4, 1fr)' gap='4' mb='6'>
+		<Box display='flex' flexDir='column' flex='1' minH='0'>
+			<Grid templateColumns='repeat(4, 1fr)' gap='4' mb='6' flexShrink='0'>
 				<StatCard
 					label='Total Queries'
 					value={liveData?.total ?? '—'}
@@ -100,23 +101,25 @@ export default function LogsPage() {
 					accentColor='status.warn'
 				/>
 			</Grid>
-			<LogsGrid
-				isLoading={isLoading}
-				activities={data?.items ?? []}
-				page={page}
-				totalPages={totalPages}
-				total={total}
-				onPageChange={setPage}
-				presetFilter={presetFilter}
-				onPresetChange={handlePresetChange}
-				sort={sort}
-				dir={dir}
-				onSortChange={handleSortChange}
-				searchField={searchField}
-				searchValue={searchValue}
-				onSearchFieldChange={handleSearchFieldChange}
-				onSearchChange={handleSearchChange}
-			/>
-		</>
+			<Box flex='1' minH='0' display='flex' flexDir='column'>
+				<LogsGrid
+					isLoading={isLoading}
+					activities={data?.items ?? []}
+					page={page}
+					totalPages={totalPages}
+					total={total}
+					onPageChange={setPage}
+					presetFilter={presetFilter}
+					onPresetChange={handlePresetChange}
+					sort={sort}
+					dir={dir}
+					onSortChange={handleSortChange}
+					searchField={searchField}
+					searchValue={searchValue}
+					onSearchFieldChange={handleSearchFieldChange}
+					onSearchChange={handleSearchChange}
+				/>
+			</Box>
+		</Box>
 	);
 }

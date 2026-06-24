@@ -211,11 +211,28 @@ export function DashboardLayout() {
 				flex='1'
 				p={{ base: '4', md: '8' }}
 				overflowY='auto'
-				maxH={{ base: 'auto', md: '100vh' }}
+				h={{ md: '100vh' }}
+				display='flex'
+				flexDir='column'
 			>
-				<Box maxW='1400px' mx='auto'>
+				<Box
+					maxW='1400px'
+					mx='auto'
+					w='full'
+					flex='1'
+					minH='0'
+					display='flex'
+					flexDir='column'
+				>
 					<Suspense fallback={<PageLoader />}>
-						<Box key={location.pathname} className='animate-fade-in'>
+						<Box
+							key={location.pathname}
+							className='animate-fade-in'
+							flex='1'
+							minH='0'
+							display='flex'
+							flexDir='column'
+						>
 							<Outlet />
 						</Box>
 					</Suspense>
