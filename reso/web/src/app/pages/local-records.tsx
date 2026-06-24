@@ -15,7 +15,7 @@ import type { LocalRecord } from '@/lib/api/local-records';
 import type { PagedResponse } from '@/lib/api/pagination';
 
 export default function LocalRecordsPage() {
-	const { data } = useLocalRecords();
+	const { data, isLoading } = useLocalRecords();
 	const queryClient = useQueryClient();
 
 	const createMutation = useCreateLocalRecord();
@@ -89,6 +89,7 @@ export default function LocalRecordsPage() {
 				onRemove={handleRemove}
 				onToggle={handleToggle}
 				onAdd={() => setShowDialog(true)}
+				isLoading={isLoading}
 			/>
 		</Box>
 	);
