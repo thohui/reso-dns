@@ -1,5 +1,5 @@
-import type { MatchType } from '@/lib/api/domain-rules';
 import { Badge, Tooltip } from '@chakra-ui/react';
+import type { MatchType } from '@/lib/api/domain-rules';
 
 const config: Record<MatchType, { label: string; tooltip: string }> = {
 	domain: {
@@ -22,18 +22,18 @@ export function MatchTypeBadge({ matchType }: { matchType: MatchType }) {
 		<Tooltip.Root openDelay={300}>
 			<Tooltip.Trigger asChild>
 				<Badge
-					px='2'
-					py='0.5'
+					px='2.5'
+					py='1'
+					borderRadius='md'
+					size='md'
 					fontSize='xs'
 					fontWeight='500'
 					fontFamily="'Mozilla Text', sans-serif"
-					borderRadius='md'
 					borderWidth='1px'
-					color='fg.muted'
-					bg='bg.subtle'
-					borderColor='border'
-					textTransform='none'
-					cursor='default'
+					color='accent.fg'
+					bg='accent.muted'
+					borderColor='accent.subtle'
+					variant='subtle'
 				>
 					{label}
 				</Badge>

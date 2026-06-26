@@ -1,6 +1,6 @@
-import type { ListAction } from '@/lib/api/domain-rules';
-import { Badge, Icon, chakra } from '@chakra-ui/react';
+import { Badge, chakra, Icon } from '@chakra-ui/react';
 import { Ban, ShieldCheck } from 'lucide-react';
+import type { ListAction } from '@/lib/api/domain-rules';
 
 interface Props {
 	action: ListAction;
@@ -11,7 +11,7 @@ interface Props {
 const sharedStyles = {
 	px: '2.5',
 	py: '1',
-	size: 'sm',
+	size: 'md',
 	fontFamily: "'Mozilla Text', sans-serif",
 	fontSize: 'xs',
 	fontWeight: '500',
