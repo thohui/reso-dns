@@ -24,7 +24,6 @@ use crate::{
     metrics::task::run_metrics_compression,
     services::{api_keys::ApiKeysService, local_records::LocalRecordService},
 };
-
 mod api;
 mod database;
 mod env_config;
@@ -35,7 +34,8 @@ mod middleware;
 mod ratelimit;
 mod server_builder;
 mod services;
-mod utils;
+mod time;
+mod uuid;
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;

@@ -14,7 +14,7 @@ use crate::{
 };
 
 use super::{
-    auth::{AllowedAuthMethods, middleware::auth_middleware},
+    auth::{AllowedAuthMethods, auth_middleware},
     error::ApiError,
 };
 
@@ -144,7 +144,7 @@ pub async fn timeline(
 }
 
 fn range_to_duration(range: &TopRange) -> i64 {
-    let now = crate::utils::now_millis();
+    let now = crate::time::now_millis();
     match range {
         TopRange::FiveMinutes => now - 5 * 60 * 1000,
         TopRange::Hour => now - 60 * 60 * 1000,

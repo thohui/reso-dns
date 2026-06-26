@@ -1,4 +1,4 @@
-use crate::utils::now_millis;
+use crate::time::now_millis;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 

@@ -7,7 +7,7 @@ use crate::{
         MetricsDatabasePool,
         models::{activity_log::ActivityLog, client_metrics::ClientMetrics, domain_metrics::DomainMetrics},
     },
-    services::config::model::Config,
+    services::config::Config,
 };
 
 /// Task that periodically truncates old activity logs to save space.

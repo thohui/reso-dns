@@ -9,11 +9,11 @@ use axum::{
 
 use crate::{
     global::SharedGlobal,
-    services::{self, config::model::Config},
+    services::config::Config,
 };
 
 use super::{
-    auth::{AllowedAuthMethods, middleware::auth_middleware},
+    auth::{AllowedAuthMethods, auth_middleware},
     error::ApiError,
 };
 
@@ -27,7 +27,7 @@ pub fn create_config_router(global: SharedGlobal) -> Router<SharedGlobal> {
         ))
 }
 
-pub async fn config(global: State<SharedGlobal>) -> Json<Arc<services::config::model::Config>> {
+pub async fn config(global: State<SharedGlobal>) -> Json<Arc<Config>> {
     Json(global.config.get_config())
 }
 

@@ -6,7 +6,7 @@ use crate::{
         models::{Page, api_key::ApiKey as DbApiKey, user::User as DbUser},
     },
     services::ServiceError,
-    utils::uuid::EntityId,
+    uuid::EntityId,
 };
 
 /// Service for managing API keys.

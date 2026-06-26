@@ -15,7 +15,7 @@ use crate::{
         models::{ListAction, MatchType, domain_rule::DomainRule, list_subscription::ListSubscription},
     },
     global::SharedGlobal,
-    utils::uuid::EntityId,
+    uuid::EntityId,
 };
 
 use super::ServiceError;

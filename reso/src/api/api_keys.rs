@@ -11,11 +11,12 @@ use crate::{
     database::models::{api_key::ApiKey as DbApiKey, user::User},
     global::SharedGlobal,
     services::api_keys::{ApiKey, CreatedApiKey},
-    utils::{now_millis, uuid::EntityId},
+    time::now_millis,
+    uuid::EntityId,
 };
 
 use super::{
-    auth::{AllowedAuthMethods, middleware::auth_middleware},
+    auth::{AllowedAuthMethods, auth_middleware},
     error::ApiError,
     pagination::{PagedQuery, PagedResponse},
 };

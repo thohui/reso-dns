@@ -12,7 +12,7 @@ use axum::{
 use serde::Deserialize;
 
 use super::{
-    auth::{AllowedAuthMethods, middleware::auth_middleware},
+    auth::{AllowedAuthMethods, auth_middleware},
     error::ApiError,
     pagination::{PagedQuery, PagedResponse},
 };

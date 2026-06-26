@@ -1,5 +1,3 @@
-pub mod uuid;
-
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn now_millis() -> i64 {

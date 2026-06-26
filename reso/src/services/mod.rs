@@ -6,6 +6,7 @@ pub mod config;
 pub mod domain_rules;
 pub mod local_records;
 
+
 #[derive(Debug, thiserror::Error)]
 pub enum ServiceError {
     #[error("{0}")]

@@ -12,7 +12,8 @@ use crate::{
         models::{ListAction, MatchType, list_subscription::ListSubscription},
         query::WhereBuilder,
     },
-    utils::{now_millis, uuid::EntityId},
+    time::now_millis,
+    uuid::EntityId,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]

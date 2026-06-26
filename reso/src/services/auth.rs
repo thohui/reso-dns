@@ -11,7 +11,7 @@ use crate::{
         models::{user::User, user_session::UserSession as DbUserSession},
     },
     services::ServiceError,
-    utils::uuid::EntityId,
+    uuid::EntityId,
 };
 
 pub struct AuthService {

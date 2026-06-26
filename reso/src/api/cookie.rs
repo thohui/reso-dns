@@ -12,7 +12,7 @@ use base64::{
 use time::Duration;
 use uuid::Uuid;
 
-use crate::{database::models::user_session::UserSession, utils::uuid::EntityId};
+use crate::{database::models::user_session::UserSession, uuid::EntityId};
 
 /// Identifier for the session cookie.
 pub const SESSION_COOKIE_KEY: &str = "RESO_SESSION";

@@ -1,11 +1,18 @@
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
-use std::{collections::HashMap, net::SocketAddr, str::FromStr};
 
 use anyhow::{Context, Result, bail};
+use arc_swap::ArcSwap;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::ratelimit;
+use crate::{
+    database::{CoreDatabasePool, models::config::ConfigSetting},
+    ratelimit,
+};
 
 /// Config
 #[derive(Serialize, Deserialize)]
@@ -332,5 +339,68 @@ impl Default for Config {
                 truncate_interval_secs: 3600,
             },
         }
+    }
+}
+
+/// Service for managing the server configuration
+pub struct ConfigService {
+    db: Arc<CoreDatabasePool>,
+    config: ArcSwap<Config>,
+    tx: tokio::sync::watch::Sender<Arc<Config>>,
+    _rx_guard: tokio::sync::watch::Receiver<Arc<Config>>,
+}
+
+impl ConfigService {
+    /// Initialize the `ConfigService`
+    pub async fn initialize(db: Arc<CoreDatabasePool>) -> anyhow::Result<ConfigService> {
+        let config = Self::initialize_config(&db).await?;
+        let config = Arc::new(config);
+        let (tx, rx) = tokio::sync::watch::channel(config.clone());
+        Ok(ConfigService {
+            db,
+            config: ArcSwap::new(config),
+            tx,
+            _rx_guard: rx,
+        })
+    }
+
+    /// Initialize the configuration from the database.
+    /// Missing keys are seeded with defaults so that new config fields
+    /// are automatically populated for existing databases.
+    async fn initialize_config(db: &CoreDatabasePool) -> anyhow::Result<Config> {
+        let map = ConfigSetting::all(db).await?;
+
+        let default_config = Config::default();
+        let missing: Vec<(String, String)> = default_config
+            .to_kv()
+            .into_iter()
+            .filter(|(key, _)| !map.contains_key(key))
+            .collect();
+
+        if !missing.is_empty() {
+            tracing::info!("seeding {} missing config keys", missing.len());
+            ConfigSetting::batch_set(db, missing).await?;
+        }
+
+        Ok(Config::from_kv(&map))
+    }
+
+    /// Updates the configuration and notify the subscribers.
+    pub async fn update_config(&self, config: Config) -> anyhow::Result<()> {
+        ConfigSetting::batch_set(&self.db, config.to_kv()).await?;
+        let arc_config = Arc::new(config);
+        self.config.store(arc_config.clone());
+        self.tx.send_replace(arc_config);
+        Ok(())
+    }
+
+    /// Get the config.
+    pub fn get_config(&self) -> Arc<Config> {
+        self.config.load_full()
+    }
+
+    /// Subscribe to any config changes.
+    pub fn subscribe(&self) -> tokio::sync::watch::Receiver<Arc<Config>> {
+        self.tx.subscribe()
     }
 }

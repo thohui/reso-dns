@@ -1,10 +1,10 @@
-use crate::utils::now_millis;
 use rusqlite::{OptionalExtension, params};
 use uuid::Uuid;
 
 use crate::{
     database::{CoreDatabasePool, DatabaseError},
-    utils::uuid::EntityId,
+    time::now_millis,
+    uuid::EntityId,
 };
 
 use super::user::User;

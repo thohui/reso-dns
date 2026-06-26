@@ -1,4 +1,3 @@
-use crate::utils::now_millis;
 use rusqlite::params;
 use uuid::Uuid;
 
@@ -6,7 +5,8 @@ use serde::Serialize;
 
 use crate::{
     database::{CoreDatabasePool, DatabaseError},
-    utils::uuid::EntityId,
+    time::now_millis,
+    uuid::EntityId,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]

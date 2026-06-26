@@ -7,10 +7,10 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{database::models::list_subscription::ListSubscription, global::SharedGlobal, utils::uuid::EntityId};
+use crate::{database::models::list_subscription::ListSubscription, global::SharedGlobal, uuid::EntityId};
 
 use super::{
-    auth::{AllowedAuthMethods, middleware::auth_middleware},
+    auth::{AllowedAuthMethods, auth_middleware},
     error::ApiError,
 };
 

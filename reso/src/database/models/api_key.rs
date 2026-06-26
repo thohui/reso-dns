@@ -9,7 +9,8 @@ use crate::{
         models::{Page, user::User},
         query::WhereBuilder,
     },
-    utils::{now_millis, uuid::EntityId},
+    time::now_millis,
+    uuid::EntityId,
 };
 
 /// An API key that can be used to authenticate API requests.

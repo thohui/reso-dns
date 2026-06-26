@@ -14,7 +14,7 @@ use crate::{
 };
 
 use super::{
-    auth::{AllowedAuthMethods, middleware::auth_middleware},
+    auth::{AllowedAuthMethods, auth_middleware},
     error::ApiError,
     pagination::PagedResponse,
 };

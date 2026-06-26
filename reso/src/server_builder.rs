@@ -17,7 +17,7 @@ use crate::{
     ratelimit::RateLimitConfig,
     services::{
         self,
-        config::model::{ActiveResolver, Config, Upstream},
+        config::{ActiveResolver, Config, Upstream},
     },
 };
 
@@ -51,7 +51,7 @@ pub fn server_middlewares(config: &Config) -> ServerMiddlewares<Global, Local> {
 /// Creates the new server state from a `services::config::model::Config`.
 async fn create_server_state(
     global: &SharedGlobal,
-    config: &services::config::model::Config,
+    config: &services::config::Config,
 ) -> anyhow::Result<ServerState<Global, Local>> {
     let upstreams = config
         .dns

@@ -67,6 +67,7 @@ pub async fn serve_web(
     }
 
     tracing::info!("HTTP listening on {}", address);
+
     let listener = tokio::net::TcpListener::bind(address).await?;
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown.cancelled_owned())
