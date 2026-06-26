@@ -7,7 +7,7 @@ use std::{
 
 use bytes::Bytes;
 
-use smallvec::{SmallVec, smallvec};
+use smallvec::SmallVec;
 
 use crate::{
     domain_name::DomainName,
@@ -76,13 +76,15 @@ impl DnsMessage {
             answers.push(answer);
         }
 
-        let mut authority_records: SmallVec<[DnsRecord; 1]> = SmallVec::with_capacity(number_of_authority_records as usize);
+        let mut authority_records: SmallVec<[DnsRecord; 1]> =
+            SmallVec::with_capacity(number_of_authority_records as usize);
 
         for _ in 0..number_of_authority_records {
             authority_records.push(DnsRecord::read_from(&mut reader)?);
         }
 
-        let mut additional_records: SmallVec<[DnsRecord; 1]> = SmallVec::with_capacity(number_of_additional_records as usize);
+        let mut additional_records: SmallVec<[DnsRecord; 1]> =
+            SmallVec::with_capacity(number_of_additional_records as usize);
 
         let mut edns: Option<Edns> = None;
 
@@ -1439,6 +1441,7 @@ mod tests {
     use crate::DnsMessageBuilder;
 
     use super::*;
+    use smallvec::smallvec;
 
     #[test]
 
