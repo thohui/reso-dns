@@ -56,14 +56,13 @@ impl Matchers {
 }
 
 const SUBSCRIPTION_SYNC_INTERVAL_SECS: u64 = 60 * 60 * 24; // 24 hours
-const SUBSCRIPTION_FETCH_TIMEOUT_SECS: u64 = 50;
+const SUBSCRIPTION_FETCH_TIMEOUT_SECS: u64 = 150;
 const SUBSCRIPTION_MAX_RESPONSE_BYTES: u64 = 35 * 1024 * 1024; // 35 MB
 
 pub struct DomainRulesService {
     matchers: ArcSwap<Matchers>,
     write_lock: Mutex<()>,
     connection: Arc<CoreDatabasePool>,
-    http_client: reqwest::Client,
 }
 
 impl DomainRulesService {
@@ -73,9 +72,6 @@ impl DomainRulesService {
             matchers: ArcSwap::new(Matchers::load(&connection).await?.into()),
             write_lock: Mutex::new(()),
             connection,
-            http_client: reqwest::Client::builder()
-                .timeout(Duration::from_secs(SUBSCRIPTION_FETCH_TIMEOUT_SECS))
-                .build()?,
         })
     }
 
@@ -236,7 +232,6 @@ impl DomainRulesService {
         Ok(())
     }
 
-    /// Toggles the sync_enabled state of a list subscription by ID.
     pub async fn toggle_list_subscription_sync_enabled(
         &self,
         id: EntityId<ListSubscription>,
@@ -248,7 +243,6 @@ impl DomainRulesService {
         Ok(())
     }
 
-    /// Sync ALL list subscriptions, fetching updated rules from their URLs if needed.
     pub async fn sync_subscriptions(&self) {
         let subscriptions = match ListSubscription::list(&self.connection).await {
             Ok(subs) => subs,
@@ -260,8 +254,16 @@ impl DomainRulesService {
 
         let mut any_updated = false;
 
+        let http_client = match create_http_client() {
+            Ok(http_client) => http_client,
+            Err(e) => {
+                tracing::error!("failed to create http client: {}", e);
+                return;
+            }
+        };
+
         for sub in subscriptions.iter().filter(|s| s.enabled && s.sync_enabled) {
-            match fetch_domain_rules_from_list_subscription_task(sub, &self.http_client, &self.connection).await {
+            match fetch_domain_rules_from_list_subscription_task(sub, &http_client, &self.connection).await {
                 Ok(updated) => {
                     if updated {
                         any_updated = true;
@@ -288,21 +290,18 @@ impl DomainRulesService {
     pub async fn add_list_subscription(&self, list_subscription: ListSubscription) -> Result<(), ServiceError> {
         validate_list_subscription_url(&list_subscription.url)?;
 
+        let http_client = create_http_client()?;
+
         // send a head request first to check if the url is reachable.
-        let head_response = self
-            .http_client
-            .head(&list_subscription.url)
-            .send()
-            .await
-            .map_err(|e| {
-                if e.is_connect() || e.is_timeout() {
-                    ServiceError::BadRequest("URL is not reachable".into())
-                } else if e.status() == Some(reqwest::StatusCode::NOT_FOUND) {
-                    ServiceError::BadRequest("URL not found".into())
-                } else {
-                    ServiceError::Internal(e.into())
-                }
-            })?;
+        let head_response = http_client.head(&list_subscription.url).send().await.map_err(|e| {
+            if e.is_connect() || e.is_timeout() {
+                ServiceError::BadRequest("URL is not reachable".into())
+            } else if e.status() == Some(reqwest::StatusCode::NOT_FOUND) {
+                ServiceError::BadRequest("URL not found".into())
+            } else {
+                ServiceError::Internal(e.into())
+            }
+        })?;
 
         head_response.error_for_status_ref().map_err(|e| {
             if e.is_connect() || e.is_timeout() {
@@ -337,8 +336,7 @@ impl DomainRulesService {
 
         // run initial sync so the user gets rules immediately.
         if let Err(e) =
-            fetch_domain_rules_from_list_subscription_task(&list_subscription, &self.http_client, &self.connection)
-                .await
+            fetch_domain_rules_from_list_subscription_task(&list_subscription, &http_client, &self.connection).await
         {
             // rollback
             if let Err(e) = ListSubscription::delete_by_id(list_subscription.id, &self.connection).await {
@@ -351,6 +349,13 @@ impl DomainRulesService {
         self.reload_all().await?;
         Ok(())
     }
+}
+
+fn create_http_client() -> Result<reqwest::Client, ServiceError> {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(SUBSCRIPTION_FETCH_TIMEOUT_SECS))
+        .build()
+        .map_err(|e| ServiceError::Internal(e.into()))
 }
 
 pub async fn run_subscription_sync(global: SharedGlobal, shutdown: tokio_util::sync::CancellationToken) {
