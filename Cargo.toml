@@ -26,3 +26,7 @@ reso-cache = { path = "crates/cache" }
 reso-list = { path = "crates/list" }
 reso-context = { path = "crates/context" }
 reso-inflight = { path = "crates/inflight" }
+
+[profile.release]
+lto = true
+panic = "abort"
