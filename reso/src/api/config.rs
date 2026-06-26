@@ -7,10 +7,7 @@ use axum::{
     routing::{get, put},
 };
 
-use crate::{
-    global::SharedGlobal,
-    services::config::Config,
-};
+use crate::{global::SharedGlobal, services::config::Config};
 
 use super::{
     auth::{AllowedAuthMethods, auth_middleware},
