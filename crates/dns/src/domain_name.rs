@@ -130,43 +130,42 @@ impl PartialEq for DomainName {
 impl Eq for DomainName {}
 
 impl DomainName {
-    pub fn from_labels(raw_labels: Vec<Vec<u8>>) -> ReadResult<Self> {
-        if raw_labels.is_empty() {
-            return Ok(Self::root());
-        }
+    pub fn from_labels<L: AsRef<[u8]>>(raw_labels: &[L]) -> ReadResult<Self> {
+        let mut wire: Vec<u8> = Vec::with_capacity(64);
+        let mut display = String::with_capacity(32);
+        let mut wire_len: usize = 1; // 1 for root terminator
 
-        let mut wire_len: usize = 1; // root terminator
+        for (i, item) in raw_labels.iter().enumerate() {
+            let label = item.as_ref();
 
-        for label in &raw_labels {
             if label.is_empty() {
                 return Err(DnsReadError::EmptyLabel);
             }
             if label.len() > 63 {
                 return Err(DnsReadError::LabelTooLong { len: label.len() });
             }
+
             wire_len += 1 + label.len();
-        }
-
-        if wire_len > 255 {
-            return Err(DnsReadError::NameTooLong { len: wire_len });
-        }
-
-        let display_cap = raw_labels.iter().map(|l| l.len()).sum::<usize>() + raw_labels.len().saturating_sub(1);
-        let mut wire = Vec::with_capacity(wire_len);
-        let mut display = String::with_capacity(display_cap);
-
-        for (i, mut label) in raw_labels.into_iter().enumerate() {
-            label.make_ascii_lowercase();
+            if wire_len > 255 {
+                return Err(DnsReadError::NameTooLong { len: wire_len });
+            }
 
             wire.push(label.len() as u8);
-            wire.extend_from_slice(&label);
+            let label_start = wire.len();
+            wire.extend_from_slice(label);
+            wire[label_start..].make_ascii_lowercase();
 
             if i > 0 {
                 display.push('.');
             }
-            display.push_str(&escape_label(&label));
+            display.push_str(&escape_label(&wire[label_start..]));
         }
-        wire.push(0);
+
+        if wire.is_empty() {
+            return Ok(Self::root());
+        }
+
+        wire.push(0); // root label terminator
 
         Ok(Self {
             labels: Arc::from(wire.as_slice()),
@@ -184,14 +183,7 @@ impl DomainName {
         let s = s.strip_suffix('.').unwrap_or(s);
 
         let raw_labels: Vec<Vec<u8>> = s.split('.').map(unescape_label).collect();
-
-        for label in raw_labels.iter() {
-            if label.is_empty() {
-                return Err(DnsReadError::EmptyLabel);
-            }
-        }
-
-        Self::from_labels(raw_labels)
+        Self::from_labels(&raw_labels)
     }
 
     pub fn from_user(s: impl AsRef<str>) -> ReadResult<Self> {
@@ -274,32 +266,32 @@ mod tests {
     #[test]
     fn test_from_labels() {
         let labels = vec![b"example".to_vec(), b"com".to_vec()];
-        let dn = DomainName::from_labels(labels).unwrap();
+        let dn = DomainName::from_labels(&labels).unwrap();
         assert_eq!(dn.as_str(), "example.com");
     }
 
     #[test]
     fn test_from_labels_lowercases() {
         let labels = vec![b"EXAMPLE".to_vec(), b"COM".to_vec()];
-        let dn = DomainName::from_labels(labels).unwrap();
+        let dn = DomainName::from_labels(&labels).unwrap();
         assert_eq!(dn.as_str(), "example.com");
     }
 
     #[test]
     fn test_from_labels_empty_is_root() {
-        let dn = DomainName::from_labels(vec![]).unwrap();
+        let dn = DomainName::from_labels(&Vec::<Vec<u8>>::new()).unwrap();
         assert_eq!(dn.as_str(), ".");
         assert!(dn.is_root());
     }
 
     #[test]
     fn test_from_labels_rejects_empty_label() {
-        assert!(DomainName::from_labels(vec![vec![]]).is_err());
+        assert!(DomainName::from_labels(&[vec![]]).is_err());
     }
 
     #[test]
     fn test_from_labels_rejects_long_label() {
-        assert!(DomainName::from_labels(vec![vec![0x41; 64]]).is_err());
+        assert!(DomainName::from_labels(&[vec![0x41; 64]]).is_err());
     }
 
     #[test]
@@ -321,7 +313,7 @@ mod tests {
     #[test]
     fn test_label_iter_returns_raw_bytes() {
         let labels = vec![vec![0x80, 0xFF], b"com".to_vec()];
-        let dn = DomainName::from_labels(labels).unwrap();
+        let dn = DomainName::from_labels(&labels).unwrap();
         let collected: Vec<&[u8]> = dn.label_iter().collect();
         assert_eq!(collected, vec![&[0x80, 0xFF][..], b"com"]);
     }

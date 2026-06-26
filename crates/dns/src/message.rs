@@ -7,6 +7,8 @@ use std::{
 
 use bytes::Bytes;
 
+use smallvec::{SmallVec, smallvec};
+
 use crate::{
     domain_name::DomainName,
     error::{DnsError, DnsReadError, ReadResult, Result, WriteResult},
@@ -14,24 +16,17 @@ use crate::{
     writer::{DnsMessageWriter, DnsWritable},
 };
 
-/// DNS Message struct representing a DNS message.
+/// DNS Message
 ///
-/// This struct encapsulates the various components of a DNS message and does not represent the full wire structure.
+/// This struct encapsulates various components of a DNS message and does not represent the full wire structure.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DnsMessage {
-    /// Transaction id
     pub id: u16,
-    /// Flags
     pub flags: DnsFlags,
-    /// Questions in the DNS message
-    questions: Vec<DnsQuestion>,
-    /// Answers in the DNS message
-    answers: Vec<DnsRecord>,
-    /// Authority records in the DNS message
-    authority_records: Vec<DnsRecord>,
-    /// Additional records in the DNS message
-    additional_records: Vec<DnsRecord>,
-    /// EDNS
+    questions: SmallVec<[DnsQuestion; 1]>,
+    answers: SmallVec<[DnsRecord; 1]>,
+    authority_records: SmallVec<[DnsRecord; 1]>,
+    additional_records: SmallVec<[DnsRecord; 1]>,
     edns: Option<Edns>,
 }
 
@@ -47,10 +42,10 @@ impl DnsMessage {
         Self {
             id,
             flags,
-            questions,
-            answers,
-            authority_records,
-            additional_records,
+            questions: questions.into(),
+            answers: answers.into(),
+            authority_records: authority_records.into(),
+            additional_records: additional_records.into(),
             edns: None,
         }
     }
@@ -67,27 +62,27 @@ impl DnsMessage {
         let number_of_authority_records = reader.read_u16()?; // NSCOUNT
         let number_of_additional_records = reader.read_u16()?; // ARCOUNT
 
-        let mut questions = Vec::with_capacity(number_of_questions as usize);
+        let mut questions: SmallVec<[DnsQuestion; 1]> = SmallVec::with_capacity(number_of_questions as usize);
 
         for _ in 0..number_of_questions {
             let question = DnsQuestion::read_from(&mut reader)?;
             questions.push(question);
         }
 
-        let mut answers = Vec::with_capacity(number_of_answers as usize);
+        let mut answers: SmallVec<[DnsRecord; 1]> = SmallVec::with_capacity(number_of_answers as usize);
 
         for _ in 0..number_of_answers {
             let answer = DnsRecord::read_from(&mut reader)?;
             answers.push(answer);
         }
 
-        let mut authority_records = Vec::with_capacity(number_of_authority_records as usize);
+        let mut authority_records: SmallVec<[DnsRecord; 1]> = SmallVec::with_capacity(number_of_authority_records as usize);
 
         for _ in 0..number_of_authority_records {
             authority_records.push(DnsRecord::read_from(&mut reader)?);
         }
 
-        let mut additional_records = Vec::with_capacity(number_of_additional_records as usize);
+        let mut additional_records: SmallVec<[DnsRecord; 1]> = SmallVec::with_capacity(number_of_additional_records as usize);
 
         let mut edns: Option<Edns> = None;
 
@@ -172,22 +167,18 @@ impl DnsMessage {
         Ok(writer.into_bytes())
     }
 
-    /// Questions
     pub fn questions(&self) -> &[DnsQuestion] {
         &self.questions
     }
 
-    /// Answers
     pub fn answers(&self) -> &[DnsRecord] {
         &self.answers
     }
 
-    /// Authority records
     pub fn authority_records(&self) -> &[DnsRecord] {
         &self.authority_records
     }
 
-    /// Additional records
     pub fn additional_records(&self) -> &[DnsRecord] {
         &self.additional_records
     }
@@ -196,12 +187,10 @@ impl DnsMessage {
         self.edns = edns
     }
 
-    /// EDNS
     pub fn edns(&self) -> &Option<Edns> {
         &self.edns
     }
 
-    // Set the response code
     pub fn set_response_code(&mut self, response_code: DnsResponseCode) {
         let full: u16 = response_code.to_u16();
         self.flags.rcode_low = (full & 0x0F) as u8;
@@ -214,7 +203,6 @@ impl DnsMessage {
         }
     }
 
-    /// Response code
     pub fn response_code(&self) -> DnsResponseCode {
         let low = self.flags.rcode_low as u16;
         let high = self.edns.as_ref().map(|e| e.extended_rcode).unwrap_or(0) as u16;
@@ -926,7 +914,7 @@ pub struct Edns {
     pub udp_payload_size: u16,
     /// High bits of RCODE (ttl[31:24])
     extended_rcode: u8,
-    /// EDNS version - must be 0.
+    /// EDNS version, must be 0.
     pub version: u8,
     /// Z flags
     z_flags: u16,
@@ -952,7 +940,6 @@ impl Edns {
         self.z_flags & 0x8000 != 0
     }
 
-    // Set the do bit
     pub fn set_do_bit(&mut self, v: bool) {
         if v {
             self.z_flags |= 0x8000;
@@ -1542,10 +1529,10 @@ mod tests {
                 )],
                 ..Default::default()
             }),
-            additional_records: vec![],
-            answers: vec![],
-            questions: vec![],
-            authority_records: vec![],
+            additional_records: smallvec![],
+            answers: smallvec![],
+            questions: smallvec![],
+            authority_records: smallvec![],
         };
         let encoded = message.encode().unwrap();
         let decoded = DnsMessage::decode(&encoded).unwrap();
@@ -2020,14 +2007,14 @@ mod tests {
                 edns.set_do_bit(true);
                 edns
             }),
-            questions: vec![DnsQuestion::new(
+            questions: smallvec![DnsQuestion::new(
                 DomainName::from_ascii("example.com").unwrap(),
                 RecordType::A,
                 ClassType::IN,
             )],
-            answers: vec![],
-            authority_records: vec![],
-            additional_records: vec![],
+            answers: smallvec![],
+            authority_records: smallvec![],
+            additional_records: smallvec![],
         };
 
         let encoded = message.encode().unwrap();
@@ -2051,10 +2038,10 @@ mod tests {
                 )],
                 ..Default::default()
             }),
-            questions: vec![],
-            answers: vec![],
-            authority_records: vec![],
-            additional_records: vec![],
+            questions: smallvec![],
+            answers: smallvec![],
+            authority_records: smallvec![],
+            additional_records: smallvec![],
         };
 
         let encoded = message.encode().unwrap();
@@ -2089,10 +2076,10 @@ mod tests {
                 )],
                 ..Default::default()
             }),
-            questions: vec![],
-            answers: vec![],
-            authority_records: vec![],
-            additional_records: vec![],
+            questions: smallvec![],
+            answers: smallvec![],
+            authority_records: smallvec![],
+            additional_records: smallvec![],
         };
 
         let encoded = message.encode().unwrap();
@@ -2134,10 +2121,10 @@ mod tests {
                 )],
                 ..Default::default()
             }),
-            questions: vec![],
-            answers: vec![],
-            authority_records: vec![],
-            additional_records: vec![],
+            questions: smallvec![],
+            answers: smallvec![],
+            authority_records: smallvec![],
+            additional_records: smallvec![],
         };
 
         let encoded = message.encode().unwrap();
@@ -2339,10 +2326,10 @@ mod tests {
                 ],
                 ..Default::default()
             }),
-            questions: vec![],
-            answers: vec![],
-            authority_records: vec![],
-            additional_records: vec![],
+            questions: smallvec![],
+            answers: smallvec![],
+            authority_records: smallvec![],
+            additional_records: smallvec![],
         };
 
         let encoded = message.encode().unwrap();
@@ -2421,10 +2408,10 @@ mod tests {
             id: 1,
             flags: DnsFlags::default(),
             edns: Some(Edns::default()),
-            questions: vec![],
-            answers: vec![],
-            authority_records: vec![],
-            additional_records: vec![additional],
+            questions: smallvec![],
+            answers: smallvec![],
+            authority_records: smallvec![],
+            additional_records: smallvec![additional],
         };
 
         let encoded = message.encode().unwrap();
@@ -2523,10 +2510,10 @@ mod tests {
                 )],
                 ..Default::default()
             }),
-            questions: vec![],
-            answers: vec![],
-            authority_records: vec![],
-            additional_records: vec![],
+            questions: smallvec![],
+            answers: smallvec![],
+            authority_records: smallvec![],
+            additional_records: smallvec![],
         };
 
         let encoded = message.encode().unwrap();
@@ -2547,11 +2534,11 @@ mod tests {
         let message = DnsMessage {
             id: 0,
             flags: DnsFlags::default(),
-            questions: vec![],
-            answers: vec![],
-            authority_records: vec![],
+            questions: smallvec![],
+            answers: smallvec![],
+            authority_records: smallvec![],
             edns: None,
-            additional_records: vec![
+            additional_records: smallvec![
                 DnsRecord {
                     name: DomainName::from_ascii("opt.example.com").unwrap(),
                     record_type: RecordType::OPT,

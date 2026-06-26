@@ -1,4 +1,5 @@
 use crate::error::{DnsWriteError, Result, WriteResult};
+use smallvec::SmallVec;
 use std::collections::HashMap;
 
 use bytes::{BufMut, Bytes, BytesMut};
@@ -97,7 +98,7 @@ impl DnsMessageWriter {
             return self.write_u8(0);
         }
 
-        let labels: Vec<&[u8]> = name.label_iter().collect();
+        let labels: SmallVec<[&[u8]; 8]> = name.label_iter().collect();
 
         self.ensure_space(name.wire_len())?;
 
@@ -175,7 +176,7 @@ impl DnsMessageWriter {
     }
 
     /// Write a `String` to the buffer.
-    pub fn write_string(&mut self, str: &String) -> WriteResult<()> {
+    pub fn write_string(&mut self, str: &str) -> WriteResult<()> {
         self.ensure_space(str.len())?;
         self.buf.extend_from_slice(str.as_bytes());
         Ok(())

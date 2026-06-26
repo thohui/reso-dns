@@ -1,3 +1,5 @@
+use smallvec::SmallVec;
+
 use crate::{
     domain_name::DomainName,
     error::{DnsReadError, ReadResult, Result},
@@ -86,8 +88,8 @@ impl<'a> DnsMessageReader<'a> {
     pub fn read_qname(&mut self) -> ReadResult<DomainName> {
         let mut pos = self.position;
         let mut jumped = false;
-        let mut seen = Vec::new();
-        let mut labels: Vec<Vec<u8>> = Vec::new();
+        let mut seen: SmallVec<[usize; 16]> = SmallVec::new();
+        let mut labels: SmallVec<[SmallVec<[u8; 32]>; 4]> = SmallVec::new();
 
         loop {
             if pos >= self.buffer.len() {
@@ -147,7 +149,7 @@ impl<'a> DnsMessageReader<'a> {
                     });
                 }
 
-                labels.push(self.buffer[pos..pos + label_len].to_vec());
+                labels.push(SmallVec::from_slice(&self.buffer[pos..pos + label_len]));
 
                 pos += label_len;
 
@@ -161,7 +163,7 @@ impl<'a> DnsMessageReader<'a> {
             return Ok(DomainName::root());
         }
 
-        DomainName::from_labels(labels)
+        DomainName::from_labels(&labels)
     }
 
     /// Read an uncompressed dns name from the next `len` bytes.
@@ -181,7 +183,7 @@ impl<'a> DnsMessageReader<'a> {
         let start = self.position;
         let end = start + len;
         let mut pos = start;
-        let mut labels: Vec<Vec<u8>> = Vec::new();
+        let mut labels: SmallVec<[SmallVec<[u8; 32]>; 4]> = SmallVec::new();
 
         loop {
             if pos >= end {
@@ -211,7 +213,7 @@ impl<'a> DnsMessageReader<'a> {
                 });
             }
 
-            labels.push(self.buffer[pos..pos + label_len].to_vec());
+            labels.push(SmallVec::from_slice(&self.buffer[pos..pos + label_len]));
             pos += label_len;
         }
 
@@ -221,7 +223,7 @@ impl<'a> DnsMessageReader<'a> {
 
         self.position = end;
 
-        DomainName::from_labels(labels)
+        DomainName::from_labels(&labels)
     }
 
     /// Read a specified number of bytes from the DNS message.
