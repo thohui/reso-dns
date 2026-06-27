@@ -4,6 +4,7 @@ use rusqlite::params;
 
 use crate::database::{CoreDatabasePool, DatabaseError};
 
+#[allow(unused)]
 pub struct ConfigSetting {
     #[allow(unused)]
     pub key: String,
@@ -66,10 +67,7 @@ pub async fn all(db: &CoreDatabasePool) -> Result<HashMap<String, String>, Datab
     .await
 }
 
-pub async fn batch_set(
-    db: &CoreDatabasePool,
-    entries: Vec<(String, String)>,
-) -> Result<(), DatabaseError> {
+pub async fn batch_set(db: &CoreDatabasePool, entries: Vec<(String, String)>) -> Result<(), DatabaseError> {
     let updated_at: i64 = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -140,9 +138,7 @@ mod tests {
 
         set(&db.conn, "dns.timeout", "3000").await.unwrap();
         set(&db.conn, "dns.active", "forwarder").await.unwrap();
-        set(&db.conn, "dns.forwarder.upstreams", "[\"1.1.1.1\"]")
-            .await
-            .unwrap();
+        set(&db.conn, "dns.forwarder.upstreams", "[\"1.1.1.1\"]").await.unwrap();
 
         let map = all(&db.conn).await.unwrap();
         assert_eq!(map.len(), 3);

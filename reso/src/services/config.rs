@@ -10,10 +10,7 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::{
-    database::{
-        CoreDatabasePool,
-        models::config as db_config,
-    },
+    database::{CoreDatabasePool, models::config as db_config},
     ratelimit,
 };
 

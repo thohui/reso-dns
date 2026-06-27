@@ -474,9 +474,7 @@ mod tests {
         let db = setup_metrics_test_db().await.unwrap();
         let mut blocked = make_query(1000);
         blocked.blocked = Some(true);
-        batch_insert(&db.conn, &[make_query(2000), blocked])
-            .await
-            .unwrap();
+        batch_insert(&db.conn, &[make_query(2000), blocked]).await.unwrap();
 
         let page = list(
             &db.conn,
@@ -503,9 +501,7 @@ mod tests {
         let db = setup_metrics_test_db().await.unwrap();
         let mut quad_a = make_query(1000);
         quad_a.qtype = Some(28);
-        batch_insert(&db.conn, &[make_query(2000), quad_a])
-            .await
-            .unwrap();
+        batch_insert(&db.conn, &[make_query(2000), quad_a]).await.unwrap();
 
         let page = list(
             &db.conn,
@@ -532,9 +528,7 @@ mod tests {
         let db = setup_metrics_test_db().await.unwrap();
         let mut cached = make_query(1000);
         cached.cache_hit = Some(true);
-        batch_insert(&db.conn, &[make_query(2000), cached])
-            .await
-            .unwrap();
+        batch_insert(&db.conn, &[make_query(2000), cached]).await.unwrap();
 
         let page = list(
             &db.conn,
@@ -561,9 +555,7 @@ mod tests {
         let db = setup_metrics_test_db().await.unwrap();
         let mut limited = make_query(1000);
         limited.rate_limited = Some(true);
-        batch_insert(&db.conn, &[make_query(2000), limited])
-            .await
-            .unwrap();
+        batch_insert(&db.conn, &[make_query(2000), limited]).await.unwrap();
 
         let page = list(
             &db.conn,
@@ -590,9 +582,7 @@ mod tests {
         let db = setup_metrics_test_db().await.unwrap();
         let mut other = make_query(1000);
         other.client = "10.0.0.1".to_string();
-        batch_insert(&db.conn, &[make_query(2000), other])
-            .await
-            .unwrap();
+        batch_insert(&db.conn, &[make_query(2000), other]).await.unwrap();
 
         let page = list(
             &db.conn,
@@ -619,9 +609,7 @@ mod tests {
         let db = setup_metrics_test_db().await.unwrap();
         let mut other = make_query(1000);
         other.qname = Some("other.com".to_string());
-        batch_insert(&db.conn, &[make_query(2000), other])
-            .await
-            .unwrap();
+        batch_insert(&db.conn, &[make_query(2000), other]).await.unwrap();
 
         let page = list(
             &db.conn,
@@ -650,9 +638,7 @@ mod tests {
         q1.qname = Some("ads.google.com".to_string());
         let mut q2 = make_query(2000);
         q2.qname = Some("mail.google.com".to_string());
-        batch_insert(&db.conn, &[make_query(3000), q1, q2])
-            .await
-            .unwrap();
+        batch_insert(&db.conn, &[make_query(3000), q1, q2]).await.unwrap();
 
         let page = list(
             &db.conn,

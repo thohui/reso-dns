@@ -103,10 +103,10 @@ impl ApiKeysService {
 
         let key = api_key::find_by_hash(&self.db, hash)
             .await?
-            .ok_or(ServiceError::Unauthorized("Invalid api key".into()))?;
+            .ok_or(ServiceError::Unauthorized("Invalid API key".into()))?;
 
         if key.is_expired() {
-            return Err(ServiceError::Unauthorized("Api key has expired".into()));
+            return Err(ServiceError::Unauthorized("API key has expired".into()));
         }
 
         Ok(key.id)

@@ -268,4 +268,22 @@ mod tests {
         assert!(*fetched_sub == sub);
         assert!(*domain_count == 1)
     }
+
+    #[tokio::test]
+    async fn test_duplicate_url_fails() {
+        let db = setup_core_test_db().await.unwrap();
+        insert(
+            &db.conn,
+            ListSubscription::new("A".into(), "https://example.com/list.txt".into()),
+        )
+        .await
+        .unwrap();
+
+        let result = insert(
+            &db.conn,
+            ListSubscription::new("B".into(), "https://example.com/list.txt".into()),
+        )
+        .await;
+        assert!(result.is_err());
+    }
 }

@@ -7,8 +7,8 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    database::models::{client_metrics, domain_metrics},
     database::models::client_metrics::TimelineBucket,
+    database::models::{client_metrics, domain_metrics},
     global::SharedGlobal,
     metrics::service::LiveStats,
 };

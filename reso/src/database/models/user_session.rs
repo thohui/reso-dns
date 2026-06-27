@@ -84,10 +84,7 @@ pub async fn find_by_id(
     .await
 }
 
-pub async fn delete_by_id(
-    db: &CoreDatabasePool,
-    session_id: EntityId<UserSession>,
-) -> Result<bool, DatabaseError> {
+pub async fn delete_by_id(db: &CoreDatabasePool, session_id: EntityId<UserSession>) -> Result<bool, DatabaseError> {
     let rows = db
         .interact(move |c| c.execute("DELETE FROM user_sessions where id = ?", params![session_id.id()]))
         .await?;

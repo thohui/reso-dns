@@ -207,9 +207,7 @@ mod tests {
         let (key, token) = ApiKey::new("test token".into(), user_id, None);
         insert(&db.conn, key).await.unwrap();
 
-        let found = find_by_hash(&db.conn, ApiKey::hash_token(&token))
-            .await
-            .unwrap();
+        let found = find_by_hash(&db.conn, ApiKey::hash_token(&token)).await.unwrap();
         assert!(found.is_some());
 
         let not_found = find_by_hash(&db.conn, "notahash".to_string()).await.unwrap();

@@ -170,11 +170,7 @@ pub async fn list_all(db: &CoreDatabasePool) -> Result<Vec<DomainRule>, Database
     .await
 }
 
-pub async fn update_action(
-    db: &CoreDatabasePool,
-    domain: &str,
-    action: ListAction,
-) -> Result<bool, DatabaseError> {
+pub async fn update_action(db: &CoreDatabasePool, domain: &str, action: ListAction) -> Result<bool, DatabaseError> {
     let domain = domain.to_string();
     let rows = db
         .interact(move |c| {
@@ -370,6 +366,15 @@ mod tests {
         assert_eq!(count(&db.conn, None).await.unwrap(), 1);
         delete(&db.conn, "delete-me.com").await.unwrap();
         assert_eq!(count(&db.conn, None).await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_duplicate_domain_fails() {
+        let db = setup_core_test_db().await.unwrap();
+        insert(&db.conn, DomainRule::new("dup.com".into())).await.unwrap();
+
+        let result = insert(&db.conn, DomainRule::new("dup.com".into())).await;
+        assert!(result.is_err());
     }
 
     #[tokio::test]

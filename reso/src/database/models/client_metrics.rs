@@ -48,10 +48,7 @@ impl ClientMetrics {
 
 /// Batch upsert client metrics
 /// on conflict, the counts and duration will be accumulated.
-pub async fn batch_upsert(
-    db: &MetricsDatabasePool,
-    rows: &[ClientMetrics],
-) -> Result<(), DatabaseError> {
+pub async fn batch_upsert(db: &MetricsDatabasePool, rows: &[ClientMetrics]) -> Result<(), DatabaseError> {
     if rows.is_empty() {
         return Ok(());
     }
