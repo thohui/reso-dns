@@ -7,8 +7,8 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    database::models::client_metrics::{ClientMetrics, TimelineBucket},
-    database::models::domain_metrics::DomainMetrics,
+    database::models::{client_metrics, domain_metrics},
+    database::models::client_metrics::TimelineBucket,
     global::SharedGlobal,
     metrics::service::LiveStats,
 };
@@ -94,9 +94,9 @@ pub async fn top(global: State<SharedGlobal>, query: Query<TopQuery>) -> Result<
     }
 
     let (clients, domains, blocked_domains) = match tokio::join!(
-        ClientMetrics::top_clients(db, since, db_top),
-        DomainMetrics::top_domains(db, since, db_top),
-        DomainMetrics::top_blocked(db, since, db_top)
+        client_metrics::top_clients(db, since, db_top),
+        domain_metrics::top_domains(db, since, db_top),
+        domain_metrics::top_blocked(db, since, db_top)
     ) {
         (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => {
             tracing::error!("failed to get top stats: {}", e);
@@ -133,7 +133,7 @@ pub async fn timeline(
 ) -> Result<Json<TimelineResponse>, ApiError> {
     let since = range_to_duration(&query.range);
 
-    let buckets = ClientMetrics::timeline(&global.metrics_database, since)
+    let buckets = client_metrics::timeline(&global.metrics_database, since)
         .await
         .map_err(|e| {
             tracing::error!("failed to get timeline: {}", e);

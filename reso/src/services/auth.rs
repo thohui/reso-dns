@@ -8,7 +8,10 @@ use argon2::{
 use crate::{
     database::{
         CoreDatabasePool,
-        models::{user::User, user_session::UserSession as DbUserSession},
+        models::{
+            user::{self, User},
+            user_session::{self, UserSession as DbUserSession},
+        },
     },
     services::ServiceError,
     uuid::EntityId,
@@ -25,7 +28,7 @@ impl AuthService {
 
     /// Performs initial server setup by creating the first admin user and returning an authenticated session.
     pub async fn setup(&self, username: &str, password: &str) -> Result<EntityId<DbUserSession>, ServiceError> {
-        let count = User::count(&self.db).await?;
+        let count = user::count(&self.db).await?;
 
         if count > 0 {
             return Err(ServiceError::Conflict("Setup already completed".into()));
@@ -39,14 +42,14 @@ impl AuthService {
 
         let user = User::new(username.trim(), hash);
         let user_id = user.id.clone();
-        user.insert(&self.db).await?;
+        user::insert(&self.db, user).await?;
 
         self.create_session(user_id).await
     }
 
     /// Verify credentials and return a session id.
     pub async fn login(&self, username: &str, password: &str) -> Result<EntityId<DbUserSession>, ServiceError> {
-        let user = match User::find_by_name(&self.db, username).await {
+        let user = match user::find_by_name(&self.db, username).await {
             Ok(Some(user)) => user,
             Ok(None) => {
                 // Simulate hashing to prevent timing attacks.
@@ -67,22 +70,24 @@ impl AuthService {
 
     /// Delete a session.
     pub async fn logout(&self, id: EntityId<DbUserSession>) -> Result<(), ServiceError> {
-        let session = DbUserSession::find_by_id(&self.db, id)
+        let session = user_session::find_by_id(&self.db, id)
             .await?
             .ok_or(ServiceError::Unauthorized("Session not found".into()))?;
 
-        session.delete(&self.db).await?;
+        user_session::delete_by_id(&self.db, session.id).await?;
         Ok(())
     }
 
     /// Validate a session id. Returns the user id on success.
     pub async fn verify_session(&self, id: EntityId<DbUserSession>) -> Result<EntityId<User>, ServiceError> {
-        let session = DbUserSession::find_by_id(&self.db, id)
+        let session = user_session::find_by_id(&self.db, id)
             .await?
             .ok_or(ServiceError::Unauthorized("Session not found".into()))?;
 
         if session.is_expired() {
-            let _ = session.delete(&self.db).await;
+            if let Err(e) = user_session::delete_by_id(&self.db, session.id).await {
+                tracing::error!("failed to delete expired user session: {}", e);
+            }
             return Err(ServiceError::Unauthorized("Session expired".into()));
         }
 
@@ -91,13 +96,13 @@ impl AuthService {
 
     /// Return the number of registered users.
     pub async fn user_count(&self) -> Result<i64, ServiceError> {
-        Ok(User::count(&self.db).await?)
+        Ok(user::count(&self.db).await?)
     }
 
     async fn create_session(&self, user_id: EntityId<User>) -> Result<EntityId<DbUserSession>, ServiceError> {
         let session = DbUserSession::new(user_id);
         let id = session.id.clone();
-        session.insert(&self.db).await?;
+        user_session::insert(&self.db, session).await?;
         Ok(id)
     }
 }

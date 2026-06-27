@@ -25,7 +25,6 @@ const INACTIVE_SESSION_TIMEOUT: i64 = 7 * 24 * 60 * 60 * 1000;
 impl UserSession {
     pub fn new(user_id: EntityId<User>) -> Self {
         let now = now_millis();
-
         Self {
             id: EntityId::from(Uuid::now_v7()),
             user_id,
@@ -34,61 +33,63 @@ impl UserSession {
         }
     }
 
-    pub async fn insert(self, db: &CoreDatabasePool) -> Result<(), DatabaseError> {
-        db.interact(move |c| {
-            c.execute(
-                r#"
-					INSERT INTO user_sessions
-						(id, user_id, created_at, expires_at)
-					VALUES (?1, ?2, ?3, ?4)
-					"#,
-                params![self.id.id(), self.user_id.id(), self.created_at, self.expires_at],
-            )?;
-            Ok(())
-        })
-        .await?;
-
-        Ok(())
-    }
-
-    pub async fn find_by_id(db: &CoreDatabasePool, id: EntityId<Self>) -> Result<Option<Self>, DatabaseError> {
-        db.interact(move |c| {
-            c.query_row(
-                "SELECT id, user_id,  created_at, expires_at FROM user_sessions WHERE id = ?1",
-                params![id.id()],
-                |f| {
-                    let session_id: Uuid = f.get(0)?;
-                    let user_id: Uuid = f.get(1)?;
-                    Ok(Self {
-                        id: EntityId::from(session_id),
-                        user_id: EntityId::from(user_id),
-                        created_at: f.get(2)?,
-                        expires_at: f.get(3)?,
-                    })
-                },
-            )
-            .optional()
-        })
-        .await
-    }
-
-    pub async fn delete(self, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
-        let rows = db
-            .interact(move |c| c.execute("DELETE FROM user_sessions where id = ?", params![self.id.id()]))
-            .await?;
-        Ok(rows > 0)
-    }
-
-    #[allow(unused)]
-    pub async fn delete_by_user_id(db: &CoreDatabasePool, user_id: EntityId<User>) -> Result<bool, DatabaseError> {
-        let rows = db
-            .interact(move |c| c.execute("DELETE FROM user_sessions where user_id = ?", params![user_id.id()]))
-            .await?;
-        Ok(rows > 0)
-    }
-
     pub fn is_expired(&self) -> bool {
         let now = now_millis();
         now > self.expires_at
     }
+}
+pub async fn insert(db: &CoreDatabasePool, user_session: UserSession) -> Result<(), DatabaseError> {
+    db.interact(move |c| {
+        c.execute(
+            r#"
+					INSERT INTO user_sessions
+						(id, user_id, created_at, expires_at)
+					VALUES (?1, ?2, ?3, ?4)
+					"#,
+            params![
+                user_session.id.id(),
+                user_session.user_id.id(),
+                user_session.created_at,
+                user_session.expires_at
+            ],
+        )?;
+        Ok(())
+    })
+    .await?;
+
+    Ok(())
+}
+
+pub async fn find_by_id(
+    db: &CoreDatabasePool,
+    id: EntityId<UserSession>,
+) -> Result<Option<UserSession>, DatabaseError> {
+    db.interact(move |c| {
+        c.query_row(
+            "SELECT id, user_id,  created_at, expires_at FROM user_sessions WHERE id = ?1",
+            params![id.id()],
+            |f| {
+                let session_id: Uuid = f.get(0)?;
+                let user_id: Uuid = f.get(1)?;
+                Ok(UserSession {
+                    id: EntityId::from(session_id),
+                    user_id: EntityId::from(user_id),
+                    created_at: f.get(2)?,
+                    expires_at: f.get(3)?,
+                })
+            },
+        )
+        .optional()
+    })
+    .await
+}
+
+pub async fn delete_by_id(
+    db: &CoreDatabasePool,
+    session_id: EntityId<UserSession>,
+) -> Result<bool, DatabaseError> {
+    let rows = db
+        .interact(move |c| c.execute("DELETE FROM user_sessions where id = ?", params![session_id.id()]))
+        .await?;
+    Ok(rows > 0)
 }

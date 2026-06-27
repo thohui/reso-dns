@@ -49,158 +49,164 @@ impl DomainRule {
     }
 }
 
-impl DomainRule {
-    pub async fn insert(self, db: &CoreDatabasePool) -> Result<(), DatabaseError> {
-        db.interact(move |c| {
+pub async fn insert(db: &CoreDatabasePool, domain_rule: DomainRule) -> Result<(), DatabaseError> {
+    db.interact(move |c| {
             c.execute(
                 "INSERT INTO domain_rules (id, domain, action, match_type, created_at, enabled, subscription_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![
-                    self.id.id(),
-                    self.domain.as_str(),
-                    self.action,
-                    self.match_type,
-                    self.created_at,
-                    self.enabled,
-                    self.subscription_id.as_ref().map(|id| *id.id()),
+                    domain_rule.id.id(),
+                    domain_rule.domain.as_str(),
+                    domain_rule.action,
+                    domain_rule.match_type,
+                    domain_rule.created_at,
+                    domain_rule.enabled,
+                    domain_rule.subscription_id.as_ref().map(|id| *id.id()),
                 ],
             )?;
             Ok(())
         })
         .await?;
-        Ok(())
-    }
+    Ok(())
+}
 
-    pub async fn delete_by_domain(domain: &str, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
-        let domain = domain.to_string();
-        let rows = db
-            .interact(move |c| c.execute("DELETE FROM domain_rules WHERE domain = ?1", params![domain]))
-            .await?;
-        Ok(rows > 0)
-    }
+pub async fn delete(db: &CoreDatabasePool, domain: &str) -> Result<bool, DatabaseError> {
+    let domain = domain.to_string();
+    let rows = db
+        .interact(move |c| c.execute("DELETE FROM domain_rules WHERE domain = ?1", params![domain]))
+        .await?;
+    Ok(rows > 0)
+}
 
-    pub async fn list(
-        db: &CoreDatabasePool,
-        limit: i64,
-        offset: i64,
-        search: Option<String>,
-    ) -> Result<Vec<Self>, DatabaseError> {
-        db.interact(move |c| {
-            let mut b = WhereBuilder::new(2);
-            if let Some(ref s) = search {
-                b.like("domain", s);
-            }
-            let (where_clause, filter_params) = b.build();
+pub async fn list(
+    db: &CoreDatabasePool,
+    limit: i64,
+    offset: i64,
+    search: Option<String>,
+) -> Result<Vec<DomainRule>, DatabaseError> {
+    db.interact(move |c| {
+        let mut b = WhereBuilder::new(2);
+        if let Some(ref s) = search {
+            b.like("domain", s);
+        }
+        let (where_clause, filter_params) = b.build();
 
-            let sql = format!(
-                r#"
+        let sql = format!(
+            r#"
                     SELECT id, domain, action, match_type, created_at, enabled, subscription_id
                     FROM domain_rules
                     WHERE 1=1 {where_clause}
                     ORDER BY created_at DESC
                     LIMIT ?1 OFFSET ?2
                     "#
-            );
-            let mut list_params: Vec<Value> = vec![Value::Integer(limit), Value::Integer(offset)];
-            list_params.extend(filter_params);
+        );
+        let mut list_params: Vec<Value> = vec![Value::Integer(limit), Value::Integer(offset)];
+        list_params.extend(filter_params);
 
-            let mut stmt = c.prepare(&sql)?;
-            let iter = stmt.query_map(rusqlite::params_from_iter(&list_params), |r| {
-                Ok(DomainRule {
-                    id: EntityId::from(r.get::<_, Uuid>(0)?),
-                    domain: r.get(1)?,
-                    action: r.get(2)?,
-                    match_type: r.get(3)?,
-                    created_at: r.get(4)?,
-                    enabled: r.get(5)?,
-                    subscription_id: r.get::<_, Option<Uuid>>(6)?.map(EntityId::from),
-                })
-            })?;
-            iter.collect::<rusqlite::Result<Vec<_>>>()
-        })
-        .await
-    }
+        let mut stmt = c.prepare(&sql)?;
+        let iter = stmt.query_map(rusqlite::params_from_iter(&list_params), |r| {
+            Ok(DomainRule {
+                id: EntityId::from(r.get::<_, Uuid>(0)?),
+                domain: r.get(1)?,
+                action: r.get(2)?,
+                match_type: r.get(3)?,
+                created_at: r.get(4)?,
+                enabled: r.get(5)?,
+                subscription_id: r.get::<_, Option<Uuid>>(6)?.map(EntityId::from),
+            })
+        })?;
+        iter.collect::<rusqlite::Result<Vec<_>>>()
+    })
+    .await
+}
 
-    pub async fn list_enabled_by_action(action: ListAction, db: &CoreDatabasePool) -> Result<Vec<Self>, DatabaseError> {
-        db.interact(move |c| {
-            let mut stmt = c.prepare(
-                "SELECT id, domain, action, match_type, created_at, enabled, subscription_id \
+pub async fn list_enabled_by_action(
+    db: &CoreDatabasePool,
+    action: ListAction,
+) -> Result<Vec<DomainRule>, DatabaseError> {
+    db.interact(move |c| {
+        let mut stmt = c.prepare(
+            "SELECT id, domain, action, match_type, created_at, enabled, subscription_id \
                  FROM domain_rules WHERE action = ?1 AND enabled = 1 ORDER BY created_at",
-            )?;
-            let iter = stmt.query_map(params![action], |r| {
-                Ok(DomainRule {
-                    id: EntityId::from(r.get::<_, Uuid>(0)?),
-                    domain: r.get(1)?,
-                    action: r.get(2)?,
-                    match_type: r.get(3)?,
-                    created_at: r.get(4)?,
-                    enabled: r.get(5)?,
-                    subscription_id: r.get::<_, Option<Uuid>>(6)?.map(EntityId::from),
-                })
-            })?;
-            iter.collect::<rusqlite::Result<Vec<_>>>()
-        })
-        .await
-    }
+        )?;
+        let iter = stmt.query_map(params![action], |r| {
+            Ok(DomainRule {
+                id: EntityId::from(r.get::<_, Uuid>(0)?),
+                domain: r.get(1)?,
+                action: r.get(2)?,
+                match_type: r.get(3)?,
+                created_at: r.get(4)?,
+                enabled: r.get(5)?,
+                subscription_id: r.get::<_, Option<Uuid>>(6)?.map(EntityId::from),
+            })
+        })?;
+        iter.collect::<rusqlite::Result<Vec<_>>>()
+    })
+    .await
+}
 
-    #[allow(unused)]
-    pub async fn list_all(db: &CoreDatabasePool) -> Result<Vec<Self>, DatabaseError> {
-        db.interact(move |c| {
-            let mut stmt = c.prepare(
-                r#"
+#[allow(unused)]
+pub async fn list_all(db: &CoreDatabasePool) -> Result<Vec<DomainRule>, DatabaseError> {
+    db.interact(move |c| {
+        let mut stmt = c.prepare(
+            r#"
                     SELECT id, domain, action, match_type, created_at, enabled, subscription_id
                     FROM domain_rules
                     ORDER BY created_at
                     "#,
-            )?;
-            let iter = stmt.query_map([], |r| {
-                Ok(DomainRule {
-                    id: EntityId::from(r.get::<_, Uuid>(0)?),
-                    domain: r.get(1)?,
-                    action: r.get(2)?,
-                    match_type: r.get(3)?,
-                    created_at: r.get(4)?,
-                    enabled: r.get(5)?,
-                    subscription_id: r.get::<_, Option<Uuid>>(6)?.map(EntityId::from),
-                })
-            })?;
-            iter.collect::<rusqlite::Result<Vec<_>>>()
+        )?;
+        let iter = stmt.query_map([], |r| {
+            Ok(DomainRule {
+                id: EntityId::from(r.get::<_, Uuid>(0)?),
+                domain: r.get(1)?,
+                action: r.get(2)?,
+                match_type: r.get(3)?,
+                created_at: r.get(4)?,
+                enabled: r.get(5)?,
+                subscription_id: r.get::<_, Option<Uuid>>(6)?.map(EntityId::from),
+            })
+        })?;
+        iter.collect::<rusqlite::Result<Vec<_>>>()
+    })
+    .await
+}
+
+pub async fn update_action(
+    db: &CoreDatabasePool,
+    domain: &str,
+    action: ListAction,
+) -> Result<bool, DatabaseError> {
+    let domain = domain.to_string();
+    let rows = db
+        .interact(move |c| {
+            c.execute(
+                "UPDATE domain_rules SET action = ?1, subscription_id = NULL WHERE domain = ?2",
+                params![action, domain],
+            )
         })
-        .await
-    }
+        .await?;
+    Ok(rows > 0)
+}
 
-    pub async fn update_action(domain: &str, action: ListAction, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
-        let domain = domain.to_string();
-        let rows = db
-            .interact(move |c| {
-                c.execute(
-                    "UPDATE domain_rules SET action = ?1, subscription_id = NULL WHERE domain = ?2",
-                    params![action, domain],
-                )
-            })
-            .await?;
-        Ok(rows > 0)
-    }
+pub async fn toggle(db: &CoreDatabasePool, domain: &str) -> Result<bool, DatabaseError> {
+    let domain = domain.to_string();
+    let rows = db
+        .interact(move |c| {
+            c.execute(
+                "UPDATE domain_rules SET enabled = NOT enabled WHERE domain = ?1",
+                params![domain],
+            )
+        })
+        .await?;
+    Ok(rows > 0)
+}
 
-    pub async fn toggle(domain: &str, db: &CoreDatabasePool) -> Result<bool, DatabaseError> {
-        let domain = domain.to_string();
-        let rows = db
-            .interact(move |c| {
-                c.execute(
-                    "UPDATE domain_rules SET enabled = NOT enabled WHERE domain = ?1",
-                    params![domain],
-                )
-            })
-            .await?;
-        Ok(rows > 0)
-    }
-
-    pub async fn sync_subscription(
-        subscription_id: EntityId<ListSubscription>,
-        domains: Vec<(String, MatchType, ListAction)>,
-        db: &CoreDatabasePool,
-    ) -> Result<i64, DatabaseError> {
-        let now = now_millis();
-        db
+pub async fn sync_subscription(
+    subscription_id: EntityId<ListSubscription>,
+    domains: Vec<(String, MatchType, ListAction)>,
+    db: &CoreDatabasePool,
+) -> Result<i64, DatabaseError> {
+    let now = now_millis();
+    db
             .interact(move |c| {
                 let tx = c.transaction()?;
 
@@ -272,26 +278,28 @@ impl DomainRule {
                 Ok(count)
             })
             .await
-    }
+}
 
-    pub async fn row_count(db: &CoreDatabasePool, search: Option<String>) -> Result<i64, DatabaseError> {
-        db.interact(move |c| {
-            let mut b = WhereBuilder::new(0);
-            if let Some(ref s) = search {
-                b.like("domain", s);
-            }
-            let (where_clause, filter_params) = b.build();
-            let sql = format!("SELECT COUNT(*) FROM domain_rules WHERE 1=1 {where_clause}");
-            c.query_row(&sql, rusqlite::params_from_iter(&filter_params), |r| r.get(0))
-        })
-        .await
-    }
+pub async fn count(db: &CoreDatabasePool, search: Option<String>) -> Result<i64, DatabaseError> {
+    db.interact(move |c| {
+        let mut b = WhereBuilder::new(0);
+        if let Some(ref s) = search {
+            b.like("domain", s);
+        }
+        let (where_clause, filter_params) = b.build();
+        let sql = format!("SELECT COUNT(*) FROM domain_rules WHERE 1=1 {where_clause}");
+        c.query_row(&sql, rusqlite::params_from_iter(&filter_params), |r| r.get(0))
+    })
+    .await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::{models::list_subscription::ListSubscription, setup_core_test_db};
+    use crate::database::{
+        models::list_subscription::{self, ListSubscription},
+        setup_core_test_db,
+    };
 
     fn cmp_block((domain, action): &(String, ListAction), expected: &str) -> bool {
         domain == expected && *action == ListAction::Block
@@ -306,9 +314,9 @@ mod tests {
     async fn test_insert_and_list() {
         let db = setup_core_test_db().await.unwrap();
         let rule = DomainRule::new("google.com".into());
-        rule.clone().insert(&db.conn).await.unwrap();
+        insert(&db.conn, rule.clone()).await.unwrap();
 
-        let rules = DomainRule::list(&db.conn, 10, 0, None).await.unwrap();
+        let rules = list(&db.conn, 10, 0, None).await.unwrap();
         assert_eq!(rules.len(), 1);
         assert_eq!(rules[0], rule);
     }
@@ -317,68 +325,60 @@ mod tests {
     async fn test_list_pagination() {
         let db = setup_core_test_db().await.unwrap();
         for i in 0..5 {
-            DomainRule::new(format!("domain{i}.com"))
-                .insert(&db.conn)
-                .await
-                .unwrap();
+            let domain_rule = DomainRule::new(format!("domain{i}.com"));
+            insert(&db.conn, domain_rule).await.unwrap();
         }
 
-        let page1 = DomainRule::list(&db.conn, 2, 0, None).await.unwrap();
+        let page1 = list(&db.conn, 2, 0, None).await.unwrap();
         assert_eq!(page1.len(), 2);
 
-        let page2 = DomainRule::list(&db.conn, 2, 2, None).await.unwrap();
+        let page2 = list(&db.conn, 2, 2, None).await.unwrap();
         assert_eq!(page2.len(), 2);
 
-        let page3 = DomainRule::list(&db.conn, 2, 4, None).await.unwrap();
+        let page3 = list(&db.conn, 2, 4, None).await.unwrap();
         assert_eq!(page3.len(), 1);
     }
 
     #[tokio::test]
     async fn test_toggle() {
         let db = setup_core_test_db().await.unwrap();
-        DomainRule::new("toggle.com".into()).insert(&db.conn).await.unwrap();
 
-        let before = DomainRule::list(&db.conn, 1, 0, None).await.unwrap();
+        let nd = DomainRule::new("toggle.com".into());
+        insert(&db.conn, nd).await.unwrap();
+
+        let before = list(&db.conn, 1, 0, None).await.unwrap();
         assert!(before[0].enabled);
 
-        DomainRule::toggle("toggle.com", &db.conn).await.unwrap();
+        toggle(&db.conn, "toggle.com").await.unwrap();
 
-        let after = DomainRule::list(&db.conn, 1, 0, None).await.unwrap();
+        let after = list(&db.conn, 1, 0, None).await.unwrap();
         assert!(!after[0].enabled);
 
-        DomainRule::toggle("toggle.com", &db.conn).await.unwrap();
+        toggle(&db.conn, "toggle.com").await.unwrap();
 
-        let restored = DomainRule::list(&db.conn, 1, 0, None).await.unwrap();
+        let restored = list(&db.conn, 1, 0, None).await.unwrap();
         assert!(restored[0].enabled);
     }
 
     #[tokio::test]
     async fn test_delete() {
         let db = setup_core_test_db().await.unwrap();
+
         let rule = DomainRule::new("delete-me.com".into());
-        rule.insert(&db.conn).await.unwrap();
+        insert(&db.conn, rule).await.unwrap();
 
-        assert_eq!(DomainRule::row_count(&db.conn, None).await.unwrap(), 1);
-        DomainRule::delete_by_domain("delete-me.com", &db.conn).await.unwrap();
-        assert_eq!(DomainRule::row_count(&db.conn, None).await.unwrap(), 0);
-    }
-
-    #[tokio::test]
-    async fn test_duplicate_insert_fails() {
-        let db = setup_core_test_db().await.unwrap();
-        DomainRule::new("dup.com".into()).insert(&db.conn).await.unwrap();
-
-        let result = DomainRule::new("dup.com".into()).insert(&db.conn).await;
-        assert!(result.is_err());
+        assert_eq!(count(&db.conn, None).await.unwrap(), 1);
+        delete(&db.conn, "delete-me.com").await.unwrap();
+        assert_eq!(count(&db.conn, None).await.unwrap(), 0);
     }
 
     #[tokio::test]
     async fn test_sync_subscription() {
         let db = setup_core_test_db().await.unwrap();
         let sub = ListSubscription::new("Test".into(), "https://example.com/list.txt".into());
-        sub.clone().insert(&db.conn).await.unwrap();
+        list_subscription::insert(&db.conn, sub.clone()).await.unwrap();
 
-        let count = DomainRule::sync_subscription(
+        let count = sync_subscription(
             sub.id.clone(),
             vec![
                 ("a.com".into(), MatchType::Domain, ListAction::Block),
@@ -391,7 +391,7 @@ mod tests {
         .unwrap();
         assert_eq!(count, 3);
 
-        let count = DomainRule::sync_subscription(
+        let count = sync_subscription(
             sub.id,
             vec![
                 ("a.com".into(), MatchType::Domain, ListAction::Block),
@@ -404,7 +404,7 @@ mod tests {
         .unwrap();
         assert_eq!(count, 3);
 
-        let all = DomainRule::list_all(&db.conn).await.unwrap();
+        let all = list_all(&db.conn).await.unwrap();
         let entries: Vec<_> = all.iter().map(|r| (r.domain.clone(), r.action)).collect();
         assert!(entries.iter().any(|e| cmp_block(e, "a.com")));
         assert!(entries.iter().any(|e| cmp_block(e, "b.com")));

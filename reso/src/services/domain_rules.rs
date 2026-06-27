@@ -12,7 +12,11 @@ use tokio::{
 use crate::{
     database::{
         CoreDatabasePool, DatabaseError,
-        models::{ListAction, MatchType, domain_rule::DomainRule, list_subscription::ListSubscription},
+        models::{
+            ListAction, MatchType,
+            domain_rule::{self, DomainRule},
+            list_subscription::{self, ListSubscription},
+        },
     },
     global::SharedGlobal,
     uuid::EntityId,
@@ -42,8 +46,8 @@ pub struct Matchers {
 impl Matchers {
     /// Load the matchers from db.
     pub async fn load(db: &CoreDatabasePool) -> anyhow::Result<Self> {
-        let allow_list = DomainRule::list_enabled_by_action(ListAction::Allow, db).await?;
-        let block_list = DomainRule::list_enabled_by_action(ListAction::Block, db).await?;
+        let allow_list = domain_rule::list_enabled_by_action(db, ListAction::Allow).await?;
+        let block_list = domain_rule::list_enabled_by_action(db, ListAction::Block).await?;
         Ok(Self {
             blocklist_matcher: Arc::new(DomainListMatcher::load(
                 block_list.iter().filter(|d| d.enabled).map(|d| d.to_domain_pattern()),
@@ -88,7 +92,7 @@ impl DomainRulesService {
         rule.action = action;
         rule.match_type = match_type;
 
-        rule.insert(&self.connection).await.map_err(|e| {
+        domain_rule::insert(&self.connection, rule).await.map_err(|e| {
             if e.is_unique_constraint_violation() {
                 ServiceError::Conflict("Domain already has a rule".into())
             } else {
@@ -108,7 +112,7 @@ impl DomainRulesService {
     pub async fn remove_domain(&self, domain: &str) -> Result<(), ServiceError> {
         let domain = normalize_bare_domain(domain)?;
 
-        let changed = DomainRule::delete_by_domain(&domain, &self.connection).await?;
+        let changed = domain_rule::delete(&self.connection, &domain).await?;
 
         if !changed {
             return Err(ServiceError::NotFound("Domain not found".into()));
@@ -122,7 +126,7 @@ impl DomainRulesService {
     pub async fn update_domain_action(&self, domain: &str, action: ListAction) -> Result<(), ServiceError> {
         let domain = normalize_bare_domain(domain)?;
 
-        let changed = DomainRule::update_action(&domain, action, &self.connection).await?;
+        let changed = domain_rule::update_action(&self.connection, &domain, action).await?;
 
         if !changed {
             return Err(ServiceError::NotFound("Domain not found".into()));
@@ -136,7 +140,7 @@ impl DomainRulesService {
     pub async fn toggle_domain(&self, domain: &str) -> Result<(), ServiceError> {
         let domain = normalize_bare_domain(domain)?;
 
-        let changed = DomainRule::toggle(&domain, &self.connection).await?;
+        let changed = domain_rule::toggle(&self.connection, &domain).await?;
 
         if !changed {
             return Err(ServiceError::NotFound("Domain not found".into()));
@@ -164,7 +168,7 @@ impl DomainRulesService {
     async fn reload_allow_list(&self) -> Result<(), ServiceError> {
         let _guard = self.write_lock.lock().await;
 
-        let rules = DomainRule::list_enabled_by_action(ListAction::Allow, &self.connection).await?;
+        let rules = domain_rule::list_enabled_by_action(&self.connection, ListAction::Allow).await?;
 
         let new_matcher = Arc::new(
             DomainListMatcher::load(rules.iter().map(|r| r.to_domain_pattern())).map_err(ServiceError::Internal)?,
@@ -183,7 +187,7 @@ impl DomainRulesService {
     /// Reload the blocklist.
     async fn reload_blocklist(&self) -> Result<(), ServiceError> {
         let _guard = self.write_lock.lock().await;
-        let rules = DomainRule::list_enabled_by_action(ListAction::Block, &self.connection).await?;
+        let rules = domain_rule::list_enabled_by_action(&self.connection, ListAction::Block).await?;
         let new_matcher = Arc::new(
             DomainListMatcher::load(rules.iter().map(|r| r.to_domain_pattern())).map_err(ServiceError::Internal)?,
         );
@@ -208,12 +212,12 @@ impl DomainRulesService {
 
     /// List all subscriptions with their current domain counts (derived from domain_rules).
     pub async fn list_subscriptions_with_counts(&self) -> Result<Vec<(ListSubscription, i64)>, ServiceError> {
-        Ok(ListSubscription::list_with_domain_counts(&self.connection).await?)
+        Ok(list_subscription::list_with_domain_counts(&self.connection).await?)
     }
 
     /// Remove a list subscription by ID.
     pub async fn remove_list_subscription(&self, id: EntityId<ListSubscription>) -> Result<(), ServiceError> {
-        let changed = ListSubscription::delete_by_id(id, &self.connection).await?;
+        let changed = list_subscription::delete_by_id(&self.connection, id).await?;
         if !changed {
             return Err(ServiceError::NotFound("Subscription not found".into()));
         }
@@ -224,7 +228,7 @@ impl DomainRulesService {
     /// Toggle the enabled state of a list subscription by ID.
     /// This also causes all the underlying domain rules from the subscription to be toggled to the same value.
     pub async fn toggle_list_subscription(&self, id: EntityId<ListSubscription>) -> Result<(), ServiceError> {
-        let changed = ListSubscription::toggle_enabled(id, &self.connection).await?;
+        let changed = list_subscription::toggle_enabled(&self.connection, id).await?;
         if !changed {
             return Err(ServiceError::NotFound("Subscription not found".into()));
         }
@@ -236,7 +240,7 @@ impl DomainRulesService {
         &self,
         id: EntityId<ListSubscription>,
     ) -> Result<(), ServiceError> {
-        let changed = ListSubscription::toggle_sync_enabled(id, &self.connection).await?;
+        let changed = list_subscription::toggle_sync_enabled(&self.connection, id).await?;
         if !changed {
             return Err(ServiceError::NotFound("Subscription not found".into()));
         }
@@ -244,7 +248,7 @@ impl DomainRulesService {
     }
 
     pub async fn sync_subscriptions(&self) {
-        let subscriptions = match ListSubscription::list(&self.connection).await {
+        let subscriptions = match list_subscription::list(&self.connection).await {
             Ok(subs) => subs,
             Err(e) => {
                 tracing::error!("failed to load list subscriptions: {}", e);
@@ -326,20 +330,22 @@ impl DomainRulesService {
             ));
         }
 
-        list_subscription.clone().insert(&self.connection).await.map_err(|e| {
-            if e.is_unique_constraint_violation() {
-                ServiceError::Conflict("A subscription with the same URL already exists".into())
-            } else {
-                ServiceError::Internal(e.into())
-            }
-        })?;
+        list_subscription::insert(&self.connection, list_subscription.clone())
+            .await
+            .map_err(|e| {
+                if e.is_unique_constraint_violation() {
+                    ServiceError::Conflict("A subscription with the same URL already exists".into())
+                } else {
+                    ServiceError::Internal(e.into())
+                }
+            })?;
 
         // run initial sync so the user gets rules immediately.
         if let Err(e) =
             fetch_domain_rules_from_list_subscription_task(&list_subscription, &http_client, &self.connection).await
         {
             // rollback
-            if let Err(e) = ListSubscription::delete_by_id(list_subscription.id, &self.connection).await {
+            if let Err(e) = list_subscription::delete_by_id(&self.connection, list_subscription.id).await {
                 tracing::error!("failed to delete list subscription after failing sync: {}", e);
             }
             tracing::error!("failed to fetch domain rules from subscription after adding: {}", e);
@@ -524,9 +530,9 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
         tracing::warn!("list subscription {} contained no valid domains", subscription.url);
     }
 
-    let count = DomainRule::sync_subscription(subscription.id.clone(), domains, db).await?;
+    let count = domain_rule::sync_subscription(subscription.id.clone(), domains, db).await?;
 
-    ListSubscription::update_after_sync(subscription.id.clone(), etag, last_modified, db).await?;
+    list_subscription::update_after_sync(subscription.id.clone(), etag, last_modified, db).await?;
 
     tracing::info!(
         "synced {} domains from list subscription: '{}'",

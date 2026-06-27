@@ -134,154 +134,153 @@ pub struct Stats {
     pub sum_duration: i64,
 }
 
-impl ActivityLog {
-    pub async fn fetch_stats(db: &MetricsDatabasePool) -> Result<Stats, DatabaseError> {
-        db.interact(move |c| {
-            c.query_row(
-                r#"
-                SELECT
-                    COUNT(*) as total,
-                    COALESCE(SUM(CASE WHEN blocked = 1 THEN 1 ELSE 0 END), 0) as blocked,
-                    COALESCE(SUM(CASE WHEN cache_hit = 1 THEN 1 ELSE 0 END), 0) as cached,
-                    COALESCE(SUM(CASE WHEN kind = 'error' THEN 1 ELSE 0 END), 0) as errors,
-                    COALESCE(SUM(dur_ms), 0) as sum_duration
-                FROM activity_log
-                "#,
-                [],
-                |r| {
-                    Ok(Stats {
-                        total: r.get(0)?,
-                        blocked: r.get(1)?,
-                        cached: r.get(2)?,
-                        errors: r.get(3)?,
-                        sum_duration: r.get(4)?,
-                    })
-                },
-            )
-        })
-        .await
+pub async fn stats(db: &MetricsDatabasePool) -> Result<Stats, DatabaseError> {
+    db.interact(move |c| {
+        c.query_row(
+            r#"
+            SELECT
+                COUNT(*) as total,
+                COALESCE(SUM(CASE WHEN blocked = 1 THEN 1 ELSE 0 END), 0) as blocked,
+                COALESCE(SUM(CASE WHEN cache_hit = 1 THEN 1 ELSE 0 END), 0) as cached,
+                COALESCE(SUM(CASE WHEN kind = 'error' THEN 1 ELSE 0 END), 0) as errors,
+                COALESCE(SUM(dur_ms), 0) as sum_duration
+            FROM activity_log
+            "#,
+            [],
+            |r| {
+                Ok(Stats {
+                    total: r.get(0)?,
+                    blocked: r.get(1)?,
+                    cached: r.get(2)?,
+                    errors: r.get(3)?,
+                    sum_duration: r.get(4)?,
+                })
+            },
+        )
+    })
+    .await
+}
+
+pub async fn batch_insert(db: &MetricsDatabasePool, rows: &[ActivityLog]) -> Result<(), DatabaseError> {
+    if rows.is_empty() {
+        return Ok(());
     }
-    pub async fn batch_insert(db: &MetricsDatabasePool, rows: &[Self]) -> Result<(), DatabaseError> {
-        if rows.is_empty() {
-            return Ok(());
+
+    let owned = rows.to_vec();
+
+    db.interact(move |c| {
+        let tx = c.transaction()?;
+
+        {
+            let mut stmt = tx.prepare(
+                r#"
+                INSERT INTO activity_log
+                  (ts_ms, kind, transport, client, qname, qtype, dur_ms,
+                   rcode, blocked, cache_hit, rate_limited, error_type, error_message)
+                VALUES
+                  (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+                "#,
+            )?;
+
+            for r in owned {
+                stmt.execute(params![
+                    r.ts_ms,
+                    r.kind,
+                    r.transport,
+                    r.client,
+                    r.qname,
+                    r.qtype,
+                    r.dur_ms,
+                    r.rcode,
+                    r.blocked,
+                    r.cache_hit,
+                    r.rate_limited,
+                    r.error_type,
+                    r.error_message,
+                ])?;
+            }
         }
 
-        let owned = rows.to_vec();
+        tx.commit()?;
+        Ok(())
+    })
+    .await?;
 
-        db.interact(move |c| {
-            let tx = c.transaction()?;
+    Ok(())
+}
 
-            {
-                let mut stmt = tx.prepare(
-                    r#"
-                    INSERT INTO activity_log
-                      (ts_ms, kind, transport, client, qname, qtype, dur_ms,
-                       rcode, blocked, cache_hit, rate_limited, error_type, error_message)
-                    VALUES
-                      (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
-                    "#,
-                )?;
+pub async fn list(
+    db: &MetricsDatabasePool,
+    limit: i64,
+    offset: i64,
+    filter: ListFilter,
+    sort: SortColumn,
+    dir: SortDir,
+    include_count: bool,
+) -> Result<Page<ActivityLog>, DatabaseError> {
+    db.interact(move |c| {
+        let (where_clause, filter_params) = filter.build_where(2);
 
-                for r in owned {
-                    stmt.execute(params![
-                        r.ts_ms,
-                        r.kind,
-                        r.transport,
-                        r.client,
-                        r.qname,
-                        r.qtype,
-                        r.dur_ms,
-                        r.rcode,
-                        r.blocked,
-                        r.cache_hit,
-                        r.rate_limited,
-                        r.error_type,
-                        r.error_message,
-                    ])?;
-                }
-            }
+        let select_sql = format!(
+            r#"
+                SELECT
+                  ts_ms,
+                  kind,
+                  id,
+                  transport,
+                  client,
+                  qname,
+                  qtype,
+                  rcode,
+                  blocked,
+                  cache_hit,
+                  dur_ms,
+                  error_type,
+                  error_message,
+                  rate_limited
+                FROM activity_log
+                WHERE 1=1 {where_clause}
+                ORDER BY {sort_col} {sort_dir}, kind ASC, id DESC
+                LIMIT ?1 OFFSET ?2
+                "#,
+            sort_col = sort.as_sql(),
+            sort_dir = dir.as_sql(),
+        );
 
-            tx.commit()?;
-            Ok(())
+        let mut list_params: Vec<Value> = vec![Value::Integer(limit), Value::Integer(offset)];
+        list_params.extend(filter_params);
+
+        let tx = c.transaction()?;
+
+        let items = {
+            let mut stmt = tx.prepare(&select_sql)?;
+            let iter = stmt.query_map(rusqlite::params_from_iter(&list_params), map_row)?;
+            iter.collect::<Result<Vec<_>, rusqlite::Error>>()?
+        };
+
+        let total = if include_count {
+            let (count_where, count_params) = filter.build_where(0);
+            let count_sql = format!("SELECT COUNT(*) FROM activity_log WHERE 1=1 {count_where}");
+            Some(tx.query_row(&count_sql, rusqlite::params_from_iter(&count_params), |r| r.get(0))?)
+        } else {
+            None
+        };
+
+        tx.commit()?;
+
+        Ok(Page { items, total })
+    })
+    .await
+}
+
+pub async fn delete_before(db: &MetricsDatabasePool, cutoff_ts_ms: i64) -> Result<bool, DatabaseError> {
+    let rows = db
+        .interact(move |c| {
+            let rows = c.execute("DELETE FROM activity_log WHERE ts_ms < ?1", params![cutoff_ts_ms])?;
+            Ok(rows)
         })
         .await?;
-
-        Ok(())
-    }
-
-    pub async fn list(
-        db: &MetricsDatabasePool,
-        limit: i64,
-        offset: i64,
-        filter: ListFilter,
-        sort: SortColumn,
-        dir: SortDir,
-        include_count: bool,
-    ) -> Result<Page<Self>, DatabaseError> {
-        db.interact(move |c| {
-            let (where_clause, filter_params) = filter.build_where(2);
-
-            let select_sql = format!(
-                r#"
-                    SELECT
-                      ts_ms,
-                      kind,
-                      id,
-                      transport,
-                      client,
-                      qname,
-                      qtype,
-                      rcode,
-                      blocked,
-                      cache_hit,
-                      dur_ms,
-                      error_type,
-                      error_message,
-                      rate_limited
-                    FROM activity_log
-                    WHERE 1=1 {where_clause}
-                    ORDER BY {sort_col} {sort_dir}, kind ASC, id DESC
-                    LIMIT ?1 OFFSET ?2
-                    "#,
-                sort_col = sort.as_sql(),
-                sort_dir = dir.as_sql(),
-            );
-
-            let mut list_params: Vec<Value> = vec![Value::Integer(limit), Value::Integer(offset)];
-            list_params.extend(filter_params);
-
-            let tx = c.transaction()?;
-
-            let items = {
-                let mut stmt = tx.prepare(&select_sql)?;
-                let iter = stmt.query_map(rusqlite::params_from_iter(&list_params), map_row)?;
-                iter.collect::<Result<Vec<_>, rusqlite::Error>>()?
-            };
-
-            let total = if include_count {
-                let (count_where, count_params) = filter.build_where(0);
-                let count_sql = format!("SELECT COUNT(*) FROM activity_log WHERE 1=1 {count_where}");
-                Some(tx.query_row(&count_sql, rusqlite::params_from_iter(&count_params), |r| r.get(0))?)
-            } else {
-                None
-            };
-
-            tx.commit()?;
-
-            Ok(Page { items, total })
-        })
-        .await
-    }
-
-    pub async fn delete_before(db: &MetricsDatabasePool, cutoff_ts_ms: i64) -> Result<bool, DatabaseError> {
-        let rows = db
-            .interact(move |c| {
-                let rows = c.execute("DELETE FROM activity_log WHERE ts_ms < ?1", params![cutoff_ts_ms])?;
-                Ok(rows)
-            })
-            .await?;
-        Ok(rows > 0)
-    }
+    Ok(rows > 0)
 }
 
 #[cfg(test)]
@@ -333,8 +332,8 @@ mod tests {
         limit: i64,
         offset: i64,
     ) -> Page<ActivityLog> {
-        ActivityLog::batch_insert(db, rows).await.unwrap();
-        ActivityLog::list(
+        batch_insert(db, rows).await.unwrap();
+        list(
             db,
             limit,
             offset,
@@ -412,9 +411,9 @@ mod tests {
             .map(|i| make_query(i * 1000))
             .chain(std::iter::once(make_error(5000)))
             .collect();
-        ActivityLog::batch_insert(&db.conn, &rows).await.unwrap();
+        batch_insert(&db.conn, &rows).await.unwrap();
 
-        let page1 = ActivityLog::list(
+        let page1 = list(
             &db.conn,
             3,
             0,
@@ -425,7 +424,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let page2 = ActivityLog::list(
+        let page2 = list(
             &db.conn,
             3,
             3,
@@ -446,11 +445,11 @@ mod tests {
     #[tokio::test]
     async fn test_filter_error_only() {
         let db = setup_metrics_test_db().await.unwrap();
-        ActivityLog::batch_insert(&db.conn, &[make_query(1000), make_error(2000)])
+        batch_insert(&db.conn, &[make_query(1000), make_error(2000)])
             .await
             .unwrap();
 
-        let page = ActivityLog::list(
+        let page = list(
             &db.conn,
             10,
             0,
@@ -475,11 +474,11 @@ mod tests {
         let db = setup_metrics_test_db().await.unwrap();
         let mut blocked = make_query(1000);
         blocked.blocked = Some(true);
-        ActivityLog::batch_insert(&db.conn, &[make_query(2000), blocked])
+        batch_insert(&db.conn, &[make_query(2000), blocked])
             .await
             .unwrap();
 
-        let page = ActivityLog::list(
+        let page = list(
             &db.conn,
             10,
             0,
@@ -504,11 +503,11 @@ mod tests {
         let db = setup_metrics_test_db().await.unwrap();
         let mut quad_a = make_query(1000);
         quad_a.qtype = Some(28);
-        ActivityLog::batch_insert(&db.conn, &[make_query(2000), quad_a])
+        batch_insert(&db.conn, &[make_query(2000), quad_a])
             .await
             .unwrap();
 
-        let page = ActivityLog::list(
+        let page = list(
             &db.conn,
             10,
             0,
@@ -533,11 +532,11 @@ mod tests {
         let db = setup_metrics_test_db().await.unwrap();
         let mut cached = make_query(1000);
         cached.cache_hit = Some(true);
-        ActivityLog::batch_insert(&db.conn, &[make_query(2000), cached])
+        batch_insert(&db.conn, &[make_query(2000), cached])
             .await
             .unwrap();
 
-        let page = ActivityLog::list(
+        let page = list(
             &db.conn,
             10,
             0,
@@ -562,11 +561,11 @@ mod tests {
         let db = setup_metrics_test_db().await.unwrap();
         let mut limited = make_query(1000);
         limited.rate_limited = Some(true);
-        ActivityLog::batch_insert(&db.conn, &[make_query(2000), limited])
+        batch_insert(&db.conn, &[make_query(2000), limited])
             .await
             .unwrap();
 
-        let page = ActivityLog::list(
+        let page = list(
             &db.conn,
             10,
             0,
@@ -591,11 +590,11 @@ mod tests {
         let db = setup_metrics_test_db().await.unwrap();
         let mut other = make_query(1000);
         other.client = "10.0.0.1".to_string();
-        ActivityLog::batch_insert(&db.conn, &[make_query(2000), other])
+        batch_insert(&db.conn, &[make_query(2000), other])
             .await
             .unwrap();
 
-        let page = ActivityLog::list(
+        let page = list(
             &db.conn,
             10,
             0,
@@ -620,11 +619,11 @@ mod tests {
         let db = setup_metrics_test_db().await.unwrap();
         let mut other = make_query(1000);
         other.qname = Some("other.com".to_string());
-        ActivityLog::batch_insert(&db.conn, &[make_query(2000), other])
+        batch_insert(&db.conn, &[make_query(2000), other])
             .await
             .unwrap();
 
-        let page = ActivityLog::list(
+        let page = list(
             &db.conn,
             10,
             0,
@@ -651,11 +650,11 @@ mod tests {
         q1.qname = Some("ads.google.com".to_string());
         let mut q2 = make_query(2000);
         q2.qname = Some("mail.google.com".to_string());
-        ActivityLog::batch_insert(&db.conn, &[make_query(3000), q1, q2])
+        batch_insert(&db.conn, &[make_query(3000), q1, q2])
             .await
             .unwrap();
 
-        let page = ActivityLog::list(
+        let page = list(
             &db.conn,
             10,
             0,
@@ -684,11 +683,11 @@ mod tests {
         let mut other = make_query(3000);
         other.client = "10.0.0.1".to_string();
 
-        ActivityLog::batch_insert(&db.conn, &[make_query(2000), other, target])
+        batch_insert(&db.conn, &[make_query(2000), other, target])
             .await
             .unwrap();
 
-        let page = ActivityLog::list(
+        let page = list(
             &db.conn,
             10,
             0,
@@ -721,9 +720,9 @@ mod tests {
                 q
             })
             .collect();
-        ActivityLog::batch_insert(&db.conn, &rows).await.unwrap();
+        batch_insert(&db.conn, &rows).await.unwrap();
 
-        let page = ActivityLog::list(
+        let page = list(
             &db.conn,
             10,
             0,
@@ -742,9 +741,9 @@ mod tests {
     #[tokio::test]
     async fn test_filter_client_sql_injection() {
         let db = setup_metrics_test_db().await.unwrap();
-        ActivityLog::batch_insert(&db.conn, &[make_query(1000)]).await.unwrap();
+        batch_insert(&db.conn, &[make_query(1000)]).await.unwrap();
 
-        let page = ActivityLog::list(
+        let page = list(
             &db.conn,
             10,
             0,
@@ -766,9 +765,9 @@ mod tests {
     #[tokio::test]
     async fn test_filter_qname_sql_injection() {
         let db = setup_metrics_test_db().await.unwrap();
-        ActivityLog::batch_insert(&db.conn, &[make_query(1000)]).await.unwrap();
+        batch_insert(&db.conn, &[make_query(1000)]).await.unwrap();
 
-        let page = ActivityLog::list(
+        let page = list(
             &db.conn,
             10,
             0,
@@ -790,13 +789,13 @@ mod tests {
     #[tokio::test]
     async fn test_delete_before() {
         let db = setup_metrics_test_db().await.unwrap();
-        ActivityLog::batch_insert(&db.conn, &[make_query(1000), make_query(2000), make_error(3000)])
+        batch_insert(&db.conn, &[make_query(1000), make_query(2000), make_error(3000)])
             .await
             .unwrap();
 
-        ActivityLog::delete_before(&db.conn, 2000).await.unwrap();
+        delete_before(&db.conn, 2000).await.unwrap();
 
-        let page = ActivityLog::list(
+        let page = list(
             &db.conn,
             10,
             0,
@@ -815,13 +814,13 @@ mod tests {
     #[tokio::test]
     async fn test_batch_insert_empty() {
         let db = setup_metrics_test_db().await.unwrap();
-        ActivityLog::batch_insert(&db.conn, &[]).await.unwrap();
+        batch_insert(&db.conn, &[]).await.unwrap();
     }
 
     #[tokio::test]
-    async fn test_fetch_stats_empty() {
+    async fn test_stats_empty() {
         let db = setup_metrics_test_db().await.unwrap();
-        let stats = ActivityLog::fetch_stats(&db.conn).await.unwrap();
+        let stats = stats(&db.conn).await.unwrap();
 
         assert_eq!(stats.total, 0);
         assert_eq!(stats.blocked, 0);
@@ -831,7 +830,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_fetch_stats() {
+    async fn test_stats() {
         let db = setup_metrics_test_db().await.unwrap();
 
         let mut cached = make_query(1000);
@@ -840,11 +839,11 @@ mod tests {
         let mut blocked = make_query(2000);
         blocked.blocked = Some(true);
 
-        ActivityLog::batch_insert(&db.conn, &[cached, blocked, make_query(3000), make_error(4000)])
+        batch_insert(&db.conn, &[cached, blocked, make_query(3000), make_error(4000)])
             .await
             .unwrap();
 
-        let stats = ActivityLog::fetch_stats(&db.conn).await.unwrap();
+        let stats = stats(&db.conn).await.unwrap();
 
         assert_eq!(stats.total, 4);
         assert_eq!(stats.blocked, 1);

@@ -9,7 +9,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    database::models::activity_log::{ActivityLog, ListFilter, SortColumn, SortDir},
+    database::models::activity_log::{self, ActivityLog, ListFilter, SortColumn, SortDir},
     global::SharedGlobal,
 };
 
@@ -109,7 +109,7 @@ pub async fn activity(
     let include_count = query.count.unwrap_or(false);
     let filter = query.into_filter();
 
-    let page = match ActivityLog::list(conn, db_top, db_skip, filter, sort, dir, include_count).await {
+    let page = match activity_log::list(conn, db_top, db_skip, filter, sort, dir, include_count).await {
         Ok(page) => page,
         Err(e) => {
             tracing::error!("failed to get activity logs: {:?}", e);

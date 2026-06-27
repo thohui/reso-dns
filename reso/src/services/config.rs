@@ -10,7 +10,10 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::{
-    database::{CoreDatabasePool, models::config::ConfigSetting},
+    database::{
+        CoreDatabasePool,
+        models::config as db_config,
+    },
     ratelimit,
 };
 
@@ -368,7 +371,7 @@ impl ConfigService {
     /// Missing keys are seeded with defaults so that new config fields
     /// are automatically populated for existing databases.
     async fn initialize_config(db: &CoreDatabasePool) -> anyhow::Result<Config> {
-        let map = ConfigSetting::all(db).await?;
+        let map = db_config::all(db).await?;
 
         let default_config = Config::default();
         let missing: Vec<(String, String)> = default_config
@@ -379,7 +382,7 @@ impl ConfigService {
 
         if !missing.is_empty() {
             tracing::info!("seeding {} missing config keys", missing.len());
-            ConfigSetting::batch_set(db, missing).await?;
+            db_config::batch_set(db, missing).await?;
         }
 
         Ok(Config::from_kv(&map))
@@ -387,7 +390,7 @@ impl ConfigService {
 
     /// Updates the configuration and notify the subscribers.
     pub async fn update_config(&self, config: Config) -> anyhow::Result<()> {
-        ConfigSetting::batch_set(&self.db, config.to_kv()).await?;
+        db_config::batch_set(&self.db, config.to_kv()).await?;
         let arc_config = Arc::new(config);
         self.config.store(arc_config.clone());
         self.tx.send_replace(arc_config);

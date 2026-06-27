@@ -12,7 +12,11 @@ use tokio::{
 use super::event::{ErrorLogEvent, QueryLogEvent};
 use crate::database::{
     MetricsDatabasePool,
-    models::{activity_log::ActivityLog, client_metrics::ClientMetrics, domain_metrics::DomainMetrics},
+    models::{
+        activity_log::{self, ActivityLog},
+        client_metrics::{self, ClientMetrics},
+        domain_metrics::{self, DomainMetrics},
+    },
 };
 
 pub enum MetricsMessage {
@@ -91,7 +95,7 @@ pub struct Stats {
 
 impl Stats {
     pub async fn init(db: &MetricsDatabasePool) -> anyhow::Result<Self> {
-        let activity_stats = ActivityLog::fetch_stats(db).await?;
+        let activity_stats = activity_log::stats(db).await?;
         let ts_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -245,17 +249,17 @@ impl MetricsService {
         let client_buckets: Vec<_> = client_map.into_values().collect();
         let domain_buckets: Vec<_> = domain_map.into_values().collect();
 
-        match ClientMetrics::batch_upsert(&self.connection, &client_buckets).await {
+        match client_metrics::batch_upsert(&self.connection, &client_buckets).await {
             Ok(()) => tracing::debug!("flushed {} client metric buckets", client_buckets.len()),
             Err(e) => tracing::error!("failed to upsert client metrics: {}", e),
         }
 
-        match DomainMetrics::batch_upsert(&self.connection, &domain_buckets).await {
+        match domain_metrics::batch_upsert(&self.connection, &domain_buckets).await {
             Ok(()) => tracing::debug!("flushed {} domain metric buckets", domain_buckets.len()),
             Err(e) => tracing::error!("failed to upsert domain metrics: {}", e),
         }
 
-        match ActivityLog::batch_insert(&self.connection, &self.batch).await {
+        match activity_log::batch_insert(&self.connection, &self.batch).await {
             Ok(()) => tracing::debug!("flushed {} activity logs", self.batch.len()),
             Err(e) => tracing::error!("failed to insert activity logs: {}", e),
         }
