@@ -5,7 +5,7 @@ use tokio::time::{self, MissedTickBehavior};
 use crate::{
     database::{
         MetricsDatabasePool,
-        models::{activity_log::ActivityLog, client_metrics::ClientMetrics, domain_metrics::DomainMetrics},
+        models::{activity_log, client_metrics, domain_metrics},
     },
     services::config::Config,
 };
@@ -50,7 +50,7 @@ pub async fn run_metrics_truncation(
                     .as_millis() as i64
                     - retention.as_millis() as i64;
 
-                if let Err(e) = ActivityLog::delete_before(&db, cutoff).await {
+                if let Err(e) = activity_log::delete_before(&db, cutoff).await {
                     tracing::error!("failed to truncate old activity logs: {}", e);
                     continue;
                 }
@@ -120,10 +120,10 @@ pub async fn run_metrics_compression(db: Arc<MetricsDatabasePool>, shutdown: tok
 
                 // we purposefully don't run these compressions in parallel since sqlite can only have one writer at a time.
 
-                if let Err(e) = ClientMetrics::compress_before(&db, cutoff).await {
+                if let Err(e) = client_metrics::compress_before(&db, cutoff).await {
                     tracing::error!("failed to compress client metrics: {}", e);
                 }
-                if let Err(e) = DomainMetrics::compress_before(&db, cutoff).await {
+                if let Err(e) = domain_metrics::compress_before(&db, cutoff).await {
                     tracing::error!("failed to compress domain metrics: {}", e);
                 }
 

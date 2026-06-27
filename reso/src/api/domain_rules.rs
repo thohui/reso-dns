@@ -1,5 +1,8 @@
 use crate::{
-    database::models::{ListAction, MatchType, domain_rule::DomainRule},
+    database::models::{
+        ListAction, MatchType,
+        domain_rule::{self, DomainRule},
+    },
     global::SharedGlobal,
 };
 use axum::{
@@ -42,14 +45,14 @@ pub async fn list(
 
     let search = query.search.clone();
 
-    let rules = DomainRule::list(&global.core_database, db_top, db_skip, search.clone())
+    let rules = domain_rule::list(&global.core_database, db_top, db_skip, search.clone())
         .await
         .map_err(|e| {
             tracing::error!("failed to list domain rules: {:?}", e);
             ApiError::server_error()
         })?;
 
-    let count: u64 = DomainRule::row_count(&global.core_database, search)
+    let count: u64 = domain_rule::count(&global.core_database, search)
         .await
         .map_err(|e| {
             tracing::error!("failed to get domain rule row count: {:?}", e);

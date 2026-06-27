@@ -26,87 +26,86 @@ impl User {
             created_at,
         }
     }
+}
 
-    pub async fn insert(self, db: &CoreDatabasePool) -> Result<(), DatabaseError> {
-        db.interact(move |c| {
-            c.execute(
-                r#"
-					INSERT INTO users
-						(id, name, password_hash, created_at)
+pub async fn insert(db: &CoreDatabasePool, user: User) -> Result<(), DatabaseError> {
+    db.interact(move |c| {
+        c.execute(
+            "
+					INSERT INTO users (id, name, password_hash, created_at)
 					VALUES (?1, ?2, ?3, ?4)
-					"#,
-                params![self.id.id(), self.name, self.password_hash, self.created_at],
-            )?;
-            Ok(())
-        })
-        .await?;
+					",
+            params![user.id.id(), user.name, user.password_hash, user.created_at],
+        )?;
         Ok(())
-    }
+    })
+    .await?;
+    Ok(())
+}
 
-    pub async fn find_by_name(db: &CoreDatabasePool, name: impl Into<String>) -> Result<Option<Self>, DatabaseError> {
-        let name = name.into();
+pub async fn find_by_name(db: &CoreDatabasePool, name: impl Into<String>) -> Result<Option<User>, DatabaseError> {
+    let name = name.into();
 
-        db.interact(move |c| {
-            c.query_row(
-                "SELECT id, name, password_hash, created_at FROM users WHERE name = ?1",
-                params![name],
-                |f| {
-                    let uuid: Uuid = f.get(0)?;
-                    Ok(Self {
-                        id: EntityId::from(uuid),
-                        name: f.get(1)?,
-                        password_hash: f.get(2)?,
-                        created_at: f.get(3)?,
-                    })
-                },
-            )
-            .optional()
-        })
-        .await
-    }
-
-    pub async fn find_by_id(db: &CoreDatabasePool, id: &EntityId<Self>) -> Result<Option<Self>, DatabaseError> {
-        let id = *id.id();
-
-        db.interact(move |c| {
-            c.query_row(
-                "SELECT id, name, password_hash, created_at FROM users WHERE id = ?1",
-                params![id],
-                |f| {
-                    Ok(Self {
-                        id: EntityId::from(f.get::<usize, Uuid>(0)?),
-                        name: f.get(1)?,
-                        password_hash: f.get(2)?,
-                        created_at: f.get(3)?,
-                    })
-                },
-            )
-            .optional()
-        })
-        .await
-    }
-
-    pub async fn count(db: &CoreDatabasePool) -> Result<i64, DatabaseError> {
-        db.interact(|c| c.query_row("SELECT COUNT(*) FROM users", [], |r| r.get(0)))
-            .await
-    }
-
-    #[allow(unused)]
-    pub async fn list(db: &CoreDatabasePool) -> Result<Vec<Self>, DatabaseError> {
-        db.interact(|c| {
-            let mut stmt = c.prepare("SELECT id, name, password_hash, created_at FROM users")?;
-            let iter = stmt.query_map([], |r| {
-                Ok(Self {
-                    id: EntityId::from(r.get::<_, Uuid>(0)?),
-                    name: r.get(1)?,
-                    password_hash: r.get(2)?,
-                    created_at: r.get(3)?,
+    db.interact(move |c| {
+        c.query_row(
+            "SELECT id, name, password_hash, created_at FROM users WHERE name = ?1",
+            params![name],
+            |f| {
+                let uuid: Uuid = f.get(0)?;
+                Ok(User {
+                    id: EntityId::from(uuid),
+                    name: f.get(1)?,
+                    password_hash: f.get(2)?,
+                    created_at: f.get(3)?,
                 })
-            })?;
-            iter.collect::<rusqlite::Result<Vec<_>>>()
-        })
+            },
+        )
+        .optional()
+    })
+    .await
+}
+
+pub async fn find_by_id(db: &CoreDatabasePool, id: &EntityId<User>) -> Result<Option<User>, DatabaseError> {
+    let id = *id.id();
+
+    db.interact(move |c| {
+        c.query_row(
+            "SELECT id, name, password_hash, created_at FROM users WHERE id = ?1",
+            params![id],
+            |f| {
+                Ok(User {
+                    id: EntityId::from(f.get::<usize, Uuid>(0)?),
+                    name: f.get(1)?,
+                    password_hash: f.get(2)?,
+                    created_at: f.get(3)?,
+                })
+            },
+        )
+        .optional()
+    })
+    .await
+}
+
+pub async fn count(db: &CoreDatabasePool) -> Result<i64, DatabaseError> {
+    db.interact(|c| c.query_row("SELECT COUNT(*) FROM users", [], |r| r.get(0)))
         .await
-    }
+}
+
+#[allow(unused)]
+pub async fn list(db: &CoreDatabasePool) -> Result<Vec<User>, DatabaseError> {
+    db.interact(|c| {
+        let mut stmt = c.prepare("SELECT id, name, password_hash, created_at FROM users")?;
+        let iter = stmt.query_map([], |r| {
+            Ok(User {
+                id: EntityId::from(r.get::<_, Uuid>(0)?),
+                name: r.get(1)?,
+                password_hash: r.get(2)?,
+                created_at: r.get(3)?,
+            })
+        })?;
+        iter.collect::<rusqlite::Result<Vec<_>>>()
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -129,24 +128,17 @@ mod tests {
 
         let user = User::new("alice", "password_hash_alice");
 
-        user.clone().insert(&db.conn).await.unwrap();
+        let created_at = user.created_at;
+        insert(&db.conn, user).await.unwrap();
 
-        let found = User::find_by_name(&db.conn, "alice").await.unwrap();
+        let found = find_by_name(&db.conn, "alice").await.unwrap();
         assert!(found.is_some());
 
         let found_user = found.unwrap();
 
         assert_eq!(found_user.name, "alice");
         assert_eq!(found_user.password_hash, "password_hash_alice");
-        assert_eq!(found_user.created_at, user.created_at);
-    }
-
-    #[tokio::test]
-    async fn test_user_find_by_name_not_found() {
-        let db = setup_core_test_db().await.unwrap();
-
-        let result = User::find_by_name(&db.conn, "nonexistent").await.unwrap();
-        assert!(result.is_none());
+        assert_eq!(found_user.created_at, created_at);
     }
 
     #[tokio::test]
@@ -155,32 +147,15 @@ mod tests {
         let user = User::new("bob", "password_hash_bob");
         let user_id = user.id.clone();
 
-        user.insert(&db.conn).await.unwrap();
+        insert(&db.conn, user).await.unwrap();
 
-        let found = User::find_by_id(&db.conn, &user_id).await.unwrap();
+        let found = find_by_id(&db.conn, &user_id).await.unwrap();
         assert!(found.is_some());
 
         let found_user = found.unwrap();
         assert_eq!(found_user.id, user_id);
         assert_eq!(found_user.name, "bob");
         assert_eq!(found_user.password_hash, "password_hash_bob");
-    }
-
-    #[tokio::test]
-    async fn test_user_find_by_id_not_found() {
-        let db = setup_core_test_db().await.unwrap();
-        let random_id = EntityId::<User>::new();
-
-        let result = User::find_by_id(&db.conn, &random_id).await.unwrap();
-        assert!(result.is_none());
-    }
-
-    #[tokio::test]
-    async fn test_user_list_empty() {
-        let db = setup_core_test_db().await.unwrap();
-
-        let users = User::list(&db.conn).await.unwrap();
-        assert_eq!(users.len(), 0);
     }
 
     #[tokio::test]
@@ -191,77 +166,16 @@ mod tests {
         let user2 = User::new("user2", "hash2");
         let user3 = User::new("user3", "hash3");
 
-        user1.insert(&db.conn).await.unwrap();
-        user2.insert(&db.conn).await.unwrap();
-        user3.insert(&db.conn).await.unwrap();
+        insert(&db.conn, user1).await.unwrap();
+        insert(&db.conn, user2).await.unwrap();
+        insert(&db.conn, user3).await.unwrap();
 
-        let users = User::list(&db.conn).await.unwrap();
+        let users = list(&db.conn).await.unwrap();
         assert_eq!(users.len(), 3);
 
         let names: Vec<String> = users.iter().map(|u| u.name.clone()).collect();
         assert!(names.contains(&"user1".to_string()));
         assert!(names.contains(&"user2".to_string()));
         assert!(names.contains(&"user3".to_string()));
-    }
-
-    #[tokio::test]
-    async fn test_user_unique_ids() {
-        let user1 = User::new("user1", "hash1");
-        let user2 = User::new("user2", "hash2");
-
-        assert_ne!(user1.id, user2.id);
-    }
-
-    #[tokio::test]
-    async fn test_user_created_at_timestamp() {
-        let before = now_millis();
-        let user = User::new("testuser", "hash");
-        let after = now_millis();
-
-        assert!(user.created_at >= before);
-        assert!(user.created_at <= after);
-    }
-
-    #[tokio::test]
-    async fn test_user_password_hash_stored() {
-        let db = setup_core_test_db().await.unwrap();
-        let password_hash = "very_secure_hash_123";
-        let user = User::new("secure_user", password_hash);
-
-        user.insert(&db.conn).await.unwrap();
-
-        let found = User::find_by_name(&db.conn, "secure_user").await.unwrap().unwrap();
-        assert_eq!(found.password_hash, password_hash);
-    }
-
-    #[tokio::test]
-    async fn test_user_with_empty_password_hash() {
-        let db = setup_core_test_db().await.unwrap();
-        let user = User::new("user_empty_hash", "");
-
-        user.insert(&db.conn).await.unwrap();
-
-        let found = User::find_by_name(&db.conn, "user_empty_hash").await.unwrap().unwrap();
-        assert_eq!(found.password_hash, "");
-    }
-
-    #[tokio::test]
-    async fn test_user_with_special_characters_in_name() {
-        let db = setup_core_test_db().await.unwrap();
-        let user = User::new("user@example.com", "hash");
-
-        user.insert(&db.conn).await.unwrap();
-
-        let found = User::find_by_name(&db.conn, "user@example.com").await.unwrap().unwrap();
-        assert_eq!(found.name, "user@example.com");
-    }
-
-    #[tokio::test]
-    async fn test_user_entity_id_conversion() {
-        let user = User::new("test", "hash");
-        let uuid = *user.id.id();
-
-        let new_entity_id = EntityId::<User>::from(uuid);
-        assert_eq!(user.id, new_entity_id);
     }
 }

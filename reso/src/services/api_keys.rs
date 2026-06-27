@@ -3,7 +3,11 @@ use std::sync::Arc;
 use crate::{
     database::{
         CoreDatabasePool,
-        models::{Page, api_key::ApiKey as DbApiKey, user::User as DbUser},
+        models::{
+            Page,
+            api_key::{self, ApiKey as DbApiKey},
+            user::{self, User as DbUser},
+        },
     },
     services::ServiceError,
     uuid::EntityId,
@@ -45,9 +49,9 @@ impl ApiKeysService {
         user_id: EntityId<DbUser>,
         expires_at: Option<i64>,
     ) -> Result<CreatedApiKey, ServiceError> {
-        let username = DbUser::find_by_id(&self.db, &user_id)
+        let username = user::find_by_id(&self.db, &user_id)
             .await?
-            .ok_or_else(|| ServiceError::NotFound("user not found".to_owned()))?
+            .ok_or_else(|| ServiceError::NotFound("User not found".to_owned()))?
             .name;
 
         let (api_key, token) = DbApiKey::new(display_name, user_id, expires_at);
@@ -57,7 +61,7 @@ impl ApiKeysService {
         let expires_at = api_key.expires_at;
         let display_name = api_key.display_name.clone();
 
-        api_key.insert(&self.db).await?;
+        api_key::insert(&self.db, api_key).await?;
 
         Ok(CreatedApiKey {
             id,
@@ -76,7 +80,7 @@ impl ApiKeysService {
         offset: i64,
         search: Option<String>,
     ) -> Result<Page<ApiKey>, ServiceError> {
-        let page = DbApiKey::list_with_username(&self.db, limit, offset, search).await?;
+        let page = api_key::list_with_username(&self.db, limit, offset, search).await?;
         Ok(Page {
             total: page.total,
             items: page
@@ -97,12 +101,12 @@ impl ApiKeysService {
     pub async fn verify_api_key(&self, bearer: &str) -> Result<EntityId<DbApiKey>, ServiceError> {
         let hash = DbApiKey::hash_token(bearer);
 
-        let key = DbApiKey::find_by_hash(&self.db, hash)
+        let key = api_key::find_by_hash(&self.db, hash)
             .await?
-            .ok_or(ServiceError::Unauthorized("invalid api key".into()))?;
+            .ok_or(ServiceError::Unauthorized("Invalid API key".into()))?;
 
         if key.is_expired() {
-            return Err(ServiceError::Unauthorized("api key expired".into()));
+            return Err(ServiceError::Unauthorized("API key has expired".into()));
         }
 
         Ok(key.id)
@@ -110,7 +114,7 @@ impl ApiKeysService {
 
     /// Delete an API key by its id.
     pub async fn delete_api_key(&self, id: &EntityId<DbApiKey>) -> Result<(), ServiceError> {
-        let changed = DbApiKey::delete_by_id(&self.db, id).await?;
+        let changed = api_key::delete_by_id(&self.db, id).await?;
         if changed {
             Ok(())
         } else {

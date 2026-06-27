@@ -4,6 +4,7 @@ use rusqlite::params;
 
 use crate::database::{CoreDatabasePool, DatabaseError};
 
+#[allow(unused)]
 pub struct ConfigSetting {
     #[allow(unused)]
     pub key: String,
@@ -13,82 +14,80 @@ pub struct ConfigSetting {
     pub updated_at: i64,
 }
 
-impl ConfigSetting {
-    #[allow(unused)]
-    pub async fn get(db: &CoreDatabasePool, key: &str) -> Result<Option<String>, DatabaseError> {
-        let key = key.to_string();
+#[allow(unused)]
+pub async fn get(db: &CoreDatabasePool, key: &str) -> Result<Option<String>, DatabaseError> {
+    let key = key.to_string();
 
-        db.interact(move |c| {
-            let mut stmt = c.prepare("SELECT value FROM config_settings WHERE key = ?1")?;
-            let mut rows = stmt.query(params![key])?;
-            let result = match rows.next()? {
-                Some(row) => Some(row.get::<_, String>(0)?),
-                None => None,
-            };
-            Ok::<_, rusqlite::Error>(result)
-        })
-        .await
-    }
+    db.interact(move |c| {
+        let mut stmt = c.prepare("SELECT value FROM config_settings WHERE key = ?1")?;
+        let mut rows = stmt.query(params![key])?;
+        let result = match rows.next()? {
+            Some(row) => Some(row.get::<_, String>(0)?),
+            None => None,
+        };
+        Ok::<_, rusqlite::Error>(result)
+    })
+    .await
+}
 
-    pub async fn all(db: &CoreDatabasePool) -> Result<HashMap<String, String>, DatabaseError> {
-        db.interact(move |c| {
-            let mut stmt = c.prepare("SELECT key, value FROM config_settings")?;
-            let iter = stmt.query_map(params![], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+#[allow(unused)]
+pub async fn set(db: &CoreDatabasePool, key: &str, value: &str) -> Result<(), DatabaseError> {
+    let key = key.to_string();
+    let value = value.to_string();
 
-            let mut map = HashMap::new();
-            for pair in iter {
-                let (k, v) = pair?;
-                map.insert(k, v);
-            }
-            Ok::<_, rusqlite::Error>(map)
-        })
-        .await
-    }
+    let updated_at: i64 = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap() // this only fails if the system clock is before 1970, which is a unrealistic scenario
+        .as_millis() as i64;
 
-    #[allow(unused)]
-    pub async fn set(db: &CoreDatabasePool, key: &str, value: &str) -> Result<(), DatabaseError> {
-        let key = key.to_string();
-        let value = value.to_string();
-
-        let updated_at: i64 = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap() // this only fails if the system clock is before 1970, which is a unrealistic scenario
-            .as_millis() as i64;
-
-        db.interact(move |c| {
-            c.execute(
-                "INSERT OR REPLACE INTO config_settings (key, value, updated_at) VALUES (?1, ?2, ?3)",
-                params![key, value, updated_at],
-            )?;
-            Ok(())
-        })
-        .await?;
-
+    db.interact(move |c| {
+        c.execute(
+            "INSERT OR REPLACE INTO config_settings (key, value, updated_at) VALUES (?1, ?2, ?3)",
+            params![key, value, updated_at],
+        )?;
         Ok(())
-    }
+    })
+    .await?;
 
-    pub async fn batch_set(db: &CoreDatabasePool, entries: Vec<(String, String)>) -> Result<(), DatabaseError> {
-        let updated_at: i64 = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64;
+    Ok(())
+}
 
-        db.interact(move |c| {
-            let tx = c.transaction()?;
-            {
-                let mut stmt =
-                    tx.prepare("INSERT OR REPLACE INTO config_settings (key, value, updated_at) VALUES (?1, ?2, ?3)")?;
-                for (key, value) in &entries {
-                    stmt.execute(params![key, value, updated_at])?;
-                }
+pub async fn all(db: &CoreDatabasePool) -> Result<HashMap<String, String>, DatabaseError> {
+    db.interact(move |c| {
+        let mut stmt = c.prepare("SELECT key, value FROM config_settings")?;
+        let iter = stmt.query_map(params![], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+
+        let mut map = HashMap::new();
+        for pair in iter {
+            let (k, v) = pair?;
+            map.insert(k, v);
+        }
+        Ok::<_, rusqlite::Error>(map)
+    })
+    .await
+}
+
+pub async fn batch_set(db: &CoreDatabasePool, entries: Vec<(String, String)>) -> Result<(), DatabaseError> {
+    let updated_at: i64 = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+
+    db.interact(move |c| {
+        let tx = c.transaction()?;
+        {
+            let mut stmt =
+                tx.prepare("INSERT OR REPLACE INTO config_settings (key, value, updated_at) VALUES (?1, ?2, ?3)")?;
+            for (key, value) in &entries {
+                stmt.execute(params![key, value, updated_at])?;
             }
-            tx.commit()?;
-            Ok::<_, rusqlite::Error>(())
-        })
-        .await?;
+        }
+        tx.commit()?;
+        Ok::<_, rusqlite::Error>(())
+    })
+    .await?;
 
-        Ok(())
-    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -100,9 +99,9 @@ mod tests {
     async fn test_set_and_get() {
         let db = setup_core_test_db().await.unwrap();
 
-        ConfigSetting::set(&db.conn, "dns.timeout", "5000").await.unwrap();
+        set(&db.conn, "dns.timeout", "5000").await.unwrap();
 
-        let value = ConfigSetting::get(&db.conn, "dns.timeout").await.unwrap();
+        let value = get(&db.conn, "dns.timeout").await.unwrap();
         assert_eq!(value, Some("5000".to_string()));
     }
 
@@ -110,7 +109,7 @@ mod tests {
     async fn test_get_missing_key() {
         let db = setup_core_test_db().await.unwrap();
 
-        let value = ConfigSetting::get(&db.conn, "nonexistent").await.unwrap();
+        let value = get(&db.conn, "nonexistent").await.unwrap();
         assert_eq!(value, None);
     }
 
@@ -118,10 +117,10 @@ mod tests {
     async fn test_set_overwrites_value() {
         let db = setup_core_test_db().await.unwrap();
 
-        ConfigSetting::set(&db.conn, "dns.timeout", "3000").await.unwrap();
-        ConfigSetting::set(&db.conn, "dns.timeout", "5000").await.unwrap();
+        set(&db.conn, "dns.timeout", "3000").await.unwrap();
+        set(&db.conn, "dns.timeout", "5000").await.unwrap();
 
-        let value = ConfigSetting::get(&db.conn, "dns.timeout").await.unwrap();
+        let value = get(&db.conn, "dns.timeout").await.unwrap();
         assert_eq!(value, Some("5000".to_string()));
     }
 
@@ -129,7 +128,7 @@ mod tests {
     async fn test_all_empty() {
         let db = setup_core_test_db().await.unwrap();
 
-        let map = ConfigSetting::all(&db.conn).await.unwrap();
+        let map = all(&db.conn).await.unwrap();
         assert!(map.is_empty());
     }
 
@@ -137,13 +136,11 @@ mod tests {
     async fn test_all_returns_all_settings() {
         let db = setup_core_test_db().await.unwrap();
 
-        ConfigSetting::set(&db.conn, "dns.timeout", "3000").await.unwrap();
-        ConfigSetting::set(&db.conn, "dns.active", "forwarder").await.unwrap();
-        ConfigSetting::set(&db.conn, "dns.forwarder.upstreams", "[\"1.1.1.1\"]")
-            .await
-            .unwrap();
+        set(&db.conn, "dns.timeout", "3000").await.unwrap();
+        set(&db.conn, "dns.active", "forwarder").await.unwrap();
+        set(&db.conn, "dns.forwarder.upstreams", "[\"1.1.1.1\"]").await.unwrap();
 
-        let map = ConfigSetting::all(&db.conn).await.unwrap();
+        let map = all(&db.conn).await.unwrap();
         assert_eq!(map.len(), 3);
         assert_eq!(map["dns.timeout"], "3000");
         assert_eq!(map["dns.active"], "forwarder");
@@ -159,7 +156,7 @@ mod tests {
             .unwrap()
             .as_millis() as i64;
 
-        ConfigSetting::set(&db.conn, "dns.timeout", "3000").await.unwrap();
+        set(&db.conn, "dns.timeout", "3000").await.unwrap();
 
         let after: i64 = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -192,9 +189,9 @@ mod tests {
             ("dns.forwarder.upstreams".to_string(), "[]".to_string()),
         ];
 
-        ConfigSetting::batch_set(&db.conn, entries).await.unwrap();
+        batch_set(&db.conn, entries).await.unwrap();
 
-        let map = ConfigSetting::all(&db.conn).await.unwrap();
+        let map = all(&db.conn).await.unwrap();
         assert_eq!(map.len(), 3);
         assert_eq!(map["dns.timeout"], "3000");
         assert_eq!(map["dns.active"], "forwarder");
@@ -205,16 +202,16 @@ mod tests {
     async fn test_batch_set_overwrites() {
         let db = setup_core_test_db().await.unwrap();
 
-        ConfigSetting::set(&db.conn, "dns.timeout", "3000").await.unwrap();
+        set(&db.conn, "dns.timeout", "3000").await.unwrap();
 
         let entries = vec![
             ("dns.timeout".to_string(), "5000".to_string()),
             ("dns.active".to_string(), "forwarder".to_string()),
         ];
 
-        ConfigSetting::batch_set(&db.conn, entries).await.unwrap();
+        batch_set(&db.conn, entries).await.unwrap();
 
-        let value = ConfigSetting::get(&db.conn, "dns.timeout").await.unwrap();
+        let value = get(&db.conn, "dns.timeout").await.unwrap();
         assert_eq!(value, Some("5000".to_string()));
     }
 }
