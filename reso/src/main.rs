@@ -14,6 +14,7 @@ use services::{
     config::ConfigService,
     domain_rules::{DomainRulesService, run_subscription_sync},
 };
+use std::io::IsTerminal;
 use tokio::signal;
 use tracing::level_filters::LevelFilter;
 use tracing_appender::non_blocking;
@@ -50,6 +51,8 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn run() -> anyhow::Result<()> {
+    print_logo();
+
     let (nb, _guard) = non_blocking(std::io::stdout());
 
     let config = EnvConfig::from_env()?;
@@ -191,4 +194,29 @@ async fn run() -> anyhow::Result<()> {
     tracing::info!("shutdown complete");
 
     Ok(())
+}
+
+fn print_logo() {
+    // only shown on interactive terminals, so log collectors like docker never see it
+    if !std::io::stdout().is_terminal() {
+        return;
+    }
+
+    const RESO_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+    let pink = "\x1b[38;2;255;0;118m";
+    let reset = "\x1b[0m";
+    println!(
+        r"{pink}
+      ▄
+   ▄█████▄
+  █████▀▀  ██▄▄
+  ████     █████
+  ████     █████{reset}   ResoDNS v{RESO_VERSION}{pink}
+  ███▀     ████▀
+  ▀▀   ██▄▄▀▀
+       █████▄▄
+       ▀▀████▀▀{reset}
+"
+    );
 }
