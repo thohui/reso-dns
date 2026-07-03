@@ -3,11 +3,17 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import svgr from 'vite-plugin-svgr';
 
-const { version } = JSON.parse(readFileSync('./package.json', 'utf-8')) as {
-	version: string;
-};
+const cargoTomlPath = new URL('../Cargo.toml', import.meta.url);
+const cargoToml = readFileSync(cargoTomlPath, 'utf-8');
 
-// https://vite.dev/config/
+const version = /^\[package\][^[]*?^version\s*=\s*"([^"]+)"/ms.exec(
+	cargoToml,
+)?.[1];
+if (!version) {
+	throw new Error('failed to read version from ../Cargo.toml');
+}
+
+// https://vite.dev/config
 export default defineConfig({
 	define: {
 		__RESO_VERSION__: JSON.stringify(version),

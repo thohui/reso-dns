@@ -204,7 +204,7 @@ export default function LoginPage() {
 							Sign In
 						</Button>
 						<Text fontSize='xs' color='fg.faint'>
-							Version {getVersion()}
+							v{getVersion()}
 						</Text>
 					</VStack>
 				</form>

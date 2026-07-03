@@ -25,6 +25,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router';
 import Logo from '@/assets/logo.svg?react';
 import { PageLoader } from '@/components/PageLoader';
 import { useLogout } from '@/hooks/auth/useLogout';
+import { getVersion } from '@/lib/version';
 
 interface MenuItem {
 	path: string;
@@ -58,8 +59,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
 	return (
 		<>
-			<HStack gap='3' px='3' mb='8'>
-				<Logo width={28} height={28} />
+			<HStack gap='3' px='3' mb='8' align='baseline'>
+				<Logo width={28} height={28} style={{ alignSelf: 'center' }} />
 				<Text
 					fontWeight='600'
 					fontSize='sm'
@@ -67,6 +68,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 					fontFamily="'Mozilla Text', sans-serif"
 				>
 					[ResoDNS]
+				</Text>
+				<Text fontSize='2xs' color='fg.faint' ml='-1.5'>
+					v{getVersion()}
 				</Text>
 			</HStack>
 
