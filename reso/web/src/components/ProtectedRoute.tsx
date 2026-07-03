@@ -1,6 +1,6 @@
+import { Navigate, Outlet } from 'react-router';
 import { useIsAuthenticated } from '@/hooks/auth/useIsAuthenticated';
 import { useIsSetupRequired } from '@/hooks/auth/useIsSetupRequired';
-import { Navigate, Outlet } from 'react-router-dom';
 
 interface Props {
 	requiresAuthentication: boolean;

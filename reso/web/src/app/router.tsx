@@ -1,9 +1,9 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { DashboardLayout } from '@/layouts/DashboardLayout';
 import ApiKeysPage from './pages/api-keys';
-import DomainRulesPage from './pages/domain-rules';
 import ConfigPage from './pages/config';
+import DomainRulesPage from './pages/domain-rules';
 import HomePage from './pages/home';
 import LocalRecordsPage from './pages/local-records';
 import LoginPage from './pages/login';

@@ -1,6 +1,3 @@
-import Logo from '@/assets/logo.svg?react';
-import { useApiClient } from '@/contexts/ApiClientContext';
-import { useIsSetupRequired } from '@/hooks/auth/useIsSetupRequired';
 import {
 	Box,
 	Button,
@@ -17,8 +14,11 @@ import { useMutation } from '@tanstack/react-query';
 import { Lock, ShieldCheck, User } from 'lucide-react';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import z from 'zod';
+import Logo from '@/assets/logo.svg?react';
+import { useApiClient } from '@/contexts/ApiClientContext';
+import { useIsSetupRequired } from '@/hooks/auth/useIsSetupRequired';
 
 const setupSchema = z
 	.object({

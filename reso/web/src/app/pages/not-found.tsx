@@ -1,6 +1,6 @@
 import { Box, Button, Heading, Icon, Text, VStack } from '@chakra-ui/react';
 import { ArrowLeft, SearchX } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 
 export default function NotFoundPage() {
 	const navigate = useNavigate();
