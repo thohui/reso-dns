@@ -56,6 +56,7 @@ impl DnsMiddleware<Global, Local> for CacheMiddleware {
                         .with_flags(cache_response_flags(message))
                         .with_response(response_code)
                         .with_questions(message.questions().to_vec())
+                        .with_answers(result.answer_records.to_vec())
                         .with_authority_records(vec![result.soa_record]),
                 );
 
