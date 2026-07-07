@@ -52,7 +52,7 @@ where
             }
         };
 
-        let mut guard = WaiterGuard::new(Arc::clone(&entry), key.clone(), Arc::clone(&self.map));
+        let mut guard = WaiterGuard::new(Arc::clone(&entry), key, Arc::clone(&self.map));
 
         let token = entry.token.child_token();
 
