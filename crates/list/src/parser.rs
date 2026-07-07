@@ -49,10 +49,8 @@ impl ListParser {
             if self.format.is_none() {
                 self.format = detect_line_format(line);
             }
-            if let Some(fmt) = self.format
-                && let Some(entry) = parse_line(line, fmt)
-            {
-                callback(entry);
+            if let Some(fmt) = self.format {
+                parse_line(line, fmt, &mut callback);
             }
 
             start = end + 1;
@@ -71,10 +69,8 @@ impl ListParser {
             if self.format.is_none() {
                 self.format = detect_line_format(line);
             }
-            if let Some(fmt) = self.format
-                && let Some(entry) = parse_line(line, fmt)
-            {
-                callback(entry);
+            if let Some(fmt) = self.format {
+                parse_line(line, fmt, &mut callback);
             }
         }
     }
@@ -105,11 +101,19 @@ fn detect_line_format(line: &str) -> Option<ListFormat> {
     }
 }
 
-fn parse_line(line: &str, format: ListFormat) -> Option<(DomainPattern<'_>, RuleType)> {
+fn parse_line<'a, F: FnMut((DomainPattern<'a>, RuleType))>(line: &'a str, format: ListFormat, callback: &mut F) {
     match format {
-        ListFormat::Hosts => parse_hosts_line(line).map(|pat| (pat, RuleType::Block)),
-        ListFormat::Plain => parse_plain_line(line).map(|pat| (pat, RuleType::Block)),
-        ListFormat::Adblock => parse_adblock_line(line),
+        ListFormat::Hosts => parse_hosts_line(line, callback),
+        ListFormat::Plain => {
+            if let Some(pat) = parse_plain_line(line) {
+                callback((pat, RuleType::Block));
+            }
+        }
+        ListFormat::Adblock => {
+            if let Some(entry) = parse_adblock_line(line) {
+                callback(entry);
+            }
+        }
     }
 }
 
@@ -147,23 +151,23 @@ const LOCAL_DOMAINS: &[&str] = &[
     "ip6-allrouters",
 ];
 
-fn parse_hosts_line(line: &str) -> Option<DomainPattern<'_>> {
+fn parse_hosts_line<'a, F: FnMut((DomainPattern<'a>, RuleType))>(line: &'a str, callback: &mut F) {
     let line = strip_comment(line).trim();
     if line.is_empty() {
-        return None;
+        return;
     }
     let mut parts = line.split_ascii_whitespace();
-    parts.next()?; // skip the ip address
-    let domain = parts.next()?;
+    parts.next(); // skip the ip address
 
-    // TODO: add support for compressed formats
-    // some block lists can have more than one domain on a single line.
-
-    if LOCAL_DOMAINS.iter().any(|d| d.eq_ignore_ascii_case(domain)) {
-        return None;
+    // compressed hosts lines can list multiple domains after the ip
+    for domain in parts {
+        if LOCAL_DOMAINS.iter().any(|d| d.eq_ignore_ascii_case(domain)) {
+            continue;
+        }
+        if let Some(domain) = validate_domain(domain) {
+            callback((DomainPattern::Exact(domain), RuleType::Block));
+        }
     }
-
-    validate_domain(domain).map(DomainPattern::Exact)
 }
 
 fn parse_plain_line(line: &str) -> Option<DomainPattern<'_>> {
@@ -298,6 +302,16 @@ mod tests {
     }
 
     #[test]
+    fn parses_compressed_hosts_lines() {
+        let domains = parse_all(HOSTS);
+        assert!(domains.iter().any(|d| cmp_block(d, "multi1.example.com")));
+        assert!(domains.iter().any(|d| cmp_block(d, "multi2.example.com")));
+        // local domains are filtered even when mixed into a compressed line
+        assert!(domains.iter().any(|d| cmp_block(d, "multi3.example.com")));
+        assert!(!domains.iter().any(|d| d.0 == "localhost"));
+    }
+
+    #[test]
     fn hosts_filters_local_domains() {
         let domains = parse_all(HOSTS);
         assert!(!domains.iter().any(|d| cmp_block(d, "localhost")));
@@ -315,11 +329,9 @@ mod tests {
         assert!(domains.iter().any(|d| cmp_block(d, "tracker.example.com")));
         assert!(domains.iter().any(|d| cmp_block(d, "telemetry.example.com")));
         assert!(domains.iter().any(|d| cmp_block(d, "metrics.example.com")));
-        assert!(
-            domains.iter().any(|(d, rt, kind)| d == "ads.example.com"
-                && *rt == RuleType::Block
-                && *kind == PatternKind::Subdomain)
-        );
+        assert!(domains
+            .iter()
+            .any(|(d, rt, kind)| d == "ads.example.com" && *rt == RuleType::Block && *kind == PatternKind::Subdomain));
         assert!(domains.iter().any(|d| cmp_block(d, "another.example.com")));
     }
 

@@ -19,3 +19,7 @@
 # empty lines and comments mixed in
 
 0.0.0.0 another.example.com
+
+# compressed lines with multiple domains per line
+0.0.0.0 multi1.example.com multi2.example.com
+127.0.0.1 localhost multi3.example.com
