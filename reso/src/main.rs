@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 use tokio::runtime::Builder;
 
-use aes_gcm::{AesGcm, KeyInit, aead::generic_array::GenericArray};
+use aes_gcm::{AesGcm, KeyInit};
 use api::serve_web;
 use database::{connect_core_db, run_core_db_migrations};
 use env_config::EnvConfig;
@@ -74,7 +74,7 @@ async fn run() -> anyhow::Result<()> {
 
     let (handle, stats, metrics_service) = MetricsService::new(metrics_db_connection.clone(), 1000).await?;
 
-    let cipher = AesGcm::new(&GenericArray::clone_from_slice(&config.cookie_secret));
+    let cipher = AesGcm::new(&config.cookie_secret.into());
 
     let global: SharedGlobal = Arc::new(Global {
         cache: DnsMessageCache::default(),

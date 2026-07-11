@@ -1,7 +1,4 @@
-use aes_gcm::{
-    Aes256Gcm, Nonce,
-    aead::{Aead, OsRng, rand_core::RngCore},
-};
+use aes_gcm::{Aes256Gcm, Nonce, aead::Aead};
 use anyhow::anyhow;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use base64::{
@@ -9,6 +6,7 @@ use base64::{
     engine::{self, general_purpose},
 };
 
+use rand::Rng;
 use time::Duration;
 use uuid::Uuid;
 
@@ -35,11 +33,11 @@ const BASE64_ENGINE: engine::GeneralPurpose = engine::GeneralPurpose::new(&alpha
 
 pub fn encrypt_session_id(cipher: &Aes256Gcm, id: EntityId<UserSession>) -> anyhow::Result<String> {
     let mut nonce_bytes = [0u8; 12];
-    OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    rand::rng().fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from(nonce_bytes);
 
     let bytes = id.id().as_bytes();
-    let ciphertext = cipher.encrypt(nonce, bytes.as_slice()).map_err(|e| anyhow!(e))?;
+    let ciphertext = cipher.encrypt(&nonce, bytes.as_slice()).map_err(|e| anyhow!(e))?;
 
     let mut encrypted_session_id = Vec::with_capacity(nonce_bytes.len() + ciphertext.len());
     encrypted_session_id.extend_from_slice(&nonce_bytes);
@@ -55,9 +53,9 @@ pub fn decrypt_session_cookie(cipher: &Aes256Gcm, encoded: &str) -> anyhow::Resu
     anyhow::ensure!(data.len() >= 12 + 16, "session cookie too short");
 
     let (nonce_bytes, ciphertext) = data.split_at(12);
-    let nonce = Nonce::from_slice(nonce_bytes);
+    let nonce = Nonce::try_from(nonce_bytes).map_err(|e| anyhow::anyhow!(e))?;
 
-    let plaintext = cipher.decrypt(nonce, ciphertext).map_err(|e| anyhow::anyhow!(e))?;
+    let plaintext = cipher.decrypt(&nonce, ciphertext).map_err(|e| anyhow::anyhow!(e))?;
 
     anyhow::ensure!(plaintext.len() == 16, "invalid session id length");
 

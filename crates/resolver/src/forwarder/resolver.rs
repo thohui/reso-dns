@@ -2,7 +2,7 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
-use rand::Rng;
+use rand::RngExt;
 use reso_context::DnsRequestCtx;
 use reso_dns::{
     ClassType, DnsMessage, DnsOpcode, RecordType,

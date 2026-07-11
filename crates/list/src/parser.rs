@@ -329,9 +329,11 @@ mod tests {
         assert!(domains.iter().any(|d| cmp_block(d, "tracker.example.com")));
         assert!(domains.iter().any(|d| cmp_block(d, "telemetry.example.com")));
         assert!(domains.iter().any(|d| cmp_block(d, "metrics.example.com")));
-        assert!(domains
-            .iter()
-            .any(|(d, rt, kind)| d == "ads.example.com" && *rt == RuleType::Block && *kind == PatternKind::Subdomain));
+        assert!(
+            domains.iter().any(|(d, rt, kind)| d == "ads.example.com"
+                && *rt == RuleType::Block
+                && *kind == PatternKind::Subdomain)
+        );
         assert!(domains.iter().any(|d| cmp_block(d, "another.example.com")));
     }
 

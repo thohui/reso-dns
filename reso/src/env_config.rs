@@ -1,5 +1,5 @@
 use base64::{Engine, engine::general_purpose::STANDARD};
-use rand::Rng;
+use rand::RngExt;
 use std::{
     env::{self},
     fs::{self, OpenOptions},
@@ -21,7 +21,7 @@ pub struct EnvConfig {
     pub metrics_db_path: String,
     pub dns_server_address: SocketAddr,
     pub http_server_address: SocketAddr,
-    pub cookie_secret: Vec<u8>,
+    pub cookie_secret: [u8; 32],
 }
 
 impl EnvConfig {
@@ -69,7 +69,7 @@ impl EnvConfig {
             }
         }
 
-        let cookie_secret: Vec<u8> = load_or_create_session_secret(&session_secret_path)?.into();
+        let cookie_secret = load_or_create_session_secret(&session_secret_path)?;
 
         Ok(Self {
             log_level,
