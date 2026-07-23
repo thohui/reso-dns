@@ -38,17 +38,20 @@ export function StatCard({
 				opacity='0.5'
 			/>
 
-			<HStack justify='space-between' mb='3'>
+			<HStack justify='space-between' mb='3' gap='2'>
 				<Text
 					color='fg.subtle'
 					fontSize='xs'
 					fontWeight='500'
 					textTransform='uppercase'
 					letterSpacing='0.05em'
+					flex='1'
+					minW='0'
+					truncate
 				>
 					{label}
 				</Text>
-				<Icon as={icon} boxSize='4' color='fg.faint' />
+				<Icon as={icon} boxSize='4' color='fg.faint' flexShrink={0} />
 			</HStack>
 			<Text
 				fontSize='2xl'

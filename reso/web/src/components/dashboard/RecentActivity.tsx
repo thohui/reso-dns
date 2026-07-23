@@ -1,8 +1,8 @@
+import { Box, HStack, Icon, Text, VStack } from '@chakra-ui/react';
+import { Zap } from 'lucide-react';
 import { useRecentActivity } from '@/hooks/dashboard/useRecentActivity';
 import { type Activity, getTransportLabel } from '@/lib/api/activity';
 import { getStatusInfo } from '@/lib/status-info';
-import { Box, HStack, Icon, Text, VStack } from '@chakra-ui/react';
-import { Zap } from 'lucide-react';
 
 export function RecentActivity() {
 	const activities = useRecentActivity();
@@ -18,7 +18,7 @@ export function RecentActivity() {
 			<HStack
 				justify='space-between'
 				px='5'
-				py='4'
+				py='3'
 				borderBottomWidth='1px'
 				borderColor='border'
 			>
@@ -28,12 +28,9 @@ export function RecentActivity() {
 						Recent Activity
 					</Text>
 				</HStack>
-				<Text fontSize='xs' color='fg.faint'>
-					Last 5 entries
-				</Text>
 			</HStack>
 			<VStack gap='0' align='stretch' overflowX='auto'>
-				{activities?.items.map((activity, i) => (
+				{activities?.items.slice(0, 5).map((activity, i) => (
 					<ActivityRow key={`${activity.timestamp}-${i}`} activity={activity} />
 				))}
 			</VStack>
@@ -54,6 +51,7 @@ function ActivityRow({ activity }: { activity: Activity }) {
 	return (
 		<HStack
 			justify='space-between'
+			align='center'
 			px='5'
 			py='3'
 			borderBottomWidth='1px'
@@ -62,35 +60,23 @@ function ActivityRow({ activity }: { activity: Activity }) {
 			_hover={{ bg: 'bg.subtle' }}
 			transition='background 0.1s ease'
 		>
-			<HStack gap='3'>
-				<Icon as={status.icon} boxSize='3.5' color={status.color} />
+			<HStack gap='3' align='center'>
+				<Icon as={status.icon} boxSize='4' color={status.color} />
 				<Text
 					fontFamily="'Mozilla Text', sans-serif"
-					fontSize='xs'
+					fontSize='sm'
 					fontWeight='500'
+					lineHeight='1'
 				>
 					{activity.qname || '-'}
 				</Text>
-				<Box
-					px='2.5'
-					py='0.5'
-					borderRadius='md'
-					fontSize='xs'
-					fontWeight='600'
-					textTransform='uppercase'
-					letterSpacing='0.03em'
-					bg={status.bg}
-					color={status.color}
-				>
-					{status.label}
-				</Box>
 			</HStack>
-			<HStack gap='3'>
+			<HStack gap='3' align='center'>
 				<Box
 					px='2'
 					py='0.5'
 					borderRadius='md'
-					fontSize='xs'
+					fontSize='sm'
 					fontWeight='500'
 					fontFamily="'Mozilla Text', sans-serif"
 					bg='accent.muted'
@@ -100,8 +86,9 @@ function ActivityRow({ activity }: { activity: Activity }) {
 				</Box>
 				<Text
 					color='fg.faint'
-					fontSize='xs'
+					fontSize='sm'
 					fontFamily="'Mozilla Text', sans-serif"
+					lineHeight='1'
 				>
 					{time}
 				</Text>

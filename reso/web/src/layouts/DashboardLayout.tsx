@@ -7,6 +7,7 @@ import {
 	Icon,
 	Portal,
 	Text,
+	Tooltip,
 	VStack,
 } from '@chakra-ui/react';
 import {
@@ -25,6 +26,8 @@ import { Outlet, useLocation, useNavigate } from 'react-router';
 import Logo from '@/assets/logo.svg?react';
 import { PageLoader } from '@/components/PageLoader';
 import { useLogout } from '@/hooks/auth/useLogout';
+import { useLiveStats } from '@/hooks/dashboard/useLiveStats';
+import { useUptime } from '@/hooks/useUptime';
 import { getVersion } from '@/lib/version';
 
 interface MenuItem {
@@ -46,6 +49,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 	const location = useLocation();
 	const navigate = useNavigate();
 	const logout = useLogout();
+	const { data: liveData } = useLiveStats();
+	const uptime = useUptime(liveData?.live_since);
 
 	const handleNavigate = (path: string) => {
 		navigate(path);
@@ -59,20 +64,35 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
 	return (
 		<>
-			<HStack gap='3' px='3' mb='8' align='baseline'>
-				<Logo width={28} height={28} style={{ alignSelf: 'center' }} />
-				<Text
-					fontWeight='600'
-					fontSize='sm'
-					letterSpacing='-0.02em'
-					fontFamily="'Mozilla Text', sans-serif"
-				>
-					[ResoDNS]
-				</Text>
-				<Text fontSize='2xs' color='fg.faint' ml='-1.5'>
-					v{getVersion()}
-				</Text>
-			</HStack>
+			<Tooltip.Root openDelay={300}>
+				<Tooltip.Trigger asChild>
+					<HStack gap='3' px='3' mb='8' align='baseline' w='fit-content'>
+						<Logo width={28} height={28} style={{ alignSelf: 'center' }} />
+						<Text
+							fontWeight='600'
+							fontSize='sm'
+							letterSpacing='-0.02em'
+							fontFamily="'Mozilla Text', sans-serif"
+						>
+							[ResoDNS]
+						</Text>
+						<Text fontSize='2xs' color='fg.faint' ml='-1.5'>
+							v{getVersion()}
+						</Text>
+					</HStack>
+				</Tooltip.Trigger>
+				<Tooltip.Positioner>
+					<Tooltip.Content
+						fontSize='xs'
+						bg='bg.panel'
+						color='fg'
+						borderWidth='1px'
+						borderColor='border'
+					>
+						Uptime: {uptime.text}
+					</Tooltip.Content>
+				</Tooltip.Positioner>
+			</Tooltip.Root>
 
 			<VStack gap='0.5' align='stretch' flex='1'>
 				{menuItems.map((item) => {

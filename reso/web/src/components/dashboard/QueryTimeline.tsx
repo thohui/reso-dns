@@ -129,6 +129,9 @@ export function QueryTimeline({ data, loading }: Props) {
 				borderWidth='1px'
 				borderColor='border'
 				p='5'
+				h='full'
+				display='flex'
+				flexDir='column'
 			>
 				<Text
 					color='fg.subtle'
@@ -137,14 +140,16 @@ export function QueryTimeline({ data, loading }: Props) {
 					textTransform='uppercase'
 					letterSpacing='0.05em'
 					mb='4'
+					flexShrink={0}
 				>
 					Query Timeline
 				</Text>
 				<Box
+					flex='1'
+					minH='0'
 					display='flex'
 					alignItems='center'
 					justifyContent='center'
-					h='250px'
 				>
 					<Text color='fg.faint' fontSize='sm'>
 						{loading ? 'Loading...' : 'No data available'}
@@ -161,6 +166,9 @@ export function QueryTimeline({ data, loading }: Props) {
 			borderWidth='1px'
 			borderColor='border'
 			p='5'
+			h='full'
+			display='flex'
+			flexDir='column'
 		>
 			<Text
 				color='fg.subtle'
@@ -169,11 +177,12 @@ export function QueryTimeline({ data, loading }: Props) {
 				textTransform='uppercase'
 				letterSpacing='0.05em'
 				mb='4'
+				flexShrink={0}
 			>
 				Query Timeline
 			</Text>
 
-			<Chart.Root maxH='sm' chart={chart}>
+			<Chart.Root flex='1' minH='0' chart={chart}>
 				<AreaChart data={chart.data} responsive>
 					<CartesianGrid
 						stroke={chart.color('border.muted')}

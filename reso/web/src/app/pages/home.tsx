@@ -1,4 +1,4 @@
-import { Box, Button, HStack, Text } from '@chakra-ui/react';
+import { Box, Button, HStack } from '@chakra-ui/react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { AlertCircle, Ban, Clock, DatabaseBackup, Globe } from 'lucide-react';
 import { useMemo, useState, useTransition } from 'react';
@@ -7,8 +7,6 @@ import { RecentActivity } from '@/components/dashboard/RecentActivity';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { TopDonutChart } from '@/components/dashboard/TopDonutChart';
 import { useApiClient } from '@/contexts/ApiClientContext';
-import { useLiveStats } from '@/hooks/dashboard/useLiveStats';
-import { useUptime } from '@/hooks/useUptime';
 import type { TopRange } from '@/lib/api/stats';
 
 const RANGE_OPTIONS: { value: TopRange; label: string }[] = [
@@ -58,29 +56,9 @@ export default function HomePage() {
 	const avgResponse =
 		totals.total > 0 ? (totals.sum_duration / totals.total).toFixed() : '0';
 
-	const { data: liveData } = useLiveStats();
-	const uptime = useUptime(liveData?.live_since);
-
 	return (
-		<Box>
-			<HStack justify='space-between' mb='8'>
-				<Box>
-					<HStack gap='2'>
-						<Box position='relative'>
-							<Box w='2.5' h='2.5' borderRadius='full' bg='status.success' />
-							<Box
-								position='absolute'
-								inset='0'
-								borderRadius='full'
-								bg='status.success'
-								className='animate-pulse-glow'
-							/>
-						</Box>
-						<Text color='fg.muted' fontSize='sm'>
-							Uptime: {uptime.text}
-						</Text>
-					</HStack>
-				</Box>
+		<Box h='full' display='flex' flexDir='column' gap='4'>
+			<HStack justify='flex-end' flexShrink={0}>
 				<HStack gap='1'>
 					{RANGE_OPTIONS.map((opt) => (
 						<Button
@@ -107,8 +85,8 @@ export default function HomePage() {
 					md: 'repeat(2, 1fr)',
 					lg: 'repeat(5, 1fr)',
 				}}
-				gap='6'
-				mb='8'
+				gap='4'
+				flexShrink={0}
 			>
 				<StatCard
 					label='Total Queries'
@@ -139,7 +117,7 @@ export default function HomePage() {
 					isLoading={timelineLoading}
 				/>
 				<StatCard
-					label='Avg Response'
+					label='Average Response time'
 					value={`${avgResponse} ms`}
 					icon={Clock}
 					accentColor='accent'
@@ -147,7 +125,7 @@ export default function HomePage() {
 				/>
 			</Box>
 
-			<Box mb='8'>
+			<Box flex='1' minH='0'>
 				<QueryTimeline
 					data={timelineData?.buckets ?? []}
 					loading={timelineLoading}
@@ -157,8 +135,8 @@ export default function HomePage() {
 			<Box
 				display='grid'
 				gridTemplateColumns={{ base: '1fr', md: 'repeat(3, 1fr)' }}
-				gap='6'
-				mb='8'
+				gap='4'
+				flexShrink={0}
 			>
 				<TopDonutChart
 					title='Top Clients'
@@ -176,8 +154,9 @@ export default function HomePage() {
 					loading={topLoading}
 				/>
 			</Box>
-
-			<RecentActivity />
+			<Box flexShrink={0}>
+				<RecentActivity />
+			</Box>
 		</Box>
 	);
 }
