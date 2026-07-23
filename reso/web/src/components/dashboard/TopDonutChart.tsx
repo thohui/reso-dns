@@ -70,6 +70,7 @@ export function TopDonutChart({ title, data, loading }: Props) {
 			borderWidth='1px'
 			borderColor='border'
 			p='5'
+			minW='0'
 		>
 			<Text
 				color='fg.subtle'
@@ -82,8 +83,8 @@ export function TopDonutChart({ title, data, loading }: Props) {
 				{title}
 			</Text>
 
-			<Box display='flex' alignItems='center' gap='4'>
-				<Chart.Root chart={chart} boxSize='140px'>
+			<Box display='flex' alignItems='center' gap='4' minW='0'>
+				<Chart.Root chart={chart} boxSize='140px' flexShrink={0}>
 					<PieChart responsive>
 						<Tooltip
 							cursor={false}
@@ -103,7 +104,7 @@ export function TopDonutChart({ title, data, loading }: Props) {
 						/>
 					</PieChart>
 				</Chart.Root>
-				<Box flex='1' overflow='hidden'>
+				<Box flex='1' minW='0' overflow='hidden'>
 					{chartData.slice(0, 5).map((entry) => (
 						<Box
 							key={entry.name}
