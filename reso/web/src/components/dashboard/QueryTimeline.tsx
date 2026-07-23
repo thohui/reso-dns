@@ -39,10 +39,7 @@ function decimate(data: TimelineBucket[], maxPoints: number): TimelineBucket[] {
 			cached: chunk.reduce((sum, d) => sum + d.cached, 0),
 			errors: chunk.reduce((sum, d) => sum + d.errors, 0),
 			sum_duration: chunk.reduce((sum, d) => sum + d.sum_duration, 0),
-			bucket_duration_ms: chunk.reduce(
-				(sum, d) => sum + d.bucket_duration_ms,
-				0,
-			),
+			bucket_duration: chunk.reduce((sum, d) => sum + d.bucket_duration, 0),
 		});
 	}
 	return merged;
@@ -51,7 +48,7 @@ function decimate(data: TimelineBucket[], maxPoints: number): TimelineBucket[] {
 // Bucket width varies by age (minute/hour/day), so raw counts aren't comparable, convert to a rate instead.
 function normalizeToHourlyRate(data: TimelineBucket[]) {
 	return data.map((d) => {
-		const factor = HOUR_MS / d.bucket_duration_ms;
+		const factor = HOUR_MS / d.bucket_duration;
 		return {
 			...d,
 			total: Math.round(d.total * factor),
@@ -114,7 +111,7 @@ export function QueryTimeline({ data, loading }: Props) {
 	const showTime = useCallback(
 		(ts: number) => {
 			const point = (chart.data as typeof normalized).find((d) => d.ts === ts);
-			return (point?.bucket_duration_ms ?? 0) < DAY_MS;
+			return (point?.bucket_duration ?? 0) < DAY_MS;
 		},
 		[chart.data],
 	);

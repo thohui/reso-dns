@@ -16,10 +16,10 @@ pub struct TimelineBucket {
     pub cached: i64,
     /// Total number of errored requests in this bucket.
     pub errors: i64,
-    /// Sum of the duration of all requests in this bucket, in milliseconds
+    /// Sum of the duration of all requests in this bucket in milliseconds
     pub sum_duration: i64,
-    /// How wide this bucket is in ms.
-    pub bucket_duration_ms: i64,
+    /// How wide this bucket is in milliseconds.
+    pub bucket_duration: i64,
 }
 
 pub struct ClientMetrics {
@@ -130,8 +130,8 @@ pub async fn timeline(db: &MetricsDatabasePool, since: i64) -> Result<Vec<Timeli
         let iter = stmt.query_map(params![since], |r| {
             let ts: i64 = r.get(0)?;
             let age = now - ts;
-            // buckets get bigger as they age so work out how wide it is based on how old it is
-            let bucket_duration_ms = if age > task::COMPRESS_TO_DAY_AFTER_MS {
+            // buckets get bigger as they age so work out how wide it is  is based on how old it is
+            let bucket_duration = if age > task::COMPRESS_TO_DAY_AFTER_MS {
                 task::DAY_MS
             } else if age > task::COMPRESS_TO_HOUR_AFTER_MS {
                 task::HOUR_MS
@@ -145,7 +145,7 @@ pub async fn timeline(db: &MetricsDatabasePool, since: i64) -> Result<Vec<Timeli
                 cached: r.get(3)?,
                 errors: r.get(4)?,
                 sum_duration: r.get(5)?,
-                bucket_duration_ms,
+                bucket_duration,
             })
         })?;
         iter.collect()
