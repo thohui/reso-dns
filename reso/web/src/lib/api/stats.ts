@@ -64,6 +64,7 @@ export interface TimelineBucket {
 	cached: number;
 	errors: number;
 	sum_duration: number;
+	bucket_duration_ms: number;
 }
 
 export interface TimelineResponse {

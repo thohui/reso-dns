@@ -1,7 +1,7 @@
 import { Box, Button, HStack, Text } from '@chakra-ui/react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { AlertCircle, Ban, Clock, DatabaseBackup, Globe } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { QueryTimeline } from '@/components/dashboard/QueryTimeline';
 import { RecentActivity } from '@/components/dashboard/RecentActivity';
 import { StatCard } from '@/components/dashboard/StatCard';
@@ -25,17 +25,20 @@ export default function HomePage() {
 	const apiClient = useApiClient();
 
 	const [range, setRange] = useState<TopRange>('day');
+	const [, startTransition] = useTransition();
 
 	const { data: topData, isPending: topLoading } = useQuery({
 		queryKey: ['top-stats', range],
 		queryFn: async () => apiClient.stats.top(range),
 		refetchInterval: 30 * 1000,
+		placeholderData: keepPreviousData,
 	});
 
 	const { data: timelineData, isPending: timelineLoading } = useQuery({
 		queryKey: ['timeline-stats', range],
 		queryFn: async () => apiClient.stats.timeline(range),
 		refetchInterval: 30 * 1000,
+		placeholderData: keepPreviousData,
 	});
 
 	const totals = useMemo(() => {
@@ -89,7 +92,7 @@ export default function HomePage() {
 							_hover={{
 								bg: range === opt.value ? 'accent.hover' : 'bg.subtle',
 							}}
-							onClick={() => setRange(opt.value)}
+							onClick={() => startTransition(() => setRange(opt.value))}
 						>
 							{opt.label}
 						</Button>
@@ -146,7 +149,6 @@ export default function HomePage() {
 
 			<Box mb='8'>
 				<QueryTimeline
-					range={range}
 					data={timelineData?.buckets ?? []}
 					loading={timelineLoading}
 				/>

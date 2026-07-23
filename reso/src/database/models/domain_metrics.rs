@@ -96,22 +96,22 @@ pub async fn top_blocked(
 
 /// Compress old metric buckets into larger ones to save space.
 /// `cutoff` is a unix timestamp in ms, all buckets with a timestamp older than the cutoff will be compressed.
-pub async fn compress_before(db: &MetricsDatabasePool, cutoff: i64) -> Result<(), DatabaseError> {
-    const HOUR_MS: i64 = 3_600_000; // 1 hour in ms.
+/// `bucket_ms` is the target bucket width in milliseconds
+pub async fn compress_before(db: &MetricsDatabasePool, cutoff: i64, bucket_ms: i64) -> Result<(), DatabaseError> {
     db.interact(move |c| {
-        // find all < hour rows older than the cutoff and sum them into
-        // hour aligned buckets. rows whose bucket_ts is already divisible
-        // by HOUR_MS are already compressed, so we skip those.
+        // find all rows older than the cutoff that aren't already aligned to bucket_ms and sum
+        // them into bucket_ms-aligned buckets.
+        // rows whose bucket_ts is already divisible by bucket_ms are already compressed, so we skip those.
 
-        // (bucket_ts / HOUR_MS) * HOUR_MS floors the timestamp to the start of the hour.
-        let hourly: Vec<DomainMetrics> = {
+        // (bucket_ts / bucket_ms) * bucket_ms floors the timestamp to the start of the bucket.
+        let rolled: Vec<DomainMetrics> = {
             let mut q = c.prepare(&format!(
-                "SELECT (bucket_ts / {HOUR_MS}) * {HOUR_MS} AS hour_ts, qname,
+                "SELECT (bucket_ts / {bucket_ms}) * {bucket_ms} AS rolled_ts, qname,
                         SUM(total_count), SUM(blocked_count)
                  FROM metrics_by_domain
                  WHERE bucket_ts < ?1
-                   AND bucket_ts % {HOUR_MS} != 0
-                 GROUP BY hour_ts, qname",
+                   AND bucket_ts % {bucket_ms} != 0
+                 GROUP BY rolled_ts, qname",
             ))?;
             q.query_map(params![cutoff], |r| {
                 Ok(DomainMetrics {
@@ -124,7 +124,7 @@ pub async fn compress_before(db: &MetricsDatabasePool, cutoff: i64) -> Result<()
             .collect::<rusqlite::Result<_>>()?
         };
 
-        if hourly.is_empty() {
+        if rolled.is_empty() {
             return Ok(());
         }
 
@@ -134,15 +134,15 @@ pub async fn compress_before(db: &MetricsDatabasePool, cutoff: i64) -> Result<()
                 "INSERT INTO metrics_by_domain (bucket_ts, qname, total_count, blocked_count)
                  VALUES (?1, ?2, ?3, ?4)
                  ON CONFLICT(bucket_ts, qname) DO UPDATE SET
-                     total_count   = total_count   + excluded.total_count,
+                     total_count  = total_count + excluded.total_count,
                      blocked_count = blocked_count + excluded.blocked_count",
             )?;
-            for row in &hourly {
+            for row in &rolled {
                 upsert.execute(params![row.bucket_ts, row.qname, row.total_count, row.blocked_count])?;
             }
         }
         tx.execute(
-            &format!("DELETE FROM metrics_by_domain WHERE bucket_ts < ?1 AND bucket_ts % {HOUR_MS} != 0"),
+            &format!("DELETE FROM metrics_by_domain WHERE bucket_ts < ?1 AND bucket_ts % {bucket_ms} != 0"),
             params![cutoff],
         )?;
         tx.commit()?;
@@ -269,8 +269,7 @@ mod tests {
         assert_eq!(result[1].1, 2);
     }
 
-    const HOUR_MS: i64 = 3_600_000;
-    const MINUTE_MS: i64 = 60_000;
+    use crate::metrics::task::{DAY_MS, HOUR_MS, MINUTE_MS};
 
     #[tokio::test]
     async fn compress_before_rolls_up_minute_buckets() {
@@ -282,7 +281,7 @@ mod tests {
         ];
         batch_upsert(&db.conn, &rows).await.unwrap();
 
-        compress_before(&db.conn, HOUR_MS * 3).await.unwrap();
+        compress_before(&db.conn, HOUR_MS * 3, HOUR_MS).await.unwrap();
 
         let result = list_range(&db.conn, 0, HOUR_MS * 5).await.unwrap();
         assert_eq!(result.len(), 1);
@@ -297,11 +296,29 @@ mod tests {
         let rows = vec![make_domain_metrics(HOUR_MS + MINUTE_MS, "a.com", 10, 3)];
         batch_upsert(&db.conn, &rows).await.unwrap();
 
-        compress_before(&db.conn, HOUR_MS * 3).await.unwrap();
-        compress_before(&db.conn, HOUR_MS * 3).await.unwrap();
+        compress_before(&db.conn, HOUR_MS * 3, HOUR_MS).await.unwrap();
+        compress_before(&db.conn, HOUR_MS * 3, HOUR_MS).await.unwrap();
 
         let result = list_range(&db.conn, 0, HOUR_MS * 5).await.unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].total_count, 10);
+    }
+
+    #[tokio::test]
+    async fn compress_before_rolls_up_hour_buckets_into_day() {
+        let db = setup_metrics_test_db().await.unwrap();
+
+        let rows = vec![
+            make_domain_metrics(DAY_MS + HOUR_MS, "a.com", 10, 3),
+            make_domain_metrics(DAY_MS + 2 * HOUR_MS, "a.com", 5, 2),
+        ];
+        batch_upsert(&db.conn, &rows).await.unwrap();
+
+        compress_before(&db.conn, DAY_MS * 3, DAY_MS).await.unwrap();
+
+        let result = list_range(&db.conn, 0, DAY_MS * 5).await.unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].bucket_ts, DAY_MS);
+        assert_eq!(result[0].total_count, 15);
     }
 }

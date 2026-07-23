@@ -10,6 +10,15 @@ use crate::{
     services::config::Config,
 };
 
+pub const MINUTE_MS: i64 = 60_000;
+pub const HOUR_MS: i64 = 3_600_000;
+pub const DAY_MS: i64 = 86_400_000;
+
+/// Buckets older than this are rolled up from 1-minute to 1-hour buckets.
+pub const COMPRESS_TO_HOUR_AFTER_MS: i64 = 24 * HOUR_MS;
+/// Buckets older than this are rolled up from 1 hour to 1 day buckets.
+pub const COMPRESS_TO_DAY_AFTER_MS: i64 = 31 * DAY_MS;
+
 /// Task that periodically truncates old activity logs to save space.
 pub async fn run_metrics_truncation(
     db: Arc<MetricsDatabasePool>,
@@ -96,35 +105,42 @@ pub async fn run_metrics_truncation(
     }
 }
 
-/// Rolls up aggregate metrics older than this threshold from 1 minute to 1 hour buckets.
-const COMPRESS_AFTER_SECS: u64 = 24 * 3600;
-
 /// Task that periodically compresses old metrics into larger time buckets to save space.
+/// Rolls 1-minute buckets into 1-hour buckets after `COMPRESS_TO_HOUR_AFTER_MS`, then
+/// 1-hour buckets into 1-day buckets after `COMPRESS_TO_DAY_AFTER_MS`.
 pub async fn run_metrics_compression(db: Arc<MetricsDatabasePool>, shutdown: tokio_util::sync::CancellationToken) {
     let mut tick = time::interval(Duration::from_secs(3600));
+
+    // Don't await the first tick in case there are already metrics that need comrpessing before
+    // the first hourly tick.
     tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
-    // we purposely don't await the first tick so that we compress on startup,
-    // in case there are already old metrics that need compressing before the first hourly tick.
-
-    tracing::info!("running metrics compression (compress_after={}s)", COMPRESS_AFTER_SECS);
+    tracing::info!(
+        "running metrics compression (compress_to_hour_after={}s, compress_to_day_after={}s)",
+        COMPRESS_TO_HOUR_AFTER_MS / 1000,
+        COMPRESS_TO_DAY_AFTER_MS / 1000,
+    );
 
     loop {
         tokio::select! {
             _ = tick.tick() => {
-                let cutoff = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as i64
-                    - Duration::from_secs(COMPRESS_AFTER_SECS).as_millis() as i64;
+                let now = crate::time::now_millis();
+                let hour_cutoff = now - COMPRESS_TO_HOUR_AFTER_MS;
+                let day_cutoff = now - COMPRESS_TO_DAY_AFTER_MS;
 
-                // we purposefully don't run these compressions in parallel since sqlite can only have one writer at a time.
+                // we purposely don't run these compressions in parallel since sqlite can only have one writer at a time.
 
-                if let Err(e) = client_metrics::compress_before(&db, cutoff).await {
-                    tracing::error!("failed to compress client metrics: {}", e);
+                if let Err(e) = client_metrics::compress_before(&db, hour_cutoff, HOUR_MS).await {
+                    tracing::error!("failed to compress client metrics to hourly buckets: {}", e);
                 }
-                if let Err(e) = domain_metrics::compress_before(&db, cutoff).await {
-                    tracing::error!("failed to compress domain metrics: {}", e);
+                if let Err(e) = domain_metrics::compress_before(&db, hour_cutoff, HOUR_MS).await {
+                    tracing::error!("failed to compress domain metrics to hourly buckets: {}", e);
+                }
+                if let Err(e) = client_metrics::compress_before(&db, day_cutoff, DAY_MS).await {
+                    tracing::error!("failed to compress client metrics to daily buckets: {}", e);
+                }
+                if let Err(e) = domain_metrics::compress_before(&db, day_cutoff, DAY_MS).await {
+                    tracing::error!("failed to compress domain metrics to daily buckets: {}", e);
                 }
 
                 if let Err(e) = db
@@ -133,7 +149,7 @@ pub async fn run_metrics_compression(db: Arc<MetricsDatabasePool>, shutdown: tok
                 {
                     tracing::error!("failed to checkpoint metrics WAL after truncation: {}", e);
                 } else {
-                    tracing::info!("compressed aggregated metrics older than {}s", COMPRESS_AFTER_SECS);
+                    tracing::info!("compressed aggregated metrics");
                 }
 
             }

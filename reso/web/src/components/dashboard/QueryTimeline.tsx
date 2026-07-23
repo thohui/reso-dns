@@ -1,5 +1,6 @@
 import { Chart, useChart } from '@chakra-ui/charts';
 import { Box, Text } from '@chakra-ui/react';
+import { useCallback, useMemo } from 'react';
 import {
 	Area,
 	AreaChart,
@@ -8,26 +9,100 @@ import {
 	XAxis,
 	YAxis,
 } from 'recharts';
-import type { TimelineBucket, TopRange } from '@/lib/api/stats';
+import type { TimelineBucket } from '@/lib/api/stats';
 
 interface Props {
 	data: TimelineBucket[];
 	loading?: boolean;
-	range: TopRange;
 }
 
-function formatTime(ts: number, range: TopRange) {
-	return new Date(ts).toLocaleTimeString([], {
-		hour: '2-digit',
-		minute: '2-digit',
-		month: range === 'year' || range === 'all' ? 'short' : undefined,
-		day: range === 'year' || range === 'all' ? 'numeric' : undefined,
+const HOUR_MS = 3_600_000;
+const DAY_MS = 86_400_000;
+
+const MAX_CHART_POINTS = 300;
+
+// recharts can't render thousands of points smoothly, so cap it.
+function decimate(data: TimelineBucket[], maxPoints: number): TimelineBucket[] {
+	if (data.length <= maxPoints) {
+		return data;
+	}
+
+	const chunkSize = Math.ceil(data.length / maxPoints);
+
+	const merged: TimelineBucket[] = [];
+	for (let i = 0; i < data.length; i += chunkSize) {
+		const chunk = data.slice(i, i + chunkSize);
+		merged.push({
+			ts: chunk[0].ts,
+			total: chunk.reduce((sum, d) => sum + d.total, 0),
+			blocked: chunk.reduce((sum, d) => sum + d.blocked, 0),
+			cached: chunk.reduce((sum, d) => sum + d.cached, 0),
+			errors: chunk.reduce((sum, d) => sum + d.errors, 0),
+			sum_duration: chunk.reduce((sum, d) => sum + d.sum_duration, 0),
+			bucket_duration_ms: chunk.reduce(
+				(sum, d) => sum + d.bucket_duration_ms,
+				0,
+			),
+		});
+	}
+	return merged;
+}
+
+// Bucket width varies by age (minute/hour/day), so raw counts aren't comparable, convert to a rate instead.
+function normalizeToHourlyRate(data: TimelineBucket[]) {
+	return data.map((d) => {
+		const factor = HOUR_MS / d.bucket_duration_ms;
+		return {
+			...d,
+			total: Math.round(d.total * factor),
+			blocked: Math.round(d.blocked * factor),
+			cached: Math.round(d.cached * factor),
+			errors: Math.round(d.errors * factor),
+		};
 	});
 }
 
-export function QueryTimeline({ data, loading, range }: Props) {
+function formatTime(ts: number, showDate: boolean, showTime: boolean) {
+	return new Date(ts).toLocaleString([], {
+		month: showDate ? 'short' : undefined,
+		day: showDate ? 'numeric' : undefined,
+		hour: showTime ? '2-digit' : undefined,
+		minute: showTime ? '2-digit' : undefined,
+	});
+}
+
+function formatTooltipLabel(ts: number, showDate: boolean, showTime: boolean) {
+	return new Date(ts).toLocaleString([], {
+		year: showDate ? 'numeric' : undefined,
+		month: showDate ? 'short' : undefined,
+		day: showDate ? 'numeric' : undefined,
+		hour: showTime ? '2-digit' : undefined,
+		minute: showTime ? '2-digit' : undefined,
+	});
+}
+
+// Check if a series of time line buckets span over multiple days.
+function spansMultipleDays(data: TimelineBucket[]): boolean {
+	if (data.length === 0) {
+		return false;
+	}
+	const first = new Date(data[0].ts);
+	const last = new Date(data[data.length - 1].ts);
+	return (
+		first.getFullYear() !== last.getFullYear() ||
+		first.getMonth() !== last.getMonth() ||
+		first.getDate() !== last.getDate()
+	);
+}
+
+export function QueryTimeline({ data, loading }: Props) {
+	const normalized = useMemo(
+		() => normalizeToHourlyRate(decimate(data, MAX_CHART_POINTS)),
+		[data],
+	);
+
 	const chart = useChart({
-		data,
+		data: normalized,
 		series: [
 			{ name: 'total', color: 'pink.solid' },
 			{ name: 'blocked', color: 'orange.solid' },
@@ -35,6 +110,19 @@ export function QueryTimeline({ data, loading, range }: Props) {
 			{ name: 'errors', color: 'red.solid' },
 		],
 	});
+
+	const showTime = useCallback(
+		(ts: number) => {
+			const point = (chart.data as typeof normalized).find((d) => d.ts === ts);
+			return (point?.bucket_duration_ms ?? 0) < DAY_MS;
+		},
+		[chart.data],
+	);
+
+	const showDate = useMemo(
+		() => spansMultipleDays(chart.data as typeof normalized),
+		[chart.data],
+	);
 
 	if (loading || data.length === 0) {
 		return (
@@ -98,12 +186,15 @@ export function QueryTimeline({ data, loading, range }: Props) {
 						axisLine={false}
 						tickLine={false}
 						dataKey={chart.key('ts')}
-						tickFormatter={(ts) => formatTime(ts, range)}
+						tickFormatter={(ts) => formatTime(ts, showDate, showTime(ts))}
 					/>
 					<YAxis axisLine={false} tickLine={false} />
 					<Tooltip
 						cursor={false}
-						labelFormatter={(label) => new Date(Number(label)).toLocaleString()}
+						labelFormatter={(label) => {
+							const ts = Number(label);
+							return formatTooltipLabel(ts, showDate, showTime(ts));
+						}}
 						animationDuration={100}
 						content={<Chart.Tooltip />}
 					/>
