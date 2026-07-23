@@ -117,7 +117,7 @@ export default function HomePage() {
 					isLoading={timelineLoading}
 				/>
 				<StatCard
-					label='Average Response time'
+					label='Average Response Time'
 					value={`${avgResponse} ms`}
 					icon={Clock}
 					accentColor='accent'
