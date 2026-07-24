@@ -125,7 +125,7 @@ export default function HomePage() {
 				/>
 			</Box>
 
-			<Box flex='1' minH='0'>
+			<Box flex='1' minH='320px'>
 				<QueryTimeline
 					data={timelineData?.buckets ?? []}
 					loading={timelineLoading}
