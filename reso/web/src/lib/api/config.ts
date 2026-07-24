@@ -27,6 +27,7 @@ export interface ConfigModel {
 
 export interface LogsConfig {
 	enabled: boolean;
+	truncation_enabled: boolean;
 	retention_secs: number;
 	truncate_interval_secs: number;
 }

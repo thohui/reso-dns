@@ -7,7 +7,7 @@ use crate::{
         MetricsDatabasePool,
         models::{activity_log, client_metrics, domain_metrics},
     },
-    services::config::Config,
+    services::config::ConfigReceiver,
 };
 
 pub const MINUTE_MS: i64 = 60_000;
@@ -22,13 +22,13 @@ pub const COMPRESS_TO_DAY_AFTER_MS: i64 = 31 * DAY_MS;
 /// Task that periodically truncates old activity logs to save space.
 pub async fn run_metrics_truncation(
     db: Arc<MetricsDatabasePool>,
-    mut config_rx: tokio::sync::watch::Receiver<Arc<Config>>,
+    mut config_rx: ConfigReceiver,
     shutdown: tokio_util::sync::CancellationToken,
 ) {
     let (mut enabled, mut retention_secs, mut interval_secs) = {
         let cfg = config_rx.borrow_and_update();
         (
-            cfg.logs.enabled,
+            cfg.logs.truncation_enabled,
             cfg.logs.retention_secs,
             cfg.logs.truncate_interval_secs.max(60),
         )
@@ -76,7 +76,7 @@ pub async fn run_metrics_truncation(
             Ok(()) = config_rx.changed() => {
                 let (new_enabled, new_retention, new_interval) = {
                     let cfg = config_rx.borrow_and_update();
-                    (cfg.logs.enabled, cfg.logs.retention_secs, cfg.logs.truncate_interval_secs.max(60))
+                    (cfg.logs.truncation_enabled, cfg.logs.retention_secs, cfg.logs.truncate_interval_secs.max(60))
                 };
 
                 if new_enabled != enabled {

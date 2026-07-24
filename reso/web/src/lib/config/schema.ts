@@ -167,6 +167,7 @@ export const configSchema = z.object({
 	}),
 	logs: z.object({
 		enabled: z.boolean(),
+		truncation_enabled: z.boolean(),
 		retention_secs: z.number().int().min(60),
 		truncate_interval_secs: z.number().int().min(60),
 	}),

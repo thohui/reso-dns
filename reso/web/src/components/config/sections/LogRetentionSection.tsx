@@ -18,11 +18,18 @@ export function LogRetentionSection({
 			icon={FileText}
 		>
 			<ConfigField
-				label='Enabled'
-				description='Automatically clean up old activity logs.'
+				label='Log Queries'
+				description='Record DNS query activity to the log.'
 				align='center'
 			>
 				<ConfigSwitch control={control} name='logs.enabled' />
+			</ConfigField>
+			<ConfigField
+				label='Auto Cleanup'
+				description='Automatically clean up old activity logs.'
+				align='center'
+			>
+				<ConfigSwitch control={control} name='logs.truncation_enabled' />
 			</ConfigField>
 			<ConfigField
 				label='Retention'

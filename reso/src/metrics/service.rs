@@ -10,13 +10,16 @@ use tokio::{
 };
 
 use super::event::{ErrorLogEvent, QueryLogEvent};
-use crate::database::{
-    MetricsDatabasePool,
-    models::{
-        activity_log::{self, ActivityLog},
-        client_metrics::{self, ClientMetrics},
-        domain_metrics::{self, DomainMetrics},
+use crate::{
+    database::{
+        MetricsDatabasePool,
+        models::{
+            activity_log::{self, ActivityLog},
+            client_metrics::{self, ClientMetrics},
+            domain_metrics::{self, DomainMetrics},
+        },
     },
+    services::config::ConfigReceiver,
 };
 
 pub enum MetricsMessage {
@@ -33,6 +36,7 @@ pub struct MetricsService {
     batch: Vec<ActivityLog>,
     buffer_size: usize,
     live_stats: Arc<RwLock<LiveStats>>,
+    config_rx: ConfigReceiver,
 }
 
 #[derive(Clone)]
@@ -121,6 +125,7 @@ impl MetricsService {
     pub async fn new(
         connection: Arc<MetricsDatabasePool>,
         buffer_size: usize,
+        config_rx: ConfigReceiver,
     ) -> anyhow::Result<(MetricsHandle, Stats, Self)> {
         let live = Stats::init(&connection).await?;
 
@@ -136,6 +141,7 @@ impl MetricsService {
                 batch: Vec::with_capacity(buffer_size),
                 buffer_size,
                 live_stats: live.query.clone(),
+                config_rx,
             },
         ))
     }
@@ -243,7 +249,7 @@ impl MetricsService {
             }
         }
 
-        // we purposefully don't use tokio::join here as it doesn't matter for sqlite,
+        // we purposely don't use tokio::join here as it doesn't matter for sqlite,
         // because sqlite only allows one write at a time.
 
         let client_buckets: Vec<_> = client_map.into_values().collect();
@@ -259,9 +265,11 @@ impl MetricsService {
             Err(e) => tracing::error!("failed to upsert domain metrics: {}", e),
         }
 
-        match activity_log::batch_insert(&self.connection, &self.batch).await {
-            Ok(()) => tracing::debug!("flushed {} activity logs", self.batch.len()),
-            Err(e) => tracing::error!("failed to insert activity logs: {}", e),
+        if self.config_rx.borrow().logs.enabled {
+            match activity_log::batch_insert(&self.connection, &self.batch).await {
+                Ok(()) => tracing::debug!("flushed {} activity logs", self.batch.len()),
+                Err(e) => tracing::error!("failed to insert activity logs: {}", e),
+            }
         }
 
         self.batch.clear();

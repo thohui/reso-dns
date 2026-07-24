@@ -72,7 +72,10 @@ async fn run() -> anyhow::Result<()> {
     let metrics_db_connection = Arc::new(connect_metrics_db(&config.metrics_db_path).await?);
     run_metrics_db_migrations(&metrics_db_connection).await?;
 
-    let (handle, stats, metrics_service) = MetricsService::new(metrics_db_connection.clone(), 1000).await?;
+    let config_service = ConfigService::initialize(core_db_connection.clone()).await?;
+
+    let (handle, stats, metrics_service) =
+        MetricsService::new(metrics_db_connection.clone(), 1000, config_service.subscribe()).await?;
 
     let cipher = AesGcm::new(&config.cookie_secret.into());
 
@@ -81,7 +84,7 @@ async fn run() -> anyhow::Result<()> {
         domain_rules: DomainRulesService::initialize(core_db_connection.clone()).await?,
         local_records: LocalRecordService::initialize(core_db_connection.clone()).await?,
         api_keys: ApiKeysService::new(core_db_connection.clone()),
-        config: ConfigService::initialize(core_db_connection.clone()).await?,
+        config: config_service,
         auth: AuthService::new(core_db_connection.clone()),
         cipher,
         metrics: handle,
@@ -150,7 +153,7 @@ async fn run() -> anyhow::Result<()> {
             _ = sigterm.recv() => {}
         }
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
     {
         signal::ctrl_c().await?;
     }

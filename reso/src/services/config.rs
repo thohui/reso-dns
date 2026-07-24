@@ -23,8 +23,10 @@ pub struct Config {
 
 #[derive(Serialize, Deserialize)]
 pub struct LogsConfig {
-    /// Whether log truncation is enabled.
+    /// Whether logging is enabled.
     pub enabled: bool,
+    /// Whether log truncation is enabled.
+    pub truncation_enabled: bool,
     /// How long to keep activity logs in seconds.
     pub retention_secs: u64,
     /// How often to run the truncation job in seconds.
@@ -234,6 +236,11 @@ impl Config {
             .and_then(|v| v.parse::<bool>().ok())
             .unwrap_or(defaults.logs.enabled);
 
+        let logs_truncation_enabled = map
+            .get("logs.truncation_enabled")
+            .and_then(|v| v.parse::<bool>().ok())
+            .unwrap_or(defaults.logs.truncation_enabled);
+
         let retention_secs = map
             .get("logs.retention_secs")
             .and_then(|v| v.parse::<u64>().ok())
@@ -262,6 +269,7 @@ impl Config {
             },
             logs: LogsConfig {
                 enabled: logs_enabled,
+                truncation_enabled: logs_truncation_enabled,
                 retention_secs,
                 truncate_interval_secs,
             },
@@ -294,6 +302,10 @@ impl Config {
                 self.dns.rate_limit.max_queries_per_window.to_string(),
             ),
             ("logs.enabled".to_string(), self.logs.enabled.to_string()),
+            (
+                "logs.truncation_enabled".to_string(),
+                self.logs.truncation_enabled.to_string(),
+            ),
             ("logs.retention_secs".to_string(), self.logs.retention_secs.to_string()),
             (
                 "logs.truncate_interval_secs".to_string(),
@@ -334,7 +346,8 @@ impl Default for Config {
                 },
             },
             logs: LogsConfig {
-                enabled: false,
+                enabled: true,
+                truncation_enabled: false,
                 retention_secs: 7 * 24 * 3600,
                 truncate_interval_secs: 3600,
             },
@@ -400,7 +413,9 @@ impl ConfigService {
     }
 
     /// Subscribe to any config changes.
-    pub fn subscribe(&self) -> tokio::sync::watch::Receiver<Arc<Config>> {
+    pub fn subscribe(&self) -> ConfigReceiver {
         self.tx.subscribe()
     }
 }
+
+pub type ConfigReceiver = tokio::sync::watch::Receiver<Arc<Config>>;
