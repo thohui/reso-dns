@@ -1,6 +1,6 @@
 import { Chart, useChart } from '@chakra-ui/charts';
 import { Box, Text } from '@chakra-ui/react';
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 import {
 	Area,
 	AreaChart,
@@ -16,51 +16,16 @@ interface Props {
 	loading?: boolean;
 }
 
-const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
 
-const MAX_CHART_POINTS = 300;
-
-// recharts can't render thousands of points smoothly, so cap it.
-function decimate(data: TimelineBucket[], maxPoints: number): TimelineBucket[] {
-	if (data.length <= maxPoints) {
-		return data;
-	}
-
-	const chunkSize = Math.ceil(data.length / maxPoints);
-
-	const merged: TimelineBucket[] = [];
-	for (let i = 0; i < data.length; i += chunkSize) {
-		const chunk = data.slice(i, i + chunkSize);
-		merged.push({
-			ts: chunk[0].ts,
-			total: chunk.reduce((sum, d) => sum + d.total, 0),
-			blocked: chunk.reduce((sum, d) => sum + d.blocked, 0),
-			cached: chunk.reduce((sum, d) => sum + d.cached, 0),
-			errors: chunk.reduce((sum, d) => sum + d.errors, 0),
-			sum_duration: chunk.reduce((sum, d) => sum + d.sum_duration, 0),
-			bucket_duration: chunk.reduce((sum, d) => sum + d.bucket_duration, 0),
-		});
-	}
-	return merged;
-}
-
-// Bucket width varies by age (minute/hour/day), so raw counts aren't comparable, convert to a rate instead.
-function normalizeToHourlyRate(data: TimelineBucket[]) {
-	return data.map((d) => {
-		const factor = HOUR_MS / d.bucket_duration;
-		return {
-			...d,
-			total: Math.round(d.total * factor),
-			blocked: Math.round(d.blocked * factor),
-			cached: Math.round(d.cached * factor),
-			errors: Math.round(d.errors * factor),
-		};
-	});
-}
-
-function formatTime(ts: number, showDate: boolean, showTime: boolean) {
+function formatTs(
+	ts: number,
+	showDate: boolean,
+	showTime: boolean,
+	showYear: boolean,
+) {
 	return new Date(ts).toLocaleString([], {
+		year: showYear ? 'numeric' : undefined,
 		month: showDate ? 'short' : undefined,
 		day: showDate ? 'numeric' : undefined,
 		hour: showTime ? '2-digit' : undefined,
@@ -68,17 +33,6 @@ function formatTime(ts: number, showDate: boolean, showTime: boolean) {
 	});
 }
 
-function formatTooltipLabel(ts: number, showDate: boolean, showTime: boolean) {
-	return new Date(ts).toLocaleString([], {
-		year: showDate ? 'numeric' : undefined,
-		month: showDate ? 'short' : undefined,
-		day: showDate ? 'numeric' : undefined,
-		hour: showTime ? '2-digit' : undefined,
-		minute: showTime ? '2-digit' : undefined,
-	});
-}
-
-// Check if a series of time line buckets span over multiple days.
 function spansMultipleDays(data: TimelineBucket[]): boolean {
 	if (data.length === 0) {
 		return false;
@@ -93,13 +47,8 @@ function spansMultipleDays(data: TimelineBucket[]): boolean {
 }
 
 export function QueryTimeline({ data, loading }: Props) {
-	const normalized = useMemo(
-		() => normalizeToHourlyRate(decimate(data, MAX_CHART_POINTS)),
-		[data],
-	);
-
 	const chart = useChart({
-		data: normalized,
+		data,
 		series: [
 			{ name: 'total', color: 'pink.solid' },
 			{ name: 'blocked', color: 'orange.solid' },
@@ -108,18 +57,9 @@ export function QueryTimeline({ data, loading }: Props) {
 		],
 	});
 
-	const showTime = useCallback(
-		(ts: number) => {
-			const point = (chart.data as typeof normalized).find((d) => d.ts === ts);
-			return (point?.bucket_duration ?? 0) < DAY_MS;
-		},
-		[chart.data],
-	);
-
-	const showDate = useMemo(
-		() => spansMultipleDays(chart.data as typeof normalized),
-		[chart.data],
-	);
+	// same width for every bucket, so show the time on all of them or none
+	const showTime = (data[0]?.bucket_duration ?? 0) < DAY_MS;
+	const showDate = useMemo(() => spansMultipleDays(data), [data]);
 
 	if (loading || data.length === 0) {
 		return (
@@ -192,14 +132,14 @@ export function QueryTimeline({ data, loading }: Props) {
 						axisLine={false}
 						tickLine={false}
 						dataKey={chart.key('ts')}
-						tickFormatter={(ts) => formatTime(ts, showDate, showTime(ts))}
+						tickFormatter={(ts) => formatTs(ts, showDate, showTime, false)}
 					/>
 					<YAxis axisLine={false} tickLine={false} />
 					<Tooltip
 						cursor={false}
 						labelFormatter={(label) => {
 							const ts = Number(label);
-							return formatTooltipLabel(ts, showDate, showTime(ts));
+							return formatTs(ts, showDate, showTime, showDate);
 						}}
 						animationDuration={100}
 						content={<Chart.Tooltip />}

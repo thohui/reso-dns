@@ -132,8 +132,9 @@ pub async fn timeline(
     query: Query<TimelineQuery>,
 ) -> Result<Json<TimelineResponse>, ApiError> {
     let since = range_to_duration(&query.range);
+    let bucket_width = range_to_bucket_width(&query.range);
 
-    let buckets = client_metrics::timeline(&global.metrics_database, since)
+    let buckets = client_metrics::timeline(&global.metrics_database, since, bucket_width)
         .await
         .map_err(|e| {
             tracing::error!("failed to get timeline: {}", e);
@@ -153,5 +154,17 @@ fn range_to_duration(range: &TopRange) -> i64 {
         TopRange::Month => now - 30 * 24 * 60 * 60 * 1000,
         TopRange::Year => now - 365 * 24 * 60 * 60 * 1000,
         TopRange::All => 0,
+    }
+}
+
+// bucket width per range, at least as wide as the widest stored bucket so we only merge, never split
+fn range_to_bucket_width(range: &TopRange) -> i64 {
+    use crate::metrics::task::{DAY_MS, HOUR_MS, MINUTE_MS};
+    match range {
+        TopRange::FiveMinutes | TopRange::Hour => MINUTE_MS,
+        TopRange::Day => 5 * MINUTE_MS,
+        TopRange::Week => HOUR_MS,
+        TopRange::Month => 3 * HOUR_MS,
+        TopRange::Year | TopRange::All => DAY_MS,
     }
 }

@@ -2,7 +2,6 @@ use rusqlite::params;
 use serde::Serialize;
 
 use crate::database::{DatabaseError, MetricsDatabasePool};
-use crate::metrics::task;
 
 #[derive(Debug, Serialize)]
 pub struct TimelineBucket {
@@ -116,36 +115,31 @@ pub async fn top_clients(
     .await
 }
 
-/// Get timeline of total counts, blocked counts, cached counts, error counts, and sum duration, grouped by bucket_ts.
-pub async fn timeline(db: &MetricsDatabasePool, since: i64) -> Result<Vec<TimelineBucket>, DatabaseError> {
-    let now = crate::time::now_millis();
+/// Get timeline of total counts, blocked counts, cached counts, error counts, and sum duration, grouped into `bucket_width` wide buckets.
+pub async fn timeline(
+    db: &MetricsDatabasePool,
+    since: i64,
+    bucket_width: i64,
+) -> Result<Vec<TimelineBucket>, DatabaseError> {
     db.interact(move |c| {
-        let mut stmt = c.prepare(
-            "SELECT bucket_ts, SUM(total_count), SUM(blocked_count), SUM(cached_count), SUM(error_count), SUM(sum_duration)
+        // round each bucket down to its slot start so buckets in one slot group together
+        let mut stmt = c.prepare(&format!(
+            "SELECT (bucket_ts / {bucket_width}) * {bucket_width} AS slot_ts,
+                    SUM(total_count), SUM(blocked_count), SUM(cached_count), SUM(error_count), SUM(sum_duration)
              FROM metrics_by_client
              WHERE bucket_ts >= ?1
-             GROUP BY bucket_ts
-             ORDER BY bucket_ts",
-        )?;
+             GROUP BY slot_ts
+             ORDER BY slot_ts",
+        ))?;
         let iter = stmt.query_map(params![since], |r| {
-            let ts: i64 = r.get(0)?;
-            let age = now - ts;
-            // buckets get bigger as they age so work out how wide it is  is based on how old it is
-            let bucket_duration = if age > task::COMPRESS_TO_DAY_AFTER_MS {
-                task::DAY_MS
-            } else if age > task::COMPRESS_TO_HOUR_AFTER_MS {
-                task::HOUR_MS
-            } else {
-                task::MINUTE_MS
-            };
             Ok(TimelineBucket {
-                ts,
+                ts: r.get(0)?,
                 total: r.get(1)?,
                 blocked: r.get(2)?,
                 cached: r.get(3)?,
                 errors: r.get(4)?,
                 sum_duration: r.get(5)?,
-                bucket_duration,
+                bucket_duration: bucket_width,
             })
         })?;
         iter.collect()
@@ -365,7 +359,8 @@ mod tests {
         ];
         batch_upsert(&db.conn, &rows).await.unwrap();
 
-        let result = timeline(&db.conn, 0).await.unwrap();
+        // width 1 keeps each bucket_ts separate, so this only checks clients are summed
+        let result = timeline(&db.conn, 0, 1).await.unwrap();
         assert_eq!(result.len(), 2);
 
         assert_eq!(result[0].ts, 1000);
@@ -377,6 +372,26 @@ mod tests {
 
         assert_eq!(result[1].ts, 2000);
         assert_eq!(result[1].total, 3);
+    }
+
+    #[tokio::test]
+    async fn timeline_rolls_up_by_width() {
+        let db = setup_metrics_test_db().await.unwrap();
+        let rows = vec![
+            make_client_metrics(0, "a", 10, 0, 0, 0, 0),
+            make_client_metrics(60_000, "a", 5, 0, 0, 0, 0),
+            make_client_metrics(350_000, "a", 2, 0, 0, 0, 0),
+        ];
+        batch_upsert(&db.conn, &rows).await.unwrap();
+
+        // with a 5 min width the first two fall in slot 0, the third in slot 300_000
+        let result = timeline(&db.conn, 0, 5 * 60_000).await.unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].ts, 0);
+        assert_eq!(result[0].total, 15);
+        assert_eq!(result[0].bucket_duration, 5 * 60_000);
+        assert_eq!(result[1].ts, 300_000);
+        assert_eq!(result[1].total, 2);
     }
 
     use crate::metrics::task::{DAY_MS, HOUR_MS, MINUTE_MS};
