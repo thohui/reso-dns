@@ -1,12 +1,3 @@
-import type { Upstream } from '@/lib/api/config';
-import {
-	type DetectedProtocol,
-	detectProtocol,
-	type ProviderGroup,
-	providerGroups,
-} from '@/lib/config/providers';
-import { upstreamSpecSchema } from '@/lib/config/schema';
-import { hexToRgba } from '@/lib/theme';
 import {
 	Box,
 	Button,
@@ -17,6 +8,7 @@ import {
 	Icon,
 	IconButton,
 	Input,
+	NativeSelect,
 	Text,
 } from '@chakra-ui/react';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -24,6 +16,18 @@ import { ArrowLeft, Check, ChevronRight, X } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import z from 'zod';
+import type { Upstream, UpstreamKind } from '@/lib/api/config';
+import {
+	type DetectedProtocol,
+	hasUpstream,
+	normalizeEndpoint,
+	type ProviderGroup,
+	protocolForKind,
+	providerGroups,
+	serverUpstream,
+} from '@/lib/config/providers';
+import { endpointInputSchema } from '@/lib/config/schema';
+import { hexToRgba } from '@/lib/theme';
 
 interface Props {
 	existingUpstreams: Upstream[];
@@ -41,7 +45,7 @@ export function UpstreamPicker({ existingUpstreams, onAdd, onClose }: Props) {
 	);
 
 	const handleAddServer = (upstream: Upstream) => {
-		if (!existingUpstreams.includes(upstream)) {
+		if (!hasUpstream(existingUpstreams, upstream)) {
 			onAdd(upstream);
 		}
 	};
@@ -134,7 +138,7 @@ export function UpstreamPicker({ existingUpstreams, onAdd, onClose }: Props) {
 
 						{selectedGroup && (
 							<ProviderGroupView
-								existingAddresses={existingUpstreams}
+								existingUpstreams={existingUpstreams}
 								selectedGroup={selectedGroup}
 								onAdd={handleAddServer}
 							/>
@@ -161,7 +165,7 @@ export function ServersView({
 		<Box>
 			{providerGroups.map((group, i) => {
 				const addedCount = group.servers.filter((s) =>
-					existingUpstreams.includes(s.address),
+					hasUpstream(existingUpstreams, serverUpstream(s)),
 				).length;
 				const allAdded = addedCount === group.servers.length;
 				return (
@@ -233,19 +237,20 @@ export function ServersView({
 
 function ProviderGroupView({
 	selectedGroup,
-	existingAddresses,
+	existingUpstreams,
 	onAdd,
 }: {
 	selectedGroup: ProviderGroup;
-	existingAddresses: string[];
+	existingUpstreams: Upstream[];
 	onAdd: (upstream: Upstream) => void;
 }) {
 	return (
 		<Box>
 			{selectedGroup.servers.map((server, i) => {
-				const isAdded = existingAddresses.includes(server.address);
+				const upstream = serverUpstream(server);
+				const isAdded = hasUpstream(existingUpstreams, upstream);
 
-				const protocol = detectProtocol(server.address);
+				const protocol = protocolForKind(upstream.kind);
 
 				const protocolColor = PROTOCOL_COLORS[protocol] ?? '#71717a';
 
@@ -304,7 +309,7 @@ function ProviderGroupView({
 								color='fg'
 								_hover={{ bg: 'accent.hover' }}
 								onClick={() => {
-									onAdd(server.address);
+									onAdd(upstream);
 								}}
 								px='4'
 								fontSize='xs'
@@ -322,8 +327,14 @@ function ProviderGroupView({
 }
 
 const customViewSchema = z.object({
-	upstream: upstreamSpecSchema,
+	kind: z.enum(['plain', 'tls']),
+	address: endpointInputSchema,
 });
+
+// Selectable protocols. Only UDP/TCP is wired up in the resolver for now.
+const PROTOCOL_OPTIONS: { kind: UpstreamKind; label: string }[] = [
+	{ kind: 'plain', label: 'UDP/TCP' },
+];
 
 function CustomView({
 	onClose,
@@ -334,13 +345,13 @@ function CustomView({
 }) {
 	const form = useForm({
 		resolver: zodResolver(customViewSchema),
-		defaultValues: { upstream: '' },
+		defaultValues: { kind: 'plain' as UpstreamKind, address: '' },
 	});
 
-	const error = form.formState.errors.upstream;
+	const error = form.formState.errors.address;
 
-	const onSubmit = form.handleSubmit(({ upstream }) => {
-		onAdd(upstream);
+	const onSubmit = form.handleSubmit(({ kind, address }) => {
+		onAdd({ kind, endpoint: normalizeEndpoint(address, kind) });
 		onClose();
 	});
 
@@ -348,7 +359,8 @@ function CustomView({
 		<form onSubmit={onSubmit}>
 			<Box px='6' py='5'>
 				<Text color='fg.muted' fontSize='sm' mb='4' lineHeight='1.6'>
-					Enter a DNS server address.
+					Enter a DNS server IP address. The port is optional and defaults per
+					protocol.
 				</Text>
 
 				<Box mb='4'>
@@ -356,17 +368,40 @@ function CustomView({
 						<Field.Label fontSize='sm' color='fg.muted' fontWeight='500' mb='2'>
 							Server Address
 						</Field.Label>
-						<Input
-							placeholder='e.g. 8.8.8.8'
-							bg='bg.input'
-							borderColor={error ? 'status.error' : 'border.input'}
-							_placeholder={{ color: 'fg.subtle' }}
-							_hover={{ borderColor: error ? 'status.error' : 'accent.subtle' }}
-							_focus={{ borderColor: error ? 'status.error' : 'accent.subtle' }}
-							fontFamily='mono'
-							fontSize='sm'
-							{...form.register('upstream')}
-						/>
+						<HStack gap='2' align='stretch'>
+							<NativeSelect.Root w='auto' minW='120px'>
+								<NativeSelect.Field
+									bg='bg.input'
+									borderColor='border.input'
+									fontSize='sm'
+									_hover={{ borderColor: 'accent.subtle' }}
+									{...form.register('kind')}
+								>
+									{PROTOCOL_OPTIONS.map((o) => (
+										<option key={o.kind} value={o.kind}>
+											{o.label}
+										</option>
+									))}
+								</NativeSelect.Field>
+								<NativeSelect.Indicator />
+							</NativeSelect.Root>
+							<Input
+								placeholder='e.g. 8.8.8.8'
+								bg='bg.input'
+								borderColor={error ? 'status.error' : 'border.input'}
+								_placeholder={{ color: 'fg.subtle' }}
+								_hover={{
+									borderColor: error ? 'status.error' : 'accent.subtle',
+								}}
+								_focus={{
+									borderColor: error ? 'status.error' : 'accent.subtle',
+								}}
+								fontFamily='mono'
+								fontSize='sm'
+								flex='1'
+								{...form.register('address')}
+							/>
+						</HStack>
 						<Field.ErrorText>{error?.message}</Field.ErrorText>
 					</Field.Root>
 				</Box>

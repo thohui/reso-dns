@@ -17,6 +17,7 @@ reso-cache.workspace = true
 reso-inflight.workspace = true
 rand.workspace = true
 dashmap.workspace = true
+serde.workspace = true
 
 [lib]
 name = "reso_resolver"

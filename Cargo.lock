@@ -1900,6 +1900,7 @@ dependencies = [
  "reso-context",
  "reso-dns",
  "reso-inflight",
+ "serde",
  "thiserror",
  "tokio",
  "tracing",

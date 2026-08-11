@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
@@ -60,17 +60,29 @@ pub struct ForwardResolver {
 }
 
 impl ForwardResolver {
-    pub async fn new(upstreams: &[SocketAddr]) -> anyhow::Result<Self> {
+    pub async fn new(upstreams: &[crate::Upstream]) -> anyhow::Result<Self> {
         if upstreams.is_empty() {
             tracing::warn!("No upstreams configured for forward resolver, it will not be able to resolve any queries!");
         }
 
         tracing::debug!("creating new ForwardResolver instance with upstreams: {:?}", upstreams);
 
+        let plain_upstreams = upstreams
+            .iter()
+            .filter_map(|u| {
+                if let crate::Upstream::Plain { endpoint } = u {
+                    Some(endpoint)
+                } else {
+                    None
+                }
+            })
+            .copied()
+            .collect::<Vec<_>>();
+
         Ok(Self {
             upstreams: Arc::new(
                 Upstreams::new(
-                    upstreams,
+                    &plain_upstreams,
                     // TODO: make this configurable by the client.
                     Limits {
                         connect_timeout: Duration::from_secs(2),

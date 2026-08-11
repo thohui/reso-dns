@@ -2,8 +2,8 @@ import {
 	Button,
 	Dialog,
 	Field,
-	HStack,
 	Heading,
+	HStack,
 	Icon,
 	IconButton,
 	Input,
@@ -14,9 +14,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import z from 'zod';
-import { LOCAL_RECORD_TYPES } from '@/lib/dns';
-import { getErrorMessage } from '@/lib/api/error';
 import { FormError } from '@/components/FormError';
+import { getErrorMessage } from '@/lib/api/error';
+import { LOCAL_RECORD_TYPES } from '@/lib/dns';
 
 interface LocalRecordDialogProps {
 	onClose: () => void;
@@ -145,6 +145,7 @@ export function LocalRecordDialog({
 										<NativeSelect.Field
 											bg='bg.input'
 											borderColor='border.input'
+											_hover={{ borderColor: 'accent.subtle' }}
 											{...register('record_type', { valueAsNumber: true })}
 										>
 											{LOCAL_RECORD_TYPES.map((t) => (

@@ -45,7 +45,9 @@ const isValidIPv6 = (s: string) => {
 	}
 };
 
-function parseHostPort(input: string): { host: string; port?: string } | null {
+export function parseHostPort(
+	input: string,
+): { host: string; port?: string } | null {
 	const s = input.trim();
 	if (!s) return null;
 
@@ -66,8 +68,6 @@ function parseHostPort(input: string): { host: string; port?: string } | null {
 		return { host, port };
 	}
 
-	// Non-bracket form: host or host:port
-
 	const colonCount = (s.match(/:/g) || []).length;
 	if (colonCount > 1) return null;
 
@@ -80,69 +80,38 @@ function parseHostPort(input: string): { host: string; port?: string } | null {
 	return { host, port };
 }
 
-export const upstreamSpecSchema = z
+export const endpointInputSchema = z
 	.string()
 	.trim()
 	.min(1, 'Address is empty')
 	.superRefine((val, ctx) => {
-		// DoH
-		// TODO: uncomment when server supports DOH.
-		if (val.startsWith('https://') || val.startsWith('http://')) {
+		if (
+			val.startsWith('https://') ||
+			val.startsWith('http://') ||
+			val.includes('://')
+		) {
 			ctx.addIssue({
 				code: 'custom',
-				message: 'DoH is currently not supported!',
-			});
-			return;
-			// try {
-			// 	const u = new URL(val);
-			// 	if (u.protocol !== 'https:' && u.protocol !== 'http:') {
-			// 		ctx.addIssue({ code: 'custom', message: 'DoH URL must be http(s)' });
-			// 	}
-			// 	if (!u.hostname) {
-			// 		ctx.addIssue({ code: 'custom', message: 'DoH URL missing hostname' });
-			// 	}
-			// } catch {
-			// ctx.addIssue({ code: 'custom', message: 'Invalid DoH URL' });
-			// }
-			// return;
-		}
-
-		// Optional scheme
-		let scheme = 'plain';
-		let rest = val;
-
-		const split = val.split('://');
-		if (split.length === 2) {
-			scheme = split[0];
-			rest = split[1];
-		} else if (split.length > 2) {
-			ctx.addIssue({ code: 'custom', message: 'Invalid scheme separator' });
-			return;
-		}
-
-		const validSchemes = ['plain'];
-
-		if (!validSchemes.includes(scheme)) {
-			ctx.addIssue({
-				code: 'custom',
-				message: `Unsupported scheme: ${scheme}`,
+				message: 'Enter a bare IP address (schemes are not supported)',
 			});
 			return;
 		}
 
-		const hp = parseHostPort(rest);
+		const hp = parseHostPort(val);
 		if (!hp) {
 			ctx.addIssue({
 				code: 'custom',
-				message: 'Expected host[:port] (IPv6 must be in brackets)',
+				message: 'Expected IP[:port] (IPv6 must be in brackets)',
 			});
 			return;
 		}
 
-		const hostOk =
-			isValidIPv4(hp.host) || isValidHostname(hp.host) || isValidIPv6(hp.host);
-		if (!hostOk) {
-			ctx.addIssue({ code: 'custom', message: 'Invalid host' });
+		if (!isValidIPv4(hp.host) && !isValidIPv6(hp.host)) {
+			// TODO: support hostnames
+			const message = isValidHostname(hp.host)
+				? 'Hostnames are not supported, enter an IP address'
+				: 'Invalid IP address';
+			ctx.addIssue({ code: 'custom', message });
 			return;
 		}
 
@@ -152,8 +121,13 @@ export const upstreamSpecSchema = z
 		}
 	});
 
+export const upstreamSchema = z.discriminatedUnion('kind', [
+	z.object({ kind: z.literal('plain'), endpoint: endpointInputSchema }),
+	z.object({ kind: z.literal('tls'), endpoint: endpointInputSchema }),
+]);
+
 export const configSchema = z.object({
-	upstreams: z.array(upstreamSpecSchema),
+	upstreams: z.array(upstreamSchema),
 	timeout: z.number().min(1),
 	rate_limit: z.object({
 		enabled: z.boolean(),

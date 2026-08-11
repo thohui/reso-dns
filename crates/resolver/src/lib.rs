@@ -1,6 +1,9 @@
+use std::net::SocketAddr;
+
 use async_trait::async_trait;
 use reso_context::{DnsRequestCtx, DnsResponse, ErrorType};
 use reso_dns::DnsResponseCode;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Trait for DNS resolvers that can resolve DNS requests.
@@ -50,6 +53,18 @@ impl ResolveError {
             Self::Other(_) => ErrorType::Other,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind")]
+#[serde(rename_all = "lowercase")]
+pub enum Upstream {
+    /// UDP and TCP
+    Plain { endpoint: SocketAddr },
+    /// DNS over TLS
+    Tls { endpoint: SocketAddr },
+    // DNS over Https
+    // Doh { url: Url },
 }
 
 pub mod forwarder;

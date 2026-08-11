@@ -74,7 +74,7 @@ impl From<ratelimit::RateLimitConfig> for RateLimitConfigModel {
 }
 
 /// Runtime endpoint type (hostname or IP + port).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HostPort {
     pub host: String,
     pub port: u16,
@@ -86,86 +86,9 @@ impl HostPort {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum Upstream {
-    /// UDP and TCP
-    Plain { endpoint: HostPort },
-    /// DNS over TLS
-    #[allow(unused)]
-    Tls { endpoint: HostPort },
-    /// DNS over Https
-    #[allow(unused)]
-    Doh { url: Url },
-}
-
-/// String representation of an `Upstream`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct UpstreamSpec(pub String);
-
-impl UpstreamSpec {
-    pub fn parse(&self) -> Result<Upstream> {
-        let s = self.0.trim();
-
-        if s.starts_with("https://") || s.starts_with("http://") {
-            let url = Url::parse(s).context("invalid DoH URL")?;
-            return Ok(Upstream::Doh { url });
-        }
-
-        let (scheme, rest) = match s.split_once("://") {
-            Some((sch, rest)) => (sch, rest),
-            None => ("plain", s),
-        };
-
-        let (host, port_opt) = split_host_port(rest).context("invalid host[:port]")?;
-
-        let (default_port, make): (u16, fn(HostPort) -> Upstream) = match scheme {
-            "plain" => (53, |hp| Upstream::Plain { endpoint: hp }),
-            "udp" => (53, |hp| Upstream::Plain { endpoint: hp }),
-            "tcp" => (53, |hp| Upstream::Plain { endpoint: hp }),
-            "tls" => (853, |hp| Upstream::Tls { endpoint: hp }),
-            other => bail!("unsupported scheme: {other}"),
-        };
-
-        let endpoint = HostPort {
-            host,
-            port: port_opt.unwrap_or(default_port),
-        };
-
-        Ok(make(endpoint))
-    }
-}
-
-fn split_host_port(s: &str) -> Result<(String, Option<u16>)> {
-    let s = s.trim();
-    if s.is_empty() {
-        bail!("empty upstream");
-    }
-
-    if let Some((host, port)) = s.rsplit_once(':')
-        && !host.contains(':')
-        && !host.is_empty()
-    {
-        let port: u16 = port.parse().with_context(|| format!("invalid port: {port:?}"))?;
-        return Ok((host.to_string(), Some(port)));
-    }
-
-    Ok((s.to_string(), None))
-}
-
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct ForwarderConfig {
-    pub upstreams: Vec<UpstreamSpec>,
-}
-
-impl ForwarderConfig {
-    pub fn upstreams(&self) -> anyhow::Result<Vec<Upstream>> {
-        self.upstreams
-            .iter()
-            .enumerate()
-            .map(|(i, spec)| spec.parse().with_context(|| format!("forwarder.upstreams[{i}]")))
-            .collect()
-    }
+    pub upstreams: Vec<reso_resolver::Upstream>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -197,8 +120,7 @@ impl Config {
 
         let upstreams = map
             .get("dns.forwarder.upstreams")
-            .and_then(|v| serde_json::from_str::<Vec<String>>(v).ok())
-            .map(|specs| specs.into_iter().map(UpstreamSpec).collect())
+            .and_then(|v| serde_json::from_str::<Vec<reso_resolver::Upstream>>(v).ok())
             .unwrap_or(defaults.dns.forwarder.upstreams);
 
         let rate_limit_enabled = map
@@ -281,9 +203,8 @@ impl Config {
             ActiveResolver::Forwarder => "forwarder",
         };
 
-        let upstreams_json =
-            serde_json::to_string(&self.dns.forwarder.upstreams.iter().map(|u| &u.0).collect::<Vec<_>>())
-                .unwrap_or_else(|_| "[]".to_string());
+        let upstreams_json = serde_json::to_string(&self.dns.forwarder.upstreams.iter().collect::<Vec<_>>())
+            .unwrap_or_else(|_| "[]".to_string());
 
         vec![
             ("dns.timeout".to_string(), self.dns.timeout.to_string()),
@@ -333,7 +254,7 @@ impl Default for Config {
             dns: DnsConfig {
                 timeout: Duration::from_secs(3).as_millis() as u64,
                 active: ActiveResolver::Forwarder,
-                forwarder: ForwarderConfig { upstreams: vec![] },
+                forwarder: ForwarderConfig::default(),
                 rate_limit: RateLimitConfigModel {
                     enabled: false,
                     window_duration: Duration::from_secs(10).as_secs() as usize,

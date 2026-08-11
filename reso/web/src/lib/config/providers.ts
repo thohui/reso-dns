@@ -1,3 +1,11 @@
+import type { Upstream, UpstreamKind } from '@/lib/api/config';
+import { parseHostPort } from '@/lib/config/schema';
+
+export const DEFAULT_PORTS: Record<UpstreamKind, number> = {
+	plain: 53,
+	tls: 853,
+};
+
 export interface ProviderGroup {
 	name: string;
 	description: string;
@@ -68,21 +76,42 @@ export const providerGroups: ProviderGroup[] = [
 	},
 ];
 
+export function normalizeEndpoint(input: string, kind: UpstreamKind): string {
+	const hp = parseHostPort(input.trim());
+	if (!hp) return input.trim();
+	const host = hp.host.includes(':') ? `[${hp.host}]` : hp.host;
+	const port = hp.port ?? DEFAULT_PORTS[kind];
+	return `${host}:${port}`;
+}
+
+export function serverUpstream(server: { address: string }): Upstream {
+	return {
+		kind: 'plain',
+		endpoint: normalizeEndpoint(server.address, 'plain'),
+	};
+}
+
+export function upstreamsMatch(a: Upstream, b: Upstream): boolean {
+	return a.kind === b.kind && a.endpoint === b.endpoint;
+}
+
+export function hasUpstream(list: Upstream[], upstream: Upstream): boolean {
+	return list.some((u) => upstreamsMatch(u, upstream));
+}
+
 export function getProviderGroup(
-	upstreamSpec: string,
+	upstream: Upstream,
 ): ProviderGroup | undefined {
 	for (const provider of providerGroups) {
 		for (const server of provider.servers) {
-			if (upstreamSpec === server.address) return provider;
+			if (upstreamsMatch(upstream, serverUpstream(server))) return provider;
 		}
 	}
 }
 
 export type DetectedProtocol = 'UDP/TCP' | 'DoH' | 'DoT';
 
-export function detectProtocol(address: string): DetectedProtocol {
-	if (address.startsWith('https://')) return 'DoH';
-	if (address.startsWith('tls://')) return 'DoT';
-
+export function protocolForKind(kind: UpstreamKind): DetectedProtocol {
+	if (kind === 'tls') return 'DoT';
 	return 'UDP/TCP';
 }
