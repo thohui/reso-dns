@@ -72,6 +72,7 @@ export function UpstreamPicker({ existingUpstreams, onAdd, onClose }: Props) {
 	};
 
 	let title = 'Custom Server';
+
 	if (view === 'providers') title = 'Add Upstream Server';
 	else if (view === 'servers' && selectedGroup) title = selectedGroup.name;
 
@@ -335,11 +336,24 @@ function ProviderGroupView({
 	);
 }
 
-const customViewSchema = z.object({
-	kind: z.enum(['plain', 'tls']),
-	address: endpointInputSchema,
-	hostname: tlsHostnameInputSchema,
-});
+const customViewSchema = z
+	.object({
+		kind: z.enum(['plain', 'tls']),
+		address: endpointInputSchema,
+		hostname: z.string().optional(),
+	})
+	.superRefine((val, ctx) => {
+		if (val.kind !== 'tls') return;
+
+		const result = tlsHostnameInputSchema.safeParse(val.hostname);
+		if (!result.success) {
+			ctx.addIssue({
+				code: 'custom',
+				path: ['hostname'],
+				message: result.error.issues[0]?.message ?? 'Invalid hostname',
+			});
+		}
+	});
 
 const PROTOCOL_OPTIONS: { kind: UpstreamKind; label: string }[] = [
 	{ kind: 'plain', label: 'UDP/TCP' },

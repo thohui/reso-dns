@@ -129,8 +129,7 @@ impl UpstreamResolveRequest {
             // A DoT upstream has no UDP mux, so it is forced to go over tcp (DoT).
             DnsProtocol::UDP if upstream.udp.is_none() => self.resolve_tcp(&upstream.tcp, &self.query).await,
             DnsProtocol::UDP => self.resolve_udp_with_fallback(upstream).await,
-            // We currently dont have support for these incoming requests.
-            DnsProtocol::DOT | DnsProtocol::DOH => unreachable!(),
+            DnsProtocol::DOT | DnsProtocol::DOH => self.resolve_tcp(&upstream.tcp, &self.query).await,
         }
     }
 

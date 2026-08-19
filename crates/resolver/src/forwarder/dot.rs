@@ -63,7 +63,6 @@ pub(crate) fn server_name(addr: SocketAddr, hostname: Option<&str>) -> Result<Se
 }
 
 impl TlsUpstream {
-    /// Build the TLS parameters for an upstream.
     pub fn new(addr: SocketAddr, hostname: Option<&str>) -> Result<Self, UpstreamError> {
         let server_name = server_name(addr, hostname)?;
 
@@ -109,6 +108,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires external DoT connectivity"]
     async fn rejects_wrong_identity() {
         let addr: SocketAddr = "1.1.1.1:853".parse().unwrap(); // Cloudflare
         let upstream = TlsUpstream::new(addr, Some("dns.quad9.net")).unwrap();

@@ -287,21 +287,6 @@ impl Upstream {
             }
         });
     }
-
-    #[allow(unused)]
-    pub fn kind(&self) -> UpstreamKind {
-        if self.tcp.has_tls() {
-            UpstreamKind::DoT
-        } else {
-            UpstreamKind::Plain
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum UpstreamKind {
-    Plain,
-    DoT,
 }
 
 #[derive(thiserror::Error, Debug)]
