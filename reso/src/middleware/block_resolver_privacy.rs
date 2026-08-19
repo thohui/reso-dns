@@ -61,7 +61,7 @@ impl DnsMiddleware<Global, Local> for BlockResolverPrivacyMiddleware {
 
                 tracing::debug!("blocked iCloud Private Relay query for {}", qname);
                 ctx.local_mut().blocked = true;
-                return Ok(Some(DnsResponse::from_parsed(bytes, response_message)));
+                return Ok(Some(DnsResponse::from_parsed(bytes, response_message, None)));
             }
 
             // Firefox Canary
@@ -78,7 +78,7 @@ impl DnsMiddleware<Global, Local> for BlockResolverPrivacyMiddleware {
 
                 tracing::debug!("blocked Firefox Canary query for {}", qname);
                 ctx.local_mut().blocked = true;
-                return Ok(Some(DnsResponse::from_parsed(bytes, response_message)));
+                return Ok(Some(DnsResponse::from_parsed(bytes, response_message, None)));
             }
 
             // Designated Resolver
@@ -97,7 +97,7 @@ impl DnsMiddleware<Global, Local> for BlockResolverPrivacyMiddleware {
 
                 tracing::debug!("blocked Designated Resolver query for {}", qname);
                 ctx.local_mut().blocked = true;
-                return Ok(Some(DnsResponse::from_parsed(bytes, response_message)));
+                return Ok(Some(DnsResponse::from_parsed(bytes, response_message, None)));
             }
         }
 

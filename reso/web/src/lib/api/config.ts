@@ -63,6 +63,7 @@ export interface PlainUpstream {
 export interface TlsUpstream {
 	kind: 'tls';
 	endpoint: string;
+	hostname?: string;
 }
 export type Upstream = PlainUpstream | TlsUpstream;
 

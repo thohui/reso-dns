@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
 use rand::RngExt;
-use reso_context::DnsRequestCtx;
+use reso_context::{DnsProtocol, DnsRequestCtx};
 use reso_dns::{
     ClassType, DnsMessage, DnsOpcode, RecordType,
     domain_name::DomainName,
@@ -56,7 +56,7 @@ impl TryFrom<&DnsMessage> for InflightCacheKey {
 /// Resolver that forwards the incoming request to a defined upstream server.
 pub struct ForwardResolver {
     upstreams: Arc<Upstreams>,
-    inflight_requests: Inflight<InflightCacheKey, DnsResponseBytes>,
+    inflight_requests: Inflight<InflightCacheKey, (DnsResponseBytes, DnsProtocol)>,
 }
 
 impl ForwardResolver {
@@ -67,32 +67,18 @@ impl ForwardResolver {
 
         tracing::debug!("creating new ForwardResolver instance with upstreams: {:?}", upstreams);
 
-        let plain_upstreams = upstreams
-            .iter()
-            .filter_map(|u| {
-                if let crate::Upstream::Plain { endpoint } = u {
-                    Some(endpoint)
-                } else {
-                    None
-                }
-            })
-            .copied()
-            .collect::<Vec<_>>();
-
         Ok(Self {
-            upstreams: Arc::new(
-                Upstreams::new(
-                    &plain_upstreams,
-                    // TODO: make this configurable by the client.
-                    Limits {
-                        connect_timeout: Duration::from_secs(2),
-                        max_tcp_connections: 10,
-                        max_idle_tcp_connections: 5,
-                        tcp_ttl: Duration::from_secs(10),
-                    },
-                )
-                .await?,
-            ),
+            upstreams: Upstreams::new(
+                upstreams,
+                // TODO: make this configurable by the client.
+                Limits {
+                    connect_timeout: Duration::from_secs(2),
+                    max_tcp_connections: 10,
+                    max_idle_tcp_connections: 5,
+                    tcp_ttl: Duration::from_secs(10),
+                },
+            )
+            .await?,
             inflight_requests: Inflight::new(),
         })
     }
@@ -129,9 +115,9 @@ where
 
                 let request = UpstreamResolveRequest::new(request_type, randomized_query, budget, upstreams);
 
-                let response = request.resolve().await?;
+                let (response, protocol) = request.resolve().await?;
 
-                Ok(DnsResponseBytes::new(response))
+                Ok((DnsResponseBytes::new(response), protocol))
             })
             .await
             .map_err(|e| match e.downcast::<ResolveError>() {
@@ -146,14 +132,20 @@ where
                 }
             })?;
 
-        let response = resp_arc.as_ref().clone().into_custom_response(query_message.id);
+        let response_bytes = resp_arc.0.clone();
+        let response_protocol = resp_arc.1;
+        let response = response_bytes.into_custom_response(query_message.id);
 
         let response_message =
             DnsMessage::decode(&response).map_err(|e| ResolveError::InvalidResponse(e.to_string()))?;
 
         validate_upstream_response(query_message, &response_message)?;
 
-        Ok(DnsResponse::from_parsed(response, response_message))
+        Ok(DnsResponse::from_parsed(
+            response,
+            response_message,
+            Some(response_protocol),
+        ))
     }
 }
 

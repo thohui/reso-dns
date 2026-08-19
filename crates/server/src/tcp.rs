@@ -3,7 +3,7 @@ use std::{net::SocketAddr, sync::Arc};
 use anyhow::Context;
 use arc_swap::ArcSwap;
 use bytes::Bytes;
-use reso_context::{DnsRequestCtx, RequestType};
+use reso_context::{DnsProtocol, DnsRequestCtx};
 use reso_dns::{DnsMessage, DnsMessageBuilder};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -99,7 +99,7 @@ where
                         let mut ctx = DnsRequestCtx::new(
                             current_state.timeout,
                             client.ip(),
-                            RequestType::TCP,
+                            DnsProtocol::TCP,
                             bytes,
                             current_state.global.clone(),
                             L::default(),

@@ -37,7 +37,7 @@ impl DnsMiddleware<Global, Local> for DomainRulesMiddleware {
 
             ctx.local_mut().blocked = true;
 
-            return Ok(Some(DnsResponse::from_parsed(bytes, message)));
+            return Ok(Some(DnsResponse::from_parsed(bytes, message, None)));
         }
 
         Ok(None)

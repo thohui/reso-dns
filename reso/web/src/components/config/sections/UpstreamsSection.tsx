@@ -7,10 +7,14 @@ import {
 	PROTOCOL_COLORS,
 	UpstreamPicker,
 } from '@/components/config/UpstreamPicker';
-import { getProviderGroup, protocolForKind } from '@/lib/config/providers';
+import type { Upstream } from '@/lib/api/config';
+import {
+	getProviderGroup,
+	protocolForKind,
+	upstreamKey,
+} from '@/lib/config/providers';
 import type { FormValues } from '@/lib/config/schema';
 import { hexToRgba } from '@/lib/theme';
-import type { Upstream } from '@/lib/api/config';
 
 export function UpstreamsSection({
 	control,
@@ -48,7 +52,7 @@ export function UpstreamsSection({
 
 						return (
 							<HStack
-								key={`${upstream.kind}:${upstream.endpoint}`}
+								key={upstreamKey(upstream)}
 								justify='space-between'
 								py='3'
 								px='4'
@@ -89,6 +93,11 @@ export function UpstreamsSection({
 											wordBreak='break-all'
 										>
 											{upstream.endpoint}
+											{upstream.kind === 'tls' && upstream.hostname && (
+												<Text as='span' ml='2' color='fg.subtle'>
+													{upstream.hostname}
+												</Text>
+											)}
 										</Text>
 									</Box>
 								</HStack>

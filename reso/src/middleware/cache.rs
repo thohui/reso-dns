@@ -61,7 +61,7 @@ impl DnsMiddleware<Global, Local> for CacheMiddleware {
                 );
 
                 let bytes = builder.build().encode()?;
-                Ok(Some(DnsResponse::from_bytes(bytes)))
+                Ok(Some(DnsResponse::from_bytes(bytes, None)))
             }
 
             CacheResult::Positive { records, ttl } => {
@@ -83,7 +83,7 @@ impl DnsMiddleware<Global, Local> for CacheMiddleware {
                     .with_answers(answers);
 
                 let bytes = echo_edns(message, builder).build().encode()?;
-                Ok(Some(DnsResponse::from_bytes(bytes)))
+                Ok(Some(DnsResponse::from_bytes(bytes, None)))
             }
 
             CacheResult::Miss => Ok(None),

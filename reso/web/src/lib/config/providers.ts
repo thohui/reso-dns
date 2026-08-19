@@ -6,10 +6,18 @@ export const DEFAULT_PORTS: Record<UpstreamKind, number> = {
 	tls: 853,
 };
 
+export interface ProviderServer {
+	address: string;
+	label: string;
+	kind?: UpstreamKind;
+	// Certificate identity, not an address.
+	hostname?: string;
+}
+
 export interface ProviderGroup {
 	name: string;
 	description: string;
-	servers: { address: string; label: string }[];
+	servers: ProviderServer[];
 }
 
 export const providerGroups: ProviderGroup[] = [
@@ -19,11 +27,16 @@ export const providerGroups: ProviderGroup[] = [
 		servers: [
 			{ address: '1.1.1.1', label: 'Primary' },
 			{ address: '1.0.0.1', label: 'Secondary' },
+			{
+				address: '1.1.1.1',
+				label: 'DNS over TLS',
+				kind: 'tls',
+				hostname: 'cloudflare-dns.com',
+			},
 			// {
 			// 	address: 'https://cloudflare-dns.com/dns-query',
 			// 	label: 'DNS over HTTPS',
 			// },
-			// { address: 'tls://1.1.1.1', label: 'DNS over TLS' },
 		],
 	},
 	{
@@ -32,11 +45,16 @@ export const providerGroups: ProviderGroup[] = [
 		servers: [
 			{ address: '8.8.8.8', label: 'Primary' },
 			{ address: '8.8.4.4', label: 'Secondary' },
+			{
+				address: '8.8.8.8',
+				label: 'DNS over TLS',
+				kind: 'tls',
+				hostname: 'dns.google',
+			},
 			// {
 			// 	address: 'https://dns.google/dns-query',
 			// 	label: 'DNS over HTTPS',
 			// },
-			// { address: 'tls://dns.google', label: 'DNS over TLS' },
 		],
 	},
 	{
@@ -45,13 +63,15 @@ export const providerGroups: ProviderGroup[] = [
 		servers: [
 			{ address: '9.9.9.9', label: 'Primary' },
 			{ address: '149.112.112.112', label: 'Secondary' },
+			{
+				address: '9.9.9.9',
+				label: 'DNS over TLS',
+				kind: 'tls',
+				hostname: 'dns.quad9.net',
+			},
 			// {
 			// 	address: 'https://dns.quad9.net/dns-query',
 			// 	label: 'DNS over HTTPS',
-			// },
-			// {
-			// 	address: 'tls://dns.quad9.net',
-			// 	label: 'DNS over TLS',
 			// },
 		],
 	},
@@ -68,6 +88,12 @@ export const providerGroups: ProviderGroup[] = [
 		description: 'Ad-blocking DNS',
 		servers: [
 			{ address: '94.140.14.14', label: 'Primary' },
+			{
+				address: '94.140.14.14',
+				label: 'DNS over TLS',
+				kind: 'tls',
+				hostname: 'dns.adguard-dns.com',
+			},
 			// {
 			// 	address: 'https://dns.adguard-dns.com/dns-query',
 			// 	label: 'DNS over HTTPS',
@@ -84,15 +110,31 @@ export function normalizeEndpoint(input: string, kind: UpstreamKind): string {
 	return `${host}:${port}`;
 }
 
-export function serverUpstream(server: { address: string }): Upstream {
-	return {
-		kind: 'plain',
-		endpoint: normalizeEndpoint(server.address, 'plain'),
-	};
+export function serverUpstream(server: ProviderServer): Upstream {
+	const kind = server.kind ?? 'plain';
+	const endpoint = normalizeEndpoint(server.address, kind);
+
+	if (kind === 'plain') return { kind, endpoint };
+
+	return server.hostname
+		? { kind, endpoint, hostname: server.hostname }
+		: { kind, endpoint };
+}
+
+export function upstreamKey(upstream: Upstream): string {
+	if (upstream.kind === 'plain') return `plain:${upstream.endpoint}`;
+	return `tls:${upstream.endpoint}:${upstream.hostname ?? ''}`;
 }
 
 export function upstreamsMatch(a: Upstream, b: Upstream): boolean {
-	return a.kind === b.kind && a.endpoint === b.endpoint;
+	if (a.kind !== b.kind || a.endpoint !== b.endpoint) return false;
+
+	// Same endpoint under a different certificate identity is a different upstream.
+	if (a.kind === 'tls' && b.kind === 'tls') {
+		return (a.hostname ?? '') === (b.hostname ?? '');
+	}
+
+	return true;
 }
 
 export function hasUpstream(list: Upstream[], upstream: Upstream): boolean {

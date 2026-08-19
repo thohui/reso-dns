@@ -1,3 +1,4 @@
+pub(crate) mod dot;
 mod request;
 pub mod resolver;
 mod tcp;

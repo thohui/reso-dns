@@ -1,18 +1,16 @@
 use std::collections::HashMap;
-use std::net::SocketAddr;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, Result, bail};
 use arc_swap::ArcSwap;
 use serde::{Deserialize, Serialize};
-use url::Url;
 
 use crate::{
     database::{CoreDatabasePool, models::config as db_config},
     ratelimit,
 };
+
+use super::ServiceError;
 
 /// Config
 #[derive(Serialize, Deserialize)]
@@ -73,19 +71,6 @@ impl From<ratelimit::RateLimitConfig> for RateLimitConfigModel {
     }
 }
 
-/// Runtime endpoint type (hostname or IP + port).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HostPort {
-    pub host: String,
-    pub port: u16,
-}
-
-impl HostPort {
-    pub fn socket_addr(&self) -> anyhow::Result<SocketAddr> {
-        Ok(SocketAddr::from_str(&format!("{}:{}", self.host, self.port))?)
-    }
-}
-
 #[derive(Serialize, Deserialize, Default)]
 pub struct ForwarderConfig {
     pub upstreams: Vec<reso_resolver::Upstream>,
@@ -120,7 +105,11 @@ impl Config {
 
         let upstreams = map
             .get("dns.forwarder.upstreams")
-            .and_then(|v| serde_json::from_str::<Vec<reso_resolver::Upstream>>(v).ok())
+            .and_then(|v| {
+                serde_json::from_str::<Vec<reso_resolver::Upstream>>(v)
+                    .inspect_err(|e| tracing::error!("failed to parse stored upstreams {}: {}", v, e))
+                    .ok()
+            })
             .unwrap_or(defaults.dns.forwarder.upstreams);
 
         let rate_limit_enabled = map
@@ -320,7 +309,11 @@ impl ConfigService {
     }
 
     /// Updates the configuration and notify the subscribers.
-    pub async fn update_config(&self, config: Config) -> anyhow::Result<()> {
+    pub async fn update_config(&self, config: Config) -> Result<(), ServiceError> {
+        for upstream in &config.dns.forwarder.upstreams {
+            upstream.validate().map_err(ServiceError::BadRequest)?;
+        }
+
         db_config::batch_set(&self.db, config.to_kv()).await?;
         let arc_config = Arc::new(config);
         self.config.store(arc_config.clone());

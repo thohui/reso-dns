@@ -2,7 +2,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use arc_swap::ArcSwap;
 use bytes::Bytes;
-use reso_context::{DnsRequestCtx, RequestType};
+use reso_context::{DnsProtocol, DnsRequestCtx};
 use reso_dns::{DnsMessage, DnsMessageBuilder};
 use tokio::{net::UdpSocket, task::JoinSet};
 
@@ -44,7 +44,7 @@ where
                 let global = state.global.clone();
 
                 inflight.spawn(async move {
-                    let mut ctx = DnsRequestCtx::new(state.timeout, client.ip(), RequestType::UDP, raw, global, L::default());
+                    let mut ctx = DnsRequestCtx::new(state.timeout, client.ip(), DnsProtocol::UDP, raw, global, L::default());
 
                     match handle_request(&mut ctx, state).await {
                         Ok(resp) => {

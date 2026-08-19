@@ -17,10 +17,12 @@ use tokio::{
 
 use crate::forwarder::upstream::UpstreamError;
 
+#[derive(Debug)]
 struct Pending(oneshot::Sender<Bytes>);
 
 /// A multiplexer that sends DNS queries and receives responses over a single
 /// UDP socket, correlating them by transaction ID.
+#[derive(Debug)]
 pub struct UpstreamUdpMux {
     /// Connected UDP socket to the upstream server.
     socket: Arc<UdpSocket>,

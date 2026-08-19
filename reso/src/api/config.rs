@@ -29,9 +29,6 @@ pub async fn config(global: State<SharedGlobal>) -> Json<Arc<Config>> {
 }
 
 pub async fn update(global: State<SharedGlobal>, Json(config): Json<Config>) -> Result<Json<Arc<Config>>, ApiError> {
-    if let Err(e) = global.config.update_config(config).await {
-        tracing::error!("failed to update config: {}", e);
-        return Err(ApiError::server_error());
-    }
+    global.config.update_config(config).await?;
     Ok(Json(global.config.get_config()))
 }

@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use futures::StreamExt;
 use reso_context::DnsMiddleware;
-use reso_resolver::{Upstream, forwarder::resolver::ForwardResolver};
+use reso_resolver::forwarder::resolver::ForwardResolver;
 use reso_server::{DnsServer, ServerMiddlewares, ServerState};
 use tokio_stream::wrappers::WatchStream;
 

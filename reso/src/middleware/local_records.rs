@@ -50,6 +50,6 @@ impl DnsMiddleware<Global, Local> for LocalRecordsMiddleware {
         .build()
         .encode()?;
 
-        Ok(Some(DnsResponse::from_bytes(bytes)))
+        Ok(Some(DnsResponse::from_bytes(bytes, None)))
     }
 }

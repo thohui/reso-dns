@@ -121,9 +121,20 @@ export const endpointInputSchema = z
 		}
 	});
 
+// Certificate identity for a DoT upstream, empty falls back to the endpoint IP.
+export const tlsHostnameInputSchema = z
+	.string()
+	.trim()
+	.optional()
+	.refine((v) => !v || isValidHostname(v), { message: 'Invalid hostname' });
+
 export const upstreamSchema = z.discriminatedUnion('kind', [
 	z.object({ kind: z.literal('plain'), endpoint: endpointInputSchema }),
-	z.object({ kind: z.literal('tls'), endpoint: endpointInputSchema }),
+	z.object({
+		kind: z.literal('tls'),
+		endpoint: endpointInputSchema,
+		hostname: z.string().optional(),
+	}),
 ]);
 
 export const configSchema = z.object({

@@ -25,8 +25,12 @@ import {
 	protocolForKind,
 	providerGroups,
 	serverUpstream,
+	upstreamKey,
 } from '@/lib/config/providers';
-import { endpointInputSchema } from '@/lib/config/schema';
+import {
+	endpointInputSchema,
+	tlsHostnameInputSchema,
+} from '@/lib/config/schema';
 import { hexToRgba } from '@/lib/theme';
 
 interface Props {
@@ -258,7 +262,7 @@ function ProviderGroupView({
 
 				return (
 					<HStack
-						key={server.address}
+						key={upstreamKey(upstream)}
 						px='6'
 						py='4'
 						justify='space-between'
@@ -293,6 +297,11 @@ function ProviderGroupView({
 							</HStack>
 							<Text fontSize='xs' color='fg.muted' fontFamily='mono'>
 								{server.address}
+								{server.hostname && (
+									<Text as='span' ml='2' color='fg.subtle'>
+										{server.hostname}
+									</Text>
+								)}
 							</Text>
 						</Box>
 						{isAdded ? (
@@ -329,11 +338,12 @@ function ProviderGroupView({
 const customViewSchema = z.object({
 	kind: z.enum(['plain', 'tls']),
 	address: endpointInputSchema,
+	hostname: tlsHostnameInputSchema,
 });
 
-// Selectable protocols. Only UDP/TCP is wired up in the resolver for now.
 const PROTOCOL_OPTIONS: { kind: UpstreamKind; label: string }[] = [
 	{ kind: 'plain', label: 'UDP/TCP' },
+	{ kind: 'tls', label: 'DoT' },
 ];
 
 function CustomView({
@@ -345,13 +355,20 @@ function CustomView({
 }) {
 	const form = useForm({
 		resolver: zodResolver(customViewSchema),
-		defaultValues: { kind: 'plain' as UpstreamKind, address: '' },
+		defaultValues: { kind: 'plain' as UpstreamKind, address: '', hostname: '' },
 	});
 
 	const error = form.formState.errors.address;
+	const hostnameError = form.formState.errors.hostname;
+	const kind = form.watch('kind');
 
-	const onSubmit = form.handleSubmit(({ kind, address }) => {
-		onAdd({ kind, endpoint: normalizeEndpoint(address, kind) });
+	const onSubmit = form.handleSubmit(({ kind, address, hostname }) => {
+		const endpoint = normalizeEndpoint(address, kind);
+		onAdd(
+			kind === 'tls' && hostname
+				? { kind, endpoint, hostname }
+				: { kind, endpoint },
+		);
 		onClose();
 	});
 
@@ -361,6 +378,8 @@ function CustomView({
 				<Text color='fg.muted' fontSize='sm' mb='4' lineHeight='1.6'>
 					Enter a DNS server IP address. The port is optional and defaults per
 					protocol.
+					{kind === 'tls' &&
+						'The hostname is the name the certificate must match, not an address.'}
 				</Text>
 
 				<Box mb='4'>
@@ -386,7 +405,7 @@ function CustomView({
 								<NativeSelect.Indicator />
 							</NativeSelect.Root>
 							<Input
-								placeholder='e.g. 8.8.8.8'
+								placeholder='8.8.8.8'
 								bg='bg.input'
 								borderColor={error ? 'status.error' : 'border.input'}
 								_placeholder={{ color: 'fg.subtle' }}
@@ -404,6 +423,38 @@ function CustomView({
 						</HStack>
 						<Field.ErrorText>{error?.message}</Field.ErrorText>
 					</Field.Root>
+
+					{kind === 'tls' && (
+						<Field.Root invalid={!!hostnameError} mb='6'>
+							<Field.Label
+								fontSize='sm'
+								color='fg.muted'
+								fontWeight='500'
+								mb='2'
+							>
+								Certificate Hostname
+								<Text as='span' ml='2' fontSize='xs' color='fg.subtle'>
+									optional
+								</Text>
+							</Field.Label>
+							<Input
+								placeholder='dns.quad9.net'
+								bg='bg.input'
+								borderColor={hostnameError ? 'status.error' : 'border.input'}
+								_placeholder={{ color: 'fg.subtle' }}
+								_hover={{
+									borderColor: hostnameError ? 'status.error' : 'accent.subtle',
+								}}
+								_focus={{
+									borderColor: hostnameError ? 'status.error' : 'accent.subtle',
+								}}
+								fontFamily='mono'
+								fontSize='sm'
+								{...form.register('hostname')}
+							/>
+							<Field.ErrorText>{hostnameError?.message}</Field.ErrorText>
+						</Field.Root>
+					)}
 				</Box>
 
 				<HStack justify='flex-end' gap='3'>
