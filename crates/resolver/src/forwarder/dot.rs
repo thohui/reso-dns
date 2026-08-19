@@ -10,7 +10,6 @@ use tokio_rustls::{TlsConnector, client::TlsStream};
 
 use super::upstream::UpstreamError;
 
-/// ALPN token for DNS over TLS.
 const ALPN_DOT: &[u8] = b"dot";
 
 fn client_config() -> Result<Arc<ClientConfig>, UpstreamError> {

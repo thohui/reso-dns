@@ -16,13 +16,9 @@ use super::{dot::TlsUpstream, tcp::TcpPool};
 /// Limits for upstream connections.
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
-    /// Max total conns per upstream
     pub max_tcp_connections: usize,
-    /// Idle conns to keep per upstream
     pub max_idle_tcp_connections: usize,
-    /// Connection timeout
     pub connect_timeout: Duration,
-    /// TCP connection time to live
     pub tcp_ttl: Duration,
 }
 
@@ -30,9 +26,7 @@ pub struct Limits {
 pub struct Upstreams {
     /// Upstream pools (1 per upstream server)
     list: Arc<[Arc<Upstream>]>,
-    /// Round-robin index
     rr: AtomicUsize,
-    /// Cached healthy upstream list.
     healthy_cache: ArcSwap<Vec<Arc<Upstream>>>,
 }
 
@@ -106,7 +100,6 @@ impl Upstreams {
 
     fn compute_healthy(list: &Arc<[Arc<Upstream>]>) -> Vec<Arc<Upstream>> {
         let upstreams: Vec<_> = list.iter().filter(|u| u.is_healthy()).cloned().collect();
-        // If no healthy upstreams, return all upstreams to allow requests to go through.
         if upstreams.is_empty() { list.to_vec() } else { upstreams }
     }
 }
