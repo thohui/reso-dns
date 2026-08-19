@@ -88,7 +88,7 @@ impl DnsMiddleware<Global, Local> for ResoLocalMiddleware {
         .build()
         .encode()?;
 
-        Ok(Some(DnsResponse::from_bytes(bytes)))
+        Ok(Some(DnsResponse::from_bytes(bytes, None)))
     }
 }
 

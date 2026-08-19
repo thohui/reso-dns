@@ -7,7 +7,12 @@ import {
 	PROTOCOL_COLORS,
 	UpstreamPicker,
 } from '@/components/config/UpstreamPicker';
-import { detectProtocol, getProviderGroup } from '@/lib/config/providers';
+import type { Upstream } from '@/lib/api/config';
+import {
+	getProviderGroup,
+	protocolForKind,
+	upstreamKey,
+} from '@/lib/config/providers';
 import type { FormValues } from '@/lib/config/schema';
 import { hexToRgba } from '@/lib/theme';
 
@@ -17,10 +22,11 @@ export function UpstreamsSection({
 	control: Control<FormValues>;
 }) {
 	const { field } = useController({ control, name: 'upstreams' });
-	const upstreams: string[] = field.value;
+	const upstreams: Upstream[] = field.value;
 	const [pickerOpen, setPickerOpen] = useState(false);
 
-	const append = (spec: string) => field.onChange([...upstreams, spec]);
+	const append = (upstream: Upstream) =>
+		field.onChange([...upstreams, upstream]);
 	const remove = (i: number) =>
 		field.onChange(upstreams.filter((_, idx) => idx !== i));
 
@@ -41,12 +47,12 @@ export function UpstreamsSection({
 					{upstreams.map((upstream, i) => {
 						const maybeProviderGroup = getProviderGroup(upstream);
 						const providerName = maybeProviderGroup?.name ?? 'Custom';
-						const protocol = detectProtocol(upstream);
+						const protocol = protocolForKind(upstream.kind);
 						const protocolColor = PROTOCOL_COLORS[protocol] ?? '#71717a';
 
 						return (
 							<HStack
-								key={upstream}
+								key={upstreamKey(upstream)}
 								justify='space-between'
 								py='3'
 								px='4'
@@ -86,7 +92,12 @@ export function UpstreamsSection({
 											mt='0.5'
 											wordBreak='break-all'
 										>
-											{upstream}
+											{upstream.endpoint}
+											{upstream.kind === 'tls' && upstream.hostname && (
+												<Text as='span' ml='2' color='fg.subtle'>
+													{upstream.hostname}
+												</Text>
+											)}
 										</Text>
 									</Box>
 								</HStack>

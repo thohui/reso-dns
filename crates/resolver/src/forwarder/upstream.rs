@@ -11,18 +11,14 @@ use arc_swap::ArcSwap;
 
 use crate::forwarder::udp::UpstreamUdpMux;
 
-use super::tcp::TcpPool;
+use super::{dot::TlsUpstream, tcp::TcpPool};
 
 /// Limits for upstream connections.
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
-    /// Max total conns per upstream
     pub max_tcp_connections: usize,
-    /// Idle conns to keep per upstream
     pub max_idle_tcp_connections: usize,
-    /// Connection timeout
     pub connect_timeout: Duration,
-    /// TCP connection time-to-live
     pub tcp_ttl: Duration,
 }
 
@@ -30,17 +26,32 @@ pub struct Limits {
 pub struct Upstreams {
     /// Upstream pools (1 per upstream server)
     list: Arc<[Arc<Upstream>]>,
-    /// Round-robin index
     rr: AtomicUsize,
-    /// Cached healthy upstream list.
     healthy_cache: ArcSwap<Vec<Arc<Upstream>>>,
 }
 
 impl Upstreams {
-    pub async fn new(addrs: &[SocketAddr], limits: Limits) -> Result<Self, std::io::Error> {
-        let mut list = Vec::with_capacity(addrs.len());
-        for &addr in addrs {
-            list.push(Arc::new(Upstream::new(addr, limits).await?));
+    pub async fn new(configs: &[crate::Upstream], limits: Limits) -> Result<Arc<Self>, UpstreamError> {
+        let mut list = Vec::with_capacity(configs.len());
+
+        let mut last_err: Option<UpstreamError> = None;
+
+        for config in configs {
+            match Upstream::from_config(config, limits).await {
+                Ok(upstream) => {
+                    list.push(Arc::new(upstream));
+                }
+                Err(err) => {
+                    tracing::error!(upstream = ?config, error = %err, "skipping unusable upstream");
+                    last_err = Some(err);
+                }
+            }
+        }
+
+        if list.is_empty()
+            && let Some(last_err) = last_err
+        {
+            return Err(last_err);
         }
 
         let list: Arc<[Arc<Upstream>]> = Arc::from(list);
@@ -65,7 +76,7 @@ impl Upstreams {
             }
         });
 
-        Ok(Arc::into_inner(upstreams).expect("no other references at construction"))
+        Ok(upstreams)
     }
 
     pub fn iter(&self) -> Option<UpstreamIter> {
@@ -89,7 +100,6 @@ impl Upstreams {
 
     fn compute_healthy(list: &Arc<[Arc<Upstream>]>) -> Vec<Arc<Upstream>> {
         let upstreams: Vec<_> = list.iter().filter(|u| u.is_healthy()).cloned().collect();
-        // If no healthy upstreams, return all upstreams to allow requests to go through.
         if upstreams.is_empty() { list.to_vec() } else { upstreams }
     }
 }
@@ -174,9 +184,9 @@ impl UpstreamHealth {
 pub struct Upstream {
     /// Address of the upstream server.
     pub addr: SocketAddr,
-    /// UDP mux for this upstream.
-    pub udp: ArcSwap<UpstreamUdpMux>,
-    /// TCP connection pool for this upstream.
+    /// UDP mux for this upstream, is None when the upstream is DoT
+    pub udp: Option<ArcSwap<UpstreamUdpMux>>,
+    /// Connection pool for this upstream, TLS-wrapped when the upstream is DoT.
     pub tcp: Arc<TcpPool>,
     /// Health status of the upstream, used to determine if it should be skipped for new requests.
     pub health: UpstreamHealth,
@@ -185,17 +195,45 @@ pub struct Upstream {
 }
 
 impl Upstream {
-    pub async fn new(addr: SocketAddr, limits: Limits) -> Result<Self, std::io::Error> {
-        let tcp = TcpPool::new(addr, limits);
-        tcp.clone().start_reaper(limits.tcp_ttl);
+    async fn from_config(config: &crate::Upstream, limits: Limits) -> Result<Self, UpstreamError> {
+        match config {
+            crate::Upstream::Plain { endpoint } => Self::plain(*endpoint, limits).await,
+            crate::Upstream::Tls { endpoint, hostname } => Self::tls(*endpoint, hostname.as_deref(), limits),
+        }
+    }
 
-        Ok(Self {
+    /// Plain DNS upstream (UDP or TCP)
+    pub async fn plain(addr: SocketAddr, limits: Limits) -> Result<Self, UpstreamError> {
+        let udp = UpstreamUdpMux::new(addr)
+            .await
+            .map_err(|e| UpstreamError::Other(format!("udp socket setup for {addr} failed: {e}")))?;
+
+        Ok(Self::build(addr, Some(ArcSwap::from_pointee(udp)), None, limits))
+    }
+
+    /// DNS over TLS upstream. `hostname` is the certificate identity, not an address.
+    pub fn tls(addr: SocketAddr, hostname: Option<&str>, limits: Limits) -> Result<Self, UpstreamError> {
+        let tls = Arc::new(TlsUpstream::new(addr, hostname)?);
+
+        Ok(Self::build(addr, None, Some(tls), limits))
+    }
+
+    fn build(
+        addr: SocketAddr,
+        udp: Option<ArcSwap<UpstreamUdpMux>>,
+        tls: Option<Arc<TlsUpstream>>,
+        limits: Limits,
+    ) -> Self {
+        let tcp = TcpPool::new(addr, limits, tls);
+        tcp.clone().start_reaper(limits.tcp_ttl.max(Duration::from_secs(1)));
+
+        Self {
             addr,
             tcp,
-            udp: ArcSwap::from_pointee(UpstreamUdpMux::new(addr).await?),
+            udp,
             health: UpstreamHealth::new(),
             udp_reconnecting: AtomicBool::new(false),
-        })
+        }
     }
 
     pub fn is_healthy(&self) -> bool {
@@ -212,6 +250,10 @@ impl Upstream {
     }
 
     pub fn trigger_udp_reconnect(self: Arc<Self>) {
+        // DoT upstreams have no mux to rebuild.
+        if self.udp.is_none() {
+            return;
+        }
         if self.udp_reconnecting.swap(true, Ordering::AcqRel) {
             return;
         }
@@ -224,7 +266,9 @@ impl Upstream {
                 tokio::time::sleep(backoff).await;
                 match UpstreamUdpMux::new(self.addr).await {
                     Ok(mux) => {
-                        self.udp.store(Arc::new(mux));
+                        if let Some(udp) = self.udp.as_ref() {
+                            udp.store(Arc::new(mux));
+                        }
                         self.udp_reconnecting.store(false, Ordering::Release);
                         tracing::info!(upstream = %self.addr, "UDP mux reconnected");
                         return;
@@ -259,6 +303,10 @@ pub enum UpstreamError {
     SendError(std::io::Error),
     #[error("upstream recv error: {0}")]
     RecvError(std::io::Error),
+    /// TLS setup or handshake failure. Kept separate from the transport errors above
+    /// because it is almost always a misconfiguration, not a transient network fault.
+    #[error("upstream tls error: {0}")]
+    Tls(String),
     #[error("upstream error: {0}")]
     Other(String),
 }
@@ -285,10 +333,16 @@ mod tests {
         }
     }
 
+    fn plain(endpoint: &str) -> crate::Upstream {
+        crate::Upstream::Plain {
+            endpoint: endpoint.parse().expect("valid endpoint"),
+        }
+    }
+
     #[tokio::test]
     async fn iter_round_robin() {
-        let addrs: Vec<SocketAddr> = vec!["127.0.0.1:5353".parse().unwrap(), "127.0.0.2:5353".parse().unwrap()];
-        let upstreams = Upstreams::new(&addrs, test_limits()).await.unwrap();
+        let configs = [plain("127.0.0.1:5353"), plain("127.0.0.2:5353")];
+        let upstreams = Upstreams::new(&configs, test_limits()).await.unwrap();
 
         let first = upstreams.iter().unwrap().next().unwrap();
         let second = upstreams.iter().unwrap().next().unwrap();
@@ -298,8 +352,8 @@ mod tests {
 
     #[tokio::test]
     async fn iter_skips_unhealthy() {
-        let addrs: Vec<SocketAddr> = vec!["127.0.0.1:5353".parse().unwrap(), "127.0.0.2:5353".parse().unwrap()];
-        let upstreams = Upstreams::new(&addrs, test_limits()).await.unwrap();
+        let configs = [plain("127.0.0.1:5353"), plain("127.0.0.2:5353")];
+        let upstreams = Upstreams::new(&configs, test_limits()).await.unwrap();
 
         let addr = upstreams.list[0].addr;
         for _ in 0..UpstreamHealth::FAILURE_THRESHOLD {
@@ -309,13 +363,13 @@ mod tests {
 
         let results: Vec<_> = upstreams.iter().unwrap().collect();
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0].addr, addrs[1]);
+        assert_eq!(results[0].addr, "127.0.0.2:5353".parse::<SocketAddr>().unwrap());
     }
 
     #[tokio::test]
     async fn iter_returns_all_when_all_unhealthy() {
-        let addrs: Vec<SocketAddr> = vec!["127.0.0.1:5353".parse().unwrap(), "127.0.0.2:5353".parse().unwrap()];
-        let upstreams = Upstreams::new(&addrs, test_limits()).await.unwrap();
+        let configs = [plain("127.0.0.1:5353"), plain("127.0.0.2:5353")];
+        let upstreams = Upstreams::new(&configs, test_limits()).await.unwrap();
 
         for upstream in upstreams.list.iter() {
             for _ in 0..UpstreamHealth::FAILURE_THRESHOLD {
@@ -326,5 +380,50 @@ mod tests {
 
         let results: Vec<_> = upstreams.iter().unwrap().collect();
         assert_eq!(results.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn tls_upstream_has_no_udp_mux() {
+        let configs = [crate::Upstream::Tls {
+            endpoint: "9.9.9.9:853".parse().unwrap(),
+            hostname: Some("dns.quad9.net".into()),
+        }];
+        let upstreams = Upstreams::new(&configs, test_limits()).await.unwrap();
+
+        assert!(upstreams.list[0].udp.is_none());
+    }
+
+    #[tokio::test]
+    async fn plain_upstream_has_a_udp_mux() {
+        let upstreams = Upstreams::new(&[plain("127.0.0.1:5353")], test_limits()).await.unwrap();
+
+        assert!(upstreams.list[0].udp.is_some());
+    }
+
+    #[tokio::test]
+    async fn rejects_tls_upstream_with_invalid_hostname() {
+        let configs = [crate::Upstream::Tls {
+            endpoint: "9.9.9.9:853".parse().unwrap(),
+            hostname: Some("not a hostname".into()),
+        }];
+
+        assert!(Upstreams::new(&configs, test_limits()).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn health_rebuild_task_keeps_running_after_construction() {
+        let configs = [plain("127.0.0.1:5353"), plain("127.0.0.2:5353")];
+        let upstreams = Upstreams::new(&configs, test_limits()).await.unwrap();
+
+        let addr = upstreams.list[0].addr;
+        for _ in 0..UpstreamHealth::FAILURE_THRESHOLD {
+            upstreams.list[0].health.record_failure(addr);
+        }
+
+        tokio::time::sleep(Duration::from_millis(1200)).await;
+
+        let results: Vec<_> = upstreams.iter().unwrap().collect();
+        assert_eq!(results.len(), 1, "unhealthy upstream was not dropped from the cache");
+        assert_eq!(results[0].addr, "127.0.0.2:5353".parse::<SocketAddr>().unwrap());
     }
 }

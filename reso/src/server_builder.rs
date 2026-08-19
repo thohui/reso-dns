@@ -17,7 +17,7 @@ use crate::{
     ratelimit::RateLimitConfig,
     services::{
         self,
-        config::{ActiveResolver, Config, Upstream},
+        config::{ActiveResolver, Config},
     },
 };
 
@@ -53,20 +53,8 @@ async fn create_server_state(
     global: &SharedGlobal,
     config: &services::config::Config,
 ) -> anyhow::Result<ServerState<Global, Local>> {
-    let upstreams = config
-        .dns
-        .forwarder
-        .upstreams()?
-        .iter()
-        .filter_map(|u| match u {
-            // TODO: implement the rest.
-            Upstream::Plain { endpoint } => endpoint.socket_addr().ok(),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-
     let resolver = match &config.dns.active {
-        ActiveResolver::Forwarder => ForwardResolver::new(&upstreams).await?,
+        ActiveResolver::Forwarder => ForwardResolver::new(&config.dns.forwarder.upstreams).await?,
     };
 
     Ok(ServerState {

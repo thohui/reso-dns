@@ -9,7 +9,7 @@ use http_body_util::{BodyExt, Full};
 use hyper::server::conn::http2;
 use hyper::{Method, Request, Response, body::Incoming, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
-use reso_context::{DnsRequestCtx, RequestType};
+use reso_context::{DnsProtocol, DnsRequestCtx};
 use reso_dns::{DnsMessage, DnsMessageBuilder};
 use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
@@ -152,7 +152,7 @@ where
     let mut ctx = DnsRequestCtx::new(
         state.timeout,
         addr.ip(),
-        RequestType::DOH,
+        DnsProtocol::DOH,
         bytes,
         state.global.clone(),
         L::default(),

@@ -20,13 +20,15 @@ pub enum ErrorType {
 /// The type of DNS request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-pub enum RequestType {
+pub enum DnsProtocol {
     /// UDP
     UDP,
     /// TCP
     TCP,
     /// DNS over HTTPS
     DOH,
+    /// DNS over TLS
+    DOT,
 }
 
 /// Context for a DNS request.
@@ -34,7 +36,7 @@ pub enum RequestType {
 #[derive(Debug)]
 pub struct DnsRequestCtx<G, L> {
     request_address: IpAddr,
-    request_type: RequestType,
+    request_type: DnsProtocol,
     raw: Bytes,
     message: OnceCell<DnsMessage>,
     budget: RequestBudget,
@@ -46,7 +48,7 @@ impl<G, L> DnsRequestCtx<G, L> {
     pub fn new(
         deadline: Duration,
         request_address: IpAddr,
-        request_type: RequestType,
+        request_type: DnsProtocol,
         raw: Bytes,
         global: Arc<G>,
         local: L,
@@ -73,7 +75,7 @@ impl<G, L> DnsRequestCtx<G, L> {
     }
 
     /// Request type
-    pub fn request_type(&self) -> RequestType {
+    pub fn request_type(&self) -> DnsProtocol {
         self.request_type
     }
 
@@ -107,20 +109,24 @@ impl<G, L> DnsRequestCtx<G, L> {
 pub struct DnsResponse {
     bytes: Bytes,
     message: OnceCell<DnsMessage>,
+    /// The DNS protocol used that the response was resolved with.
+    response_protocol: Option<DnsProtocol>,
 }
 
 impl DnsResponse {
-    pub fn from_bytes(bytes: Bytes) -> Self {
+    pub fn from_bytes(bytes: Bytes, response_protocol: Option<DnsProtocol>) -> Self {
         Self {
             bytes,
             message: OnceCell::new(),
+            response_protocol,
         }
     }
 
-    pub fn from_parsed(raw: Bytes, message: DnsMessage) -> Self {
+    pub fn from_parsed(raw: Bytes, message: DnsMessage, response_protocol: Option<DnsProtocol>) -> Self {
         Self {
             bytes: raw,
             message: OnceCell::with_value(message),
+            response_protocol,
         }
     }
 
@@ -131,6 +137,10 @@ impl DnsResponse {
 
     pub fn message(&self) -> reso_dns::Result<&DnsMessage> {
         self.message.get_or_try_init(|| DnsMessage::decode(&self.bytes))
+    }
+
+    pub fn response_protocol(&self) -> Option<DnsProtocol> {
+        self.response_protocol
     }
 }
 

@@ -88,8 +88,8 @@ export interface ErrorActivity extends ActivityBase {
 export const TRANSPORT_LABELS: Record<number, string> = {
 	0: 'UDP',
 	1: 'TCP',
-	2: 'DoT',
-	3: 'DoH',
+	2: 'DoH',
+	3: 'DoT',
 	4: 'DoQ',
 };
 

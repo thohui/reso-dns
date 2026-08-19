@@ -1,4 +1,4 @@
-use reso_context::{ErrorType, RequestType};
+use reso_context::{DnsProtocol, ErrorType};
 use reso_dns::{DnsResponseCode, domain_name::DomainName, message::RecordType};
 
 use crate::database::models::activity_log::ActivityLog;
@@ -6,7 +6,7 @@ use crate::database::models::activity_log::ActivityLog;
 #[derive(Debug, Clone)]
 pub struct QueryLogEvent {
     pub ts_ms: i64,
-    pub transport: RequestType,
+    pub transport: DnsProtocol,
     pub client: String,
     pub qname: DomainName,
     pub qtype: RecordType,
@@ -41,7 +41,7 @@ impl QueryLogEvent {
 #[derive(Debug, Clone)]
 pub struct ErrorLogEvent {
     pub ts_ms: i64,
-    pub transport: RequestType,
+    pub transport: DnsProtocol,
     pub client: String,
     pub message: String,
     pub r#type: ErrorType,

@@ -109,6 +109,7 @@ export function DurationInput({
 				<NativeSelect.Root w='auto' minW='110px'>
 					<NativeSelect.Field
 						bg='bg.input'
+						_hover={{ borderColor: 'accent.subtle' }}
 						borderColor='border.input'
 						value={unit}
 						onChange={handleUnitChange}

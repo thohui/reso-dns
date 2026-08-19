@@ -54,8 +54,19 @@ export interface SecurityConfig {
 	block_designated_resolver: boolean;
 }
 
-export type Upstream = string;
+export type UpstreamKind = 'plain' | 'tls';
+
+export interface PlainUpstream {
+	kind: 'plain';
+	endpoint: string;
+}
+export interface TlsUpstream {
+	kind: 'tls';
+	endpoint: string;
+	hostname?: string;
+}
+export type Upstream = PlainUpstream | TlsUpstream;
 
 export interface ForwarderConfig {
-	upstreams: string[];
+	upstreams: Upstream[];
 }

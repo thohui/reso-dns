@@ -53,7 +53,7 @@ impl DnsMiddleware<Global, Local> for RateLimitMiddleware {
             .build();
 
             let bytes = message.encode()?;
-            Ok(Some(DnsResponse::from_parsed(bytes, message)))
+            Ok(Some(DnsResponse::from_parsed(bytes, message, None)))
         }
     }
 }

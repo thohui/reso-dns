@@ -6,7 +6,7 @@ use crate::{
     forwarder::upstream::{Upstream, UpstreamError},
 };
 use bytes::Bytes;
-use reso_context::{RequestBudget, RequestType};
+use reso_context::{DnsProtocol, RequestBudget};
 use reso_dns::helpers;
 use tracing::Instrument;
 
@@ -14,7 +14,7 @@ use tracing::Instrument;
 const MIN_REMAINING_TO_START_ATTEMPT: Duration = Duration::from_millis(15);
 
 pub struct UpstreamResolveRequest {
-    request_type: RequestType,
+    request_type: DnsProtocol,
     query: Bytes,
     request_budget: RequestBudget,
     upstreams: Arc<Upstreams>,
@@ -22,7 +22,7 @@ pub struct UpstreamResolveRequest {
 
 impl UpstreamResolveRequest {
     pub fn new(
-        request_type: RequestType,
+        request_type: DnsProtocol,
         query: Bytes,
         request_budget: RequestBudget,
         upstreams: Arc<Upstreams>,
@@ -36,7 +36,7 @@ impl UpstreamResolveRequest {
     }
 
     /// Resolve a DNS query by forwarding it to configured upstreams.
-    pub async fn resolve(&self) -> Result<Bytes, ResolveError> {
+    pub async fn resolve(&self) -> Result<(Bytes, DnsProtocol), ResolveError> {
         let upstreams = self
             .upstreams
             .iter()
@@ -70,6 +70,7 @@ impl UpstreamResolveRequest {
                             | UpstreamError::SendError(_)
                             | UpstreamError::RecvError(_)
                             | UpstreamError::RecvTaskStopped
+                            | UpstreamError::Tls(_)
                     ) {
                         upstream.health.record_failure(upstream.addr);
                     }
@@ -89,13 +90,13 @@ impl UpstreamResolveRequest {
                 }
             };
 
-            let response_tid = match helpers::extract_transaction_id(&resp) {
+            let response_tid = match helpers::extract_transaction_id(&resp.0) {
                 Some(t) => t,
                 None => {
                     tracing::warn!(
                         upstream = %upstream.addr,
                         req_type = ?req_type,
-                        resp_len = resp.len(),
+                        resp_len = resp.0.len(),
                         "response missing/invalid transaction id"
                     );
                     continue;
@@ -118,14 +119,21 @@ impl UpstreamResolveRequest {
         Err(ResolveError::Other("all upstreams failed".into()))
     }
 
-    async fn try_upstream(&self, upstream: &Upstream, req_type: RequestType) -> Result<Bytes, UpstreamError> {
+    async fn try_upstream(
+        &self,
+        upstream: &Upstream,
+        req_type: DnsProtocol,
+    ) -> Result<(Bytes, DnsProtocol), UpstreamError> {
         match req_type {
-            RequestType::TCP | RequestType::DOH => self.resolve_tcp(&upstream.tcp, &self.query).await,
-            RequestType::UDP => self.resolve_udp_with_fallback(upstream).await,
+            DnsProtocol::TCP => self.resolve_tcp(&upstream.tcp, &self.query).await,
+            // A DoT upstream has no UDP mux, so it is forced to go over tcp (DoT).
+            DnsProtocol::UDP if upstream.udp.is_none() => self.resolve_tcp(&upstream.tcp, &self.query).await,
+            DnsProtocol::UDP => self.resolve_udp_with_fallback(upstream).await,
+            DnsProtocol::DOT | DnsProtocol::DOH => self.resolve_tcp(&upstream.tcp, &self.query).await,
         }
     }
 
-    async fn resolve_udp_with_fallback(&self, upstream: &Upstream) -> Result<Bytes, UpstreamError> {
+    async fn resolve_udp_with_fallback(&self, upstream: &Upstream) -> Result<(Bytes, DnsProtocol), UpstreamError> {
         let resp = self.resolve_udp(upstream, &self.query).await?;
         match helpers::is_truncated(&resp) {
             Some(true) => {
@@ -135,7 +143,7 @@ impl UpstreamResolveRequest {
                 // TCP fallback for THIS upstream only.
                 self.resolve_tcp(&upstream.tcp, &self.query).await
             }
-            Some(false) => Ok(resp),
+            Some(false) => Ok((resp, DnsProtocol::UDP)),
             None => Err(UpstreamError::Other("invalid UDP response".into())),
         }
     }
@@ -146,7 +154,7 @@ impl UpstreamResolveRequest {
     }
 
     /// Resolve the upstream request over tcp.
-    async fn resolve_tcp(&self, pool: &TcpPool, query: &[u8]) -> Result<Bytes, UpstreamError> {
+    async fn resolve_tcp(&self, pool: &TcpPool, query: &[u8]) -> Result<(Bytes, DnsProtocol), UpstreamError> {
         let deadline = self.request_budget.deadline();
         let mut conn = pool.get_or_connect(deadline).await?;
 
@@ -155,7 +163,12 @@ impl UpstreamResolveRequest {
         match result {
             Ok(resp_bytes) => {
                 pool.put_back(conn, true);
-                Ok(resp_bytes)
+                let protocol = if pool.has_tls() {
+                    DnsProtocol::DOT
+                } else {
+                    DnsProtocol::TCP
+                };
+                Ok((resp_bytes, protocol))
             }
             Err(e) => {
                 pool.put_back(conn, false);
@@ -167,7 +180,11 @@ impl UpstreamResolveRequest {
     /// Resolve the upstream request over udp.
     async fn resolve_udp(&self, upstream: &Upstream, query: &[u8]) -> Result<Bytes, UpstreamError> {
         let deadline = self.request_budget.deadline();
-        let udp = upstream.udp.load();
-        udp.send_and_receive(query, deadline).await
+        let mux = upstream
+            .udp
+            .as_ref()
+            .ok_or_else(|| UpstreamError::Other(format!("upstream {} has no udp transport", upstream.addr)))?;
+
+        mux.load().send_and_receive(query, deadline).await
     }
 }
