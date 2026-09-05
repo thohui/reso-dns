@@ -109,6 +109,18 @@ pub async fn list_with_domain_counts(db: &CoreDatabasePool) -> Result<Vec<(ListS
         .await
 }
 
+pub async fn name_by_id(
+    db: &CoreDatabasePool,
+    id: EntityId<ListSubscription>,
+) -> Result<Option<String>, DatabaseError> {
+    db.interact(move |c| {
+        let mut stmt = c.prepare("SELECT name FROM list_subscriptions WHERE id = ?1")?;
+        let mut iter = stmt.query_map(params![id.id()], |r| r.get::<_, String>(0))?;
+        iter.next().transpose()
+    })
+    .await
+}
+
 pub async fn delete_by_id(db: &CoreDatabasePool, id: EntityId<ListSubscription>) -> Result<bool, DatabaseError> {
     let rows = db
         .interact(move |c| c.execute("DELETE FROM list_subscriptions WHERE id = ?1", params![id.id()]))
@@ -208,7 +220,7 @@ mod tests {
         insert(&db.conn, sub.clone()).await.unwrap();
 
         sync_subscription(
-            sub.id.clone(),
+            sub.id,
             vec![
                 (
                     "a.com".into(),
@@ -229,7 +241,7 @@ mod tests {
         let rules = domain_rule::list_all(&db.conn).await.unwrap();
         assert!(rules.iter().all(|d| d.enabled));
 
-        toggle_enabled(&db.conn, sub.id.clone()).await.unwrap();
+        toggle_enabled(&db.conn, sub.id).await.unwrap();
         let rules = domain_rule::list_all(&db.conn).await.unwrap();
         assert!(rules.iter().all(|d| !d.enabled));
 
@@ -260,7 +272,7 @@ mod tests {
         insert(&db.conn, sub.clone()).await.unwrap();
 
         let mut dn = DomainRule::new("test.com".into());
-        dn.subscription_id = Some(sub.id.clone());
+        dn.subscription_id = Some(sub.id);
         domain_rule::insert(&db.conn, dn).await.unwrap();
 
         let subs = list_with_domain_counts(&db.conn).await.unwrap();

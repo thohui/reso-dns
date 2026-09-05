@@ -6,7 +6,7 @@ import {
 	useReactTable,
 } from '@tanstack/react-table';
 import { Globe, Pencil, Search } from 'lucide-react';
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ActionBadge } from '@/components/ActionBadge';
 import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
 import { GridPage } from '@/components/GridPage';
@@ -14,6 +14,7 @@ import { MatchTypeBadge } from '@/components/MatchTypeBadge';
 import { ToggleButton } from '@/components/ToggleButton';
 import type { DomainRule } from '@/lib/api/domain-rules';
 import { formatTimeAgo } from '@/lib/time';
+import { DomainRuleDetailDrawer } from './DomainRuleDetailDrawer';
 
 const columnHelper = createColumnHelper<DomainRule>();
 
@@ -44,19 +45,26 @@ export function DomainRulesGrid({
 	onEdit,
 	isLoading,
 }: DomainRulesGridProps) {
+	const [selectedRule, setSelectedRule] = useState<DomainRule | null>(null);
+
 	const columns = useMemo(
 		() => [
 			columnHelper.accessor('domain', {
 				header: 'Domain',
-				cell: ({ getValue }) => (
+				cell: ({ row, getValue }) => (
 					<Table.Cell py='3.5' px='4'>
 						<Text
+							as='button'
 							fontFamily="'Mozilla Text', sans-serif"
 							fontSize='sm'
 							fontWeight='500'
 							whiteSpace='nowrap'
 							overflow='hidden'
 							textOverflow='ellipsis'
+							maxW='full'
+							textAlign='left'
+							_hover={{ color: 'accent.fg', textDecoration: 'underline' }}
+							onClick={() => setSelectedRule(row.original)}
 						>
 							{getValue()}
 						</Text>
@@ -114,7 +122,10 @@ export function DomainRulesGrid({
 							color='fg.subtle'
 							_hover={{ color: 'accent.fg', bg: 'accent.muted' }}
 							transition='all 0.15s'
-							onClick={() => onEdit(row.original)}
+							onClick={(e) => {
+								e.stopPropagation();
+								onEdit(row.original);
+							}}
 						>
 							<Icon as={Pencil} boxSize='3.5' />
 						</IconButton>
@@ -169,78 +180,97 @@ export function DomainRulesGrid({
 	);
 
 	return (
-		<GridPage
-			toolbar={toolbar}
-			isLoading={isLoading}
-			isEmpty={rules.length === 0}
-			emptyIcon={search ? Search : Globe}
-			emptyTitle={search ? 'No domains match your search' : 'No rules yet'}
-			emptySubtitle={
-				search ? 'Try adjusting your search' : 'Click "Add Rule" to get started'
-			}
-			page={page}
-			totalPages={totalPages}
-			total={total}
-			totalLabel='rules'
-			onPageChange={onPageChange}
-		>
-			<Table.Root size='sm'>
-				<Table.Header position='sticky' top='0' zIndex='1'>
-					{table.getHeaderGroups().map((headerGroup) => (
-						<Table.Row key={headerGroup.id} bg='bg.subtle' borderColor='border'>
-							{headerGroup.headers.map((header) => (
-								<Table.ColumnHeader
-									key={header.id}
-									py='3'
-									px='4'
-									color='fg.subtle'
-									fontSize='xs'
-									textTransform='uppercase'
-									letterSpacing='0.05em'
-									fontWeight='600'
-									textAlign={
-										header.id === 'created_at'
-											? 'right'
-											: header.id === 'status'
-												? 'center'
+		<>
+			<GridPage
+				toolbar={toolbar}
+				isLoading={isLoading}
+				isEmpty={rules.length === 0}
+				emptyIcon={search ? Search : Globe}
+				emptyTitle={search ? 'No domains match your search' : 'No rules yet'}
+				emptySubtitle={
+					search
+						? 'Try adjusting your search'
+						: 'Click "Add Rule" to get started'
+				}
+				page={page}
+				totalPages={totalPages}
+				total={total}
+				totalLabel='rules'
+				onPageChange={onPageChange}
+			>
+				<Table.Root size='sm'>
+					<Table.Header position='sticky' top='0' zIndex='1'>
+						{table.getHeaderGroups().map((headerGroup) => (
+							<Table.Row
+								key={headerGroup.id}
+								bg='bg.subtle'
+								borderColor='border'
+							>
+								{headerGroup.headers.map((header) => (
+									<Table.ColumnHeader
+										key={header.id}
+										py='3'
+										px='4'
+										color='fg.subtle'
+										fontSize='xs'
+										textTransform='uppercase'
+										letterSpacing='0.05em'
+										fontWeight='600'
+										textAlign={
+											header.id === 'created_at'
+												? 'right'
+												: header.id === 'status'
+													? 'center'
+													: undefined
+										}
+										w={
+											header.id === 'edit' || header.id === 'delete'
+												? '10'
 												: undefined
-									}
-									w={
-										header.id === 'edit' || header.id === 'delete'
-											? '10'
-											: undefined
-									}
-								>
-									{flexRender(
-										header.column.columnDef.header,
-										header.getContext(),
-									)}
-								</Table.ColumnHeader>
-							))}
-						</Table.Row>
-					))}
-				</Table.Header>
-				<Table.Body>
-					{table.getRowModel().rows.map((row) => (
-						<Table.Row
-							key={row.original.domain}
-							bg='bg.panel'
-							borderColor='border'
-							_hover={{ bg: 'bg.subtle' }}
-							transition='background 0.15s'
-							opacity={row.original.enabled ? 1 : 0.5}
-						>
-							{row.getVisibleCells().map((cell) => {
-								return (
-									<React.Fragment key={cell.id}>
-										{flexRender(cell.column.columnDef.cell, cell.getContext())}
-									</React.Fragment>
-								);
-							})}
-						</Table.Row>
-					))}
-				</Table.Body>
-			</Table.Root>
-		</GridPage>
+										}
+									>
+										{flexRender(
+											header.column.columnDef.header,
+											header.getContext(),
+										)}
+									</Table.ColumnHeader>
+								))}
+							</Table.Row>
+						))}
+					</Table.Header>
+					<Table.Body>
+						{table.getRowModel().rows.map((row) => (
+							<Table.Row
+								key={row.original.domain}
+								bg='bg.panel'
+								borderColor='border'
+								_hover={{ bg: 'bg.subtle' }}
+								_focus={{ bg: 'bg.subtle', outline: 'none' }}
+								cursor='pointer'
+								transition='background 0.15s'
+								onClick={() => setSelectedRule(row.original)}
+							>
+								{row.getVisibleCells().map((cell) => {
+									return (
+										<React.Fragment key={cell.id}>
+											{flexRender(
+												cell.column.columnDef.cell,
+												cell.getContext(),
+											)}
+										</React.Fragment>
+									);
+								})}
+							</Table.Row>
+						))}
+					</Table.Body>
+				</Table.Root>
+			</GridPage>
+
+			<DomainRuleDetailDrawer
+				rule={selectedRule}
+				open={selectedRule !== null}
+				onClose={() => setSelectedRule(null)}
+			/>
+		</>
 	);
 }

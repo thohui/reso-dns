@@ -6,11 +6,16 @@ use axum::{
     response::Result,
     routing::get,
 };
+use reso_context::DnsProtocol;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    database::models::activity_log::{self, ActivityLog, ListFilter, SortColumn, SortDir},
+    database::models::{
+        activity_log::{self, ActivityLog, ListFilter, SortColumn, SortDir},
+        domain_rule::DomainRule,
+    },
     global::SharedGlobal,
+    uuid::EntityId,
 };
 
 use super::{
@@ -43,7 +48,7 @@ pub struct ActivityListQuery {
     // sort
     pub sort: Option<String>,
     pub dir: Option<String>,
-    // count
+
     pub count: Option<bool>,
 }
 
@@ -141,11 +146,12 @@ pub async fn activity(
 #[derive(Debug, Clone, Serialize)]
 pub struct Activity {
     pub timestamp: i64,
-    pub transport: u8,
+    pub transport: DnsProtocol,
     pub client: Option<String>,
     pub duration: u64,
     pub qname: Option<String>,
     pub qtype: Option<i64>,
+    pub upstream_protocol: Option<DnsProtocol>,
     #[serde(flatten)]
     pub kind: ActivityKind,
 }
@@ -154,11 +160,6 @@ impl TryFrom<ActivityLog> for Activity {
     type Error = anyhow::Error;
 
     fn try_from(r: ActivityLog) -> Result<Self, Self::Error> {
-        let transport: u8 = r
-            .transport
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("transport out of range: {}", r.transport))?;
-
         let kind = match r.kind.as_str() {
             "query" => {
                 let rcode = r.rcode.context("query row missing rcode")? as u16;
@@ -170,6 +171,7 @@ impl TryFrom<ActivityLog> for Activity {
                     source_id: r.id,
                     rcode,
                     blocked,
+                    rule_id: r.rule_id,
                     cache_hit,
                     rate_limited,
                 })
@@ -189,8 +191,9 @@ impl TryFrom<ActivityLog> for Activity {
 
         Ok(Activity {
             timestamp: r.ts_ms,
-            transport,
+            transport: r.transport.try_into()?,
             client: Some(r.client),
+            upstream_protocol: r.upstream_protocol.map(DnsProtocol::try_from).transpose()?,
             kind,
             duration: r
                 .dur_ms
@@ -216,6 +219,7 @@ pub struct ActivityQuery {
     pub source_id: i64,
     pub rcode: u16,
     pub blocked: bool,
+    pub rule_id: Option<EntityId<DomainRule>>,
     pub cache_hit: bool,
     pub rate_limited: bool,
 }

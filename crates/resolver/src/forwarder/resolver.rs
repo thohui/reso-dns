@@ -11,7 +11,7 @@ use reso_dns::{
 };
 use reso_inflight::Inflight;
 
-use crate::{DnsResolver, DnsResponse, ResolveError};
+use crate::{DnsResolver, DnsResponse, ResolveError, ResolveErrorKind};
 
 use super::{
     request::UpstreamResolveRequest,
@@ -91,16 +91,19 @@ where
     L: Send + Sync,
 {
     async fn resolve(&self, ctx: &DnsRequestCtx<G, L>) -> Result<DnsResponse, ResolveError> {
-        let query_message = ctx.message().map_err(|e| ResolveError::InvalidRequest(e.to_string()))?;
+        let query_message = ctx
+            .message()
+            .map_err(|e| ResolveErrorKind::InvalidRequest(e.to_string()))?;
 
         if query_message.questions().len() != 1 {
-            return Err(ResolveError::InvalidRequest(format!(
+            return Err(ResolveErrorKind::InvalidRequest(format!(
                 "request contains {} questions, expected 1",
                 query_message.questions().len(),
-            )));
+            ))
+            .into());
         }
 
-        let key = InflightCacheKey::try_from(query_message).map_err(|e| ResolveError::Other(e.to_string()))?;
+        let key = InflightCacheKey::try_from(query_message).map_err(|e| ResolveErrorKind::Other(e.to_string()))?;
 
         let upstreams = self.upstreams.clone();
 
@@ -125,9 +128,9 @@ where
                 Err(e) => {
                     let msg = e.to_string();
                     if msg.contains("inflight cancelled") {
-                        ResolveError::Timeout
+                        ResolveErrorKind::Timeout.into()
                     } else {
-                        ResolveError::Other(msg)
+                        ResolveErrorKind::Other(msg).into()
                     }
                 }
             })?;
@@ -136,10 +139,11 @@ where
         let response_protocol = resp_arc.1;
         let response = response_bytes.into_custom_response(query_message.id);
 
-        let response_message =
-            DnsMessage::decode(&response).map_err(|e| ResolveError::InvalidResponse(e.to_string()))?;
+        let response_message = DnsMessage::decode(&response)
+            .map_err(|e| ResolveErrorKind::InvalidResponse(e.to_string()).with_protocol(Some(response_protocol)))?;
 
-        validate_upstream_response(query_message, &response_message)?;
+        validate_upstream_response(query_message, &response_message)
+            .map_err(|kind| kind.with_protocol(Some(response_protocol)))?;
 
         Ok(DnsResponse::from_parsed(
             response,
@@ -180,23 +184,23 @@ fn generate_tid(query: &[u8]) -> (Bytes, u16) {
     (bytes.freeze(), randomized_id)
 }
 
-pub fn validate_upstream_response(request: &DnsMessage, response: &DnsMessage) -> Result<(), ResolveError> {
+pub fn validate_upstream_response(request: &DnsMessage, response: &DnsMessage) -> Result<(), ResolveErrorKind> {
     if request.id != response.id {
-        return Err(ResolveError::MalformedResponse("transaction id mismatch".into()));
+        return Err(ResolveErrorKind::MalformedResponse("transaction id mismatch".into()));
     }
 
     if !response.flags.response {
-        return Err(ResolveError::MalformedResponse(
+        return Err(ResolveErrorKind::MalformedResponse(
             "received query instead of response from upstream".into(),
         ));
     }
 
     if response.flags.opcode != request.flags.opcode {
-        return Err(ResolveError::MalformedResponse("opcode mismatch".into()));
+        return Err(ResolveErrorKind::MalformedResponse("opcode mismatch".into()));
     }
 
     if request.questions() != response.questions() {
-        return Err(ResolveError::MalformedResponse("questions mismatch".into()));
+        return Err(ResolveErrorKind::MalformedResponse("questions mismatch".into()));
     }
 
     Ok(())

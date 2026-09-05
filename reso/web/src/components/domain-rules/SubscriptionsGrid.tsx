@@ -7,11 +7,11 @@ import {
 } from '@tanstack/react-table';
 import { Globe } from 'lucide-react';
 import React, { useMemo } from 'react';
-import type { ListSubscription } from '@/lib/api/list-subscriptions';
-import { formatTimeAgo } from '@/lib/time';
 import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
 import { GridPage } from '@/components/GridPage';
 import { ToggleButton } from '@/components/ToggleButton';
+import type { ListSubscription } from '@/lib/api/list-subscriptions';
+import { formatTimeAgo } from '@/lib/time';
 
 const columnHelper = createColumnHelper<ListSubscription>();
 

@@ -1,8 +1,10 @@
 use rusqlite::{params, types::Value};
 
 use crate::database::models::Page;
+use crate::database::models::domain_rule::DomainRule;
 use crate::database::query::WhereBuilder;
 use crate::database::{DatabaseError, MetricsDatabasePool};
+use crate::uuid::EntityId;
 
 #[derive(Debug, Clone)]
 pub struct ActivityLog {
@@ -12,7 +14,6 @@ pub struct ActivityLog {
     pub ts_ms: i64,
     /// Kind
     pub kind: String,
-    // autoincremented by db
     pub transport: i64,
     /// Client
     pub client: String,
@@ -24,6 +25,8 @@ pub struct ActivityLog {
     pub rcode: Option<i64>,
     /// Whether the request was blocked
     pub blocked: Option<bool>,
+    /// The rule that is associated with the block (or allow).
+    pub rule_id: Option<EntityId<DomainRule>>,
     /// Whether the request's response was served by the cache
     pub cache_hit: Option<bool>,
     /// Whether the request was rate limited.
@@ -34,6 +37,8 @@ pub struct ActivityLog {
     pub error_type: Option<i64>,
     /// Error message
     pub error_message: Option<String>,
+    /// Response protocol
+    pub upstream_protocol: Option<i64>,
 }
 
 #[derive(Debug, Default)]
@@ -123,6 +128,8 @@ fn map_row(row: &rusqlite::Row<'_>) -> Result<ActivityLog, rusqlite::Error> {
         error_type: row.get(11)?,
         error_message: row.get(12)?,
         rate_limited: row.get(13)?,
+        rule_id: row.get::<_, Option<uuid::Uuid>>(14)?.map(EntityId::from),
+        upstream_protocol: row.get(15)?,
     })
 }
 
@@ -161,6 +168,77 @@ pub async fn stats(db: &MetricsDatabasePool) -> Result<Stats, DatabaseError> {
     .await
 }
 
+pub struct RuleStats {
+    pub blocked: i64,
+    pub allowed: i64,
+    pub last_seen_at: Option<i64>,
+}
+
+pub async fn stats_by_domain_rule(
+    db: &MetricsDatabasePool,
+    rule_id: EntityId<DomainRule>,
+) -> Result<RuleStats, DatabaseError> {
+    db.interact(move |c| {
+        c.query_row(
+            r#"
+            SELECT
+                COALESCE(SUM(CASE WHEN blocked = 1 THEN 1 ELSE 0 END), 0) as blocked,
+                COALESCE(SUM(CASE WHEN blocked = 0 THEN 1 ELSE 0 END), 0) as allowed,
+                MAX(ts_ms) as last_seen_at
+            FROM activity_log
+            WHERE rule_id = ?1
+            "#,
+            params![rule_id],
+            |r| {
+                Ok(RuleStats {
+                    blocked: r.get(0)?,
+                    allowed: r.get(1)?,
+                    last_seen_at: r.get(2)?,
+                })
+            },
+        )
+    })
+    .await
+}
+
+/// The most recent activity attributed to a single domain rule, newest first.
+pub async fn recent_by_rule(
+    db: &MetricsDatabasePool,
+    rule_id: EntityId<DomainRule>,
+    limit: i64,
+) -> Result<Vec<ActivityLog>, DatabaseError> {
+    db.interact(move |c| {
+        let mut stmt = c.prepare(
+            r#"
+            SELECT
+              ts_ms,
+              kind,
+              id,
+              transport,
+              client,
+              qname,
+              qtype,
+              rcode,
+              blocked,
+              cache_hit,
+              dur_ms,
+              error_type,
+              error_message,
+              rate_limited,
+              rule_id,
+              upstream_protocol
+            FROM activity_log
+            WHERE rule_id = ?1
+            ORDER BY ts_ms DESC, id DESC
+            LIMIT ?2
+            "#,
+        )?;
+        let iter = stmt.query_map(params![rule_id, limit], map_row)?;
+        iter.collect()
+    })
+    .await
+}
+
 pub async fn batch_insert(db: &MetricsDatabasePool, rows: &[ActivityLog]) -> Result<(), DatabaseError> {
     if rows.is_empty() {
         return Ok(());
@@ -176,9 +254,9 @@ pub async fn batch_insert(db: &MetricsDatabasePool, rows: &[ActivityLog]) -> Res
                 r#"
                 INSERT INTO activity_log
                   (ts_ms, kind, transport, client, qname, qtype, dur_ms,
-                   rcode, blocked, cache_hit, rate_limited, error_type, error_message)
+                   rcode, blocked, cache_hit, rate_limited, error_type, error_message, rule_id, upstream_protocol)
                 VALUES
-                  (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+                  (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
                 "#,
             )?;
 
@@ -197,6 +275,8 @@ pub async fn batch_insert(db: &MetricsDatabasePool, rows: &[ActivityLog]) -> Res
                     r.rate_limited,
                     r.error_type,
                     r.error_message,
+                    r.rule_id,
+                    r.upstream_protocol
                 ])?;
             }
         }
@@ -237,7 +317,9 @@ pub async fn list(
                   dur_ms,
                   error_type,
                   error_message,
-                  rate_limited
+                  rate_limited,
+                  rule_id,
+                  upstream_protocol
                 FROM activity_log
                 WHERE 1=1 {where_clause}
                 ORDER BY {sort_col} {sort_dir}, kind ASC, id DESC
@@ -304,6 +386,8 @@ mod tests {
             rate_limited: Some(false),
             error_type: None,
             error_message: None,
+            rule_id: Some(EntityId::new()),
+            upstream_protocol: None,
         }
     }
 
@@ -318,11 +402,13 @@ mod tests {
             qtype: Some(1),
             dur_ms: 50,
             rcode: None,
+            rule_id: None,
             blocked: None,
             cache_hit: None,
             rate_limited: None,
             error_type: Some(1),
             error_message: Some("timeout".to_string()),
+            upstream_protocol: None,
         }
     }
 
@@ -474,6 +560,7 @@ mod tests {
         let db = setup_metrics_test_db().await.unwrap();
         let mut blocked = make_query(1000);
         blocked.blocked = Some(true);
+        let rule_id = blocked.rule_id;
         batch_insert(&db.conn, &[make_query(2000), blocked]).await.unwrap();
 
         let page = list(
@@ -494,6 +581,7 @@ mod tests {
         assert_eq!(page.items.len(), 1);
         assert_eq!(page.total, Some(1));
         assert_eq!(page.items[0].blocked, Some(true));
+        assert_eq!(page.items[0].rule_id, rule_id);
     }
 
     #[tokio::test]

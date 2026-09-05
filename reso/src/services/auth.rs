@@ -41,7 +41,7 @@ impl AuthService {
         let hash = hash_password(password)?;
 
         let user = User::new(username.trim(), hash);
-        let user_id = user.id.clone();
+        let user_id = user.id;
         user::insert(&self.db, user).await?;
 
         self.create_session(user_id).await
@@ -101,7 +101,7 @@ impl AuthService {
 
     async fn create_session(&self, user_id: EntityId<User>) -> Result<EntityId<DbUserSession>, ServiceError> {
         let session = DbUserSession::new(user_id);
-        let id = session.id.clone();
+        let id = session.id;
         user_session::insert(&self.db, session).await?;
         Ok(id)
     }

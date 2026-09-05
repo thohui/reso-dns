@@ -1,15 +1,13 @@
-import { getTransportLabel } from '@/lib/api/activity';
 import { Badge } from '@chakra-ui/react';
+import type { DnsProtocol } from '@/lib/api/activity';
 
 interface Props {
-	protocol: string | number;
+	protocol: DnsProtocol | null;
 	size: 'xs' | 'sm' | 'md' | 'lg';
 }
 
 export function ProtocolBadge({ protocol, size }: Props) {
-	const protocolString =
-		typeof protocol === 'string' ? protocol : getTransportLabel(protocol);
-
+	const label = protocol ?? 'Unknown';
 	return (
 		<Badge
 			bg='accent.muted'
@@ -21,7 +19,7 @@ export function ProtocolBadge({ protocol, size }: Props) {
 			fontWeight='500'
 			textTransform='capitalize'
 		>
-			{protocolString}
+			{label}
 		</Badge>
 	);
 }

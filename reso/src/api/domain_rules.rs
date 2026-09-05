@@ -1,18 +1,21 @@
 use crate::{
+    api::activity::Activity,
     database::models::{
-        ListAction, MatchType,
+        ListAction, MatchType, activity_log,
         domain_rule::{self, DomainRule},
+        list_subscription,
     },
     global::SharedGlobal,
+    uuid::EntityId,
 };
 use axum::{
     Json, Router,
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     middleware,
     routing::{delete, get, patch, post, put},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::{
     auth::{AllowedAuthMethods, auth_middleware},
@@ -27,6 +30,7 @@ pub fn create_domain_rules_router(global: SharedGlobal) -> Router<SharedGlobal> 
         .route("/", delete(remove_domain))
         .route("/", put(update_domain))
         .route("/toggle", patch(toggle_domain))
+        .route("/{id}/details", get(details))
         .layer(middleware::from_fn_with_state(
             (global, AllowedAuthMethods::Session | AllowedAuthMethods::ApiKey),
             auth_middleware,
@@ -122,4 +126,72 @@ pub async fn update_domain(
         .update_domain_action(&payload.domain, payload.action)
         .await?;
     Ok(())
+}
+
+#[derive(Debug, Serialize)]
+pub struct DetailsResponse {
+    rule: DomainRule,
+    subscription_name: Option<String>,
+    total_blocked: i64,
+    total_allowed: i64,
+    last_seen_at: Option<i64>,
+    activities: Vec<Activity>,
+}
+
+const DETAILS_ACTIVITY_LIMIT: i64 = 5;
+
+pub async fn details(
+    global: State<SharedGlobal>,
+    Path(id): Path<EntityId<DomainRule>>,
+) -> Result<Json<DetailsResponse>, ApiError> {
+    let rule = domain_rule::get_by_id(&global.core_database, id)
+        .await
+        .map_err(|e| {
+            tracing::error!("failed to get domain rule: {:?}", e);
+            ApiError::server_error()
+        })?
+        .ok_or_else(ApiError::not_found)?;
+
+    let subscription_name = match rule.subscription_id {
+        Some(id) => list_subscription::name_by_id(&global.core_database, id)
+            .await
+            .map_err(|e| {
+                tracing::error!("failed to get subscription name: {:?}", e);
+                ApiError::server_error()
+            })?,
+        None => None,
+    };
+
+    let conn = &global.metrics_database;
+
+    let (stats, recent) = tokio::join!(
+        activity_log::stats_by_domain_rule(conn, id),
+        activity_log::recent_by_rule(conn, id, DETAILS_ACTIVITY_LIMIT)
+    );
+
+    let (stats, recent) = match (stats, recent) {
+        (Ok(stats), Ok(recent)) => (stats, recent),
+        (Err(e), _) | (_, Err(e)) => {
+            tracing::error!("failed to get activity for domain rule: {:?}", e);
+            return Err(ApiError::server_error());
+        }
+    };
+
+    let activities: Vec<Activity> = recent
+        .into_iter()
+        .map(Activity::try_from)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| {
+            tracing::error!("failed to convert activity: {:?}", e);
+            ApiError::server_error()
+        })?;
+
+    Ok(Json(DetailsResponse {
+        rule,
+        subscription_name,
+        total_blocked: stats.blocked,
+        total_allowed: stats.allowed,
+        last_seen_at: stats.last_seen_at,
+        activities,
+    }))
 }

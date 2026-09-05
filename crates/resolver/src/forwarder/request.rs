@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use super::{tcp::TcpPool, upstream::Upstreams};
 use crate::{
-    ResolveError,
+    ResolveError, ResolveErrorKind,
     forwarder::upstream::{Upstream, UpstreamError},
 };
 use bytes::Bytes;
@@ -10,7 +10,6 @@ use reso_context::{DnsProtocol, RequestBudget};
 use reso_dns::helpers;
 use tracing::Instrument;
 
-/// Minimum time remaining in the request budget to start a new upstream attempt.
 const MIN_REMAINING_TO_START_ATTEMPT: Duration = Duration::from_millis(15);
 
 pub struct UpstreamResolveRequest {
@@ -35,27 +34,30 @@ impl UpstreamResolveRequest {
         }
     }
 
-    /// Resolve a DNS query by forwarding it to configured upstreams.
     pub async fn resolve(&self) -> Result<(Bytes, DnsProtocol), ResolveError> {
         let upstreams = self
             .upstreams
             .iter()
-            .ok_or(ResolveError::Other("no upstreams available".into()))?;
+            .ok_or(ResolveErrorKind::Other("no upstreams available".into()))?;
 
-        let request_tid = helpers::extract_transaction_id(&self.query)
-            .ok_or(ResolveError::InvalidRequest("failed to extract tid from query".into()))?;
+        let request_tid = helpers::extract_transaction_id(&self.query).ok_or(ResolveErrorKind::InvalidRequest(
+            "failed to extract tid from query".into(),
+        ))?;
 
         let req_type = self.request_type;
+
+        let mut last_protocol: Option<DnsProtocol> = None;
 
         // Try each upstream in round robin order once.
         for (attempt, upstream) in upstreams.enumerate() {
             if !self.has_budget(MIN_REMAINING_TO_START_ATTEMPT) {
-                return Err(ResolveError::Timeout);
+                return Err(ResolveErrorKind::Timeout.with_protocol(last_protocol));
             }
 
             let span = tracing::debug_span!("upstream_attempt", upstream = %upstream.addr, attempt=attempt);
 
-            let attempt_res = self.try_upstream(&upstream, req_type).instrument(span).await;
+            let (protocol, attempt_res) = self.try_upstream(&upstream, req_type).instrument(span).await;
+            last_protocol = Some(protocol);
 
             let resp = match attempt_res {
                 Ok(r) => {
@@ -90,13 +92,13 @@ impl UpstreamResolveRequest {
                 }
             };
 
-            let response_tid = match helpers::extract_transaction_id(&resp.0) {
+            let response_tid = match helpers::extract_transaction_id(&resp) {
                 Some(t) => t,
                 None => {
                     tracing::warn!(
                         upstream = %upstream.addr,
                         req_type = ?req_type,
-                        resp_len = resp.0.len(),
+                        resp_len = resp.len(),
                         "response missing/invalid transaction id"
                     );
                     continue;
@@ -113,48 +115,65 @@ impl UpstreamResolveRequest {
                 );
                 continue;
             }
-            return Ok(resp);
+            return Ok((resp, protocol));
         }
 
-        Err(ResolveError::Other("all upstreams failed".into()))
+        Err(ResolveErrorKind::Other("all upstreams failed".into()).with_protocol(last_protocol))
     }
 
+    /// Attempt a single upstream.
     async fn try_upstream(
         &self,
         upstream: &Upstream,
-        req_type: DnsProtocol,
-    ) -> Result<(Bytes, DnsProtocol), UpstreamError> {
-        match req_type {
-            DnsProtocol::TCP => self.resolve_tcp(&upstream.tcp, &self.query).await,
+        incoming_request_type: DnsProtocol,
+    ) -> (DnsProtocol, Result<Bytes, UpstreamError>) {
+        match incoming_request_type {
+            DnsProtocol::TCP => self.try_tcp(&upstream.tcp).await,
             // A DoT upstream has no UDP mux, so it is forced to go over tcp (DoT).
-            DnsProtocol::UDP if upstream.udp.is_none() => self.resolve_tcp(&upstream.tcp, &self.query).await,
+            DnsProtocol::UDP if upstream.udp.is_none() => self.try_tcp(&upstream.tcp).await,
             DnsProtocol::UDP => self.resolve_udp_with_fallback(upstream).await,
-            DnsProtocol::DOT | DnsProtocol::DOH => self.resolve_tcp(&upstream.tcp, &self.query).await,
+            DnsProtocol::DOT | DnsProtocol::DOH => self.try_tcp(&upstream.tcp).await,
         }
     }
 
-    async fn resolve_udp_with_fallback(&self, upstream: &Upstream) -> Result<(Bytes, DnsProtocol), UpstreamError> {
-        let resp = self.resolve_udp(upstream, &self.query).await?;
+    /// Resolve over TCP or DoT
+    async fn try_tcp(&self, pool: &TcpPool) -> (DnsProtocol, Result<Bytes, UpstreamError>) {
+        let protocol = if pool.has_tls() {
+            DnsProtocol::DOT
+        } else {
+            DnsProtocol::TCP
+        };
+        (protocol, self.resolve_tcp(pool, &self.query).await)
+    }
+
+    async fn resolve_udp_with_fallback(&self, upstream: &Upstream) -> (DnsProtocol, Result<Bytes, UpstreamError>) {
+        let resp = match self.resolve_udp(upstream, &self.query).await {
+            Ok(resp) => resp,
+            Err(e) => return (DnsProtocol::UDP, Err(e)),
+        };
+
         match helpers::is_truncated(&resp) {
             Some(true) => {
                 if !self.has_budget(MIN_REMAINING_TO_START_ATTEMPT) {
-                    return Err(UpstreamError::Timeout);
+                    return (DnsProtocol::UDP, Err(UpstreamError::Timeout));
                 }
                 // TCP fallback for THIS upstream only.
-                self.resolve_tcp(&upstream.tcp, &self.query).await
+                self.try_tcp(&upstream.tcp).await
             }
-            Some(false) => Ok((resp, DnsProtocol::UDP)),
-            None => Err(UpstreamError::Other("invalid UDP response".into())),
+            Some(false) => (DnsProtocol::UDP, Ok(resp)),
+            None => (
+                DnsProtocol::UDP,
+                Err(UpstreamError::Other("invalid UDP response".into())),
+            ),
         }
     }
 
-    /// Check if the request budget has at least `min` remaining.
     fn has_budget(&self, min: Duration) -> bool {
         self.request_budget.remaining().is_some_and(|r| r >= min)
     }
 
-    /// Resolve the upstream request over tcp.
-    async fn resolve_tcp(&self, pool: &TcpPool, query: &[u8]) -> Result<(Bytes, DnsProtocol), UpstreamError> {
+    /// Resolve the upstream request over TCP.
+    async fn resolve_tcp(&self, pool: &TcpPool, query: &[u8]) -> Result<Bytes, UpstreamError> {
         let deadline = self.request_budget.deadline();
         let mut conn = pool.get_or_connect(deadline).await?;
 
@@ -163,12 +182,7 @@ impl UpstreamResolveRequest {
         match result {
             Ok(resp_bytes) => {
                 pool.put_back(conn, true);
-                let protocol = if pool.has_tls() {
-                    DnsProtocol::DOT
-                } else {
-                    DnsProtocol::TCP
-                };
-                Ok((resp_bytes, protocol))
+                Ok(resp_bytes)
             }
             Err(e) => {
                 pool.put_back(conn, false);
@@ -177,7 +191,7 @@ impl UpstreamResolveRequest {
         }
     }
 
-    /// Resolve the upstream request over udp.
+    /// Resolve the upstream request over UDP.
     async fn resolve_udp(&self, upstream: &Upstream, query: &[u8]) -> Result<Bytes, UpstreamError> {
         let deadline = self.request_budget.deadline();
         let mux = upstream

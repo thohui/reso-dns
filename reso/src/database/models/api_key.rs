@@ -176,7 +176,7 @@ mod tests {
 
     async fn insert_test_user(db: &CoreDatabasePool) -> EntityId<User> {
         let user = User::new("testuser", "hash");
-        let id = user.id.clone();
+        let id = user.id;
         user::insert(db, user).await.unwrap();
         id
     }
@@ -187,10 +187,10 @@ mod tests {
         let user_id = insert_test_user(&db.conn).await;
         let expires_at = now_millis() + 60_000;
 
-        let (key1, _) = ApiKey::new("test token".into(), user_id.clone(), None);
+        let (key1, _) = ApiKey::new("test token".into(), user_id, None);
         insert(&db.conn, key1).await.unwrap();
 
-        let (key2, _) = ApiKey::new("another token".into(), user_id.clone(), Some(expires_at));
+        let (key2, _) = ApiKey::new("another token".into(), user_id, Some(expires_at));
         insert(&db.conn, key2).await.unwrap();
 
         let page = list_with_username(&db.conn, 10, 0, None).await.unwrap();
@@ -220,7 +220,7 @@ mod tests {
         let user_id = insert_test_user(&db.conn).await;
 
         let (key, _) = ApiKey::new("test token".into(), user_id, None);
-        let key_id = key.id.clone();
+        let key_id = key.id;
         insert(&db.conn, key).await.unwrap();
 
         delete_by_id(&db.conn, &key_id).await.unwrap();
