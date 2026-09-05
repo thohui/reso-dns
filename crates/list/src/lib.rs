@@ -69,22 +69,25 @@ impl<T> DomainListMatcher<T> {
 
         let mut node = &self.root;
 
+        // the most specific candidate wins, exact -> deeper wildcard -> shallower wildcard
+        let mut fallback = None;
+
         for label in labels.rev_labels() {
-            if let Some(index) = node.subdomain_match {
-                return self.data.get(index.get() as usize - 1);
+            if node.subdomain_match.is_some() {
+                fallback = node.subdomain_match;
             }
 
             match node.children.binary_search_by(|n| n.label.as_str().cmp(label)) {
                 Ok(i) => node = &node.children[i],
-                Err(_) => return None,
+                Err(_) => return fallback.and_then(|index| self.get(index)),
             }
         }
 
-        if let Some(index) = node.pattern_end {
-            return self.data.get(index.get() as usize - 1);
-        }
+        node.pattern_end.or(fallback).and_then(|index| self.get(index))
+    }
 
-        None
+    fn get(&self, index: NonZeroU32) -> Option<&T> {
+        self.data.get(index.get() as usize - 1)
     }
 
     /// Load a list of domain patterns into the matcher.

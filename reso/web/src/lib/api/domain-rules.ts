@@ -72,13 +72,9 @@ export interface DomainRule {
 
 export interface DomainRuleDetails {
 	rule: DomainRule;
-	/** Name of the subscription this rule came from, if it is not a manual rule. */
 	subscription_name: string | null;
-	/** Queries this rule blocked. */
 	total_blocked: number;
-	/** Queries this rule matched without blocking, i.e. an allow rule shadowing a block. */
 	total_allowed: number;
-	/** Timestamp of the most recent query attributed to this rule. */
 	last_seen_at: number | null;
 	activities: Activity[];
 }

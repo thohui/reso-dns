@@ -248,7 +248,16 @@ export function DomainRulesGrid({
 								_focus={{ bg: 'bg.subtle', outline: 'none' }}
 								cursor='pointer'
 								transition='background 0.15s'
+								role='button'
+								tabIndex={0}
+								aria-label={`View details for ${row.original.domain}`}
 								onClick={() => setSelectedRule(row.original)}
+								onKeyDown={(e) => {
+									if (e.key === 'Enter' || e.key === ' ') {
+										e.preventDefault();
+										setSelectedRule(row.original);
+									}
+								}}
 							>
 								{row.getVisibleCells().map((cell) => {
 									return (
