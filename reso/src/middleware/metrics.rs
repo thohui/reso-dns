@@ -1,4 +1,4 @@
-use reso_context::{DnsMiddleware, DnsRequestCtx, DnsResponse, ErrorType};
+use reso_context::{DnsMiddleware, DnsProtocol, DnsRequestCtx, DnsResponse, ErrorType};
 
 use crate::{
     global::Global,
@@ -34,12 +34,19 @@ impl MetricsMiddleware {
             cache_hit: local.cache_hit,
             blocked: local.blocked,
             rate_limited: local.rate_limited,
+            rule_id: local.rule_id,
+            upstream_protocol: response.response_protocol(),
         });
 
         Ok(())
     }
 
-    fn record_error(ctx: &DnsRequestCtx<Global, Local>, error_type: &ErrorType, message: &str) {
+    fn record_error(
+        ctx: &DnsRequestCtx<Global, Local>,
+        error_type: &ErrorType,
+        message: &str,
+        upstream_protocol: Option<DnsProtocol>,
+    ) {
         let local = ctx.local();
 
         let ts_ms: i64 = std::time::SystemTime::now()
@@ -66,6 +73,7 @@ impl MetricsMiddleware {
             dur_ms: local.time_elapsed().as_millis() as u64,
             qname,
             qtype,
+            upstream_protocol,
         });
     }
 }
@@ -83,7 +91,13 @@ impl DnsMiddleware<Global, Local> for MetricsMiddleware {
         Ok(())
     }
 
-    async fn on_error(&self, ctx: &mut DnsRequestCtx<Global, Local>, error_type: &ErrorType, message: &str) {
-        Self::record_error(ctx, error_type, message);
+    async fn on_error(
+        &self,
+        ctx: &mut DnsRequestCtx<Global, Local>,
+        error_type: &ErrorType,
+        message: &str,
+        upstream_protocol: Option<DnsProtocol>,
+    ) {
+        Self::record_error(ctx, error_type, message, upstream_protocol);
     }
 }

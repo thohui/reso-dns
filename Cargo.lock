@@ -1751,7 +1751,7 @@ dependencies = [
 
 [[package]]
 name = "reso"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -1824,6 +1824,7 @@ dependencies = [
  "bytes",
  "once_cell",
  "reso-dns",
+ "serde",
  "tokio",
 ]
 

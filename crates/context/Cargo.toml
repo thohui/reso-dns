@@ -10,6 +10,7 @@ async-trait.workspace = true
 bytes.workspace = true
 once_cell.workspace = true
 tokio.workspace = true
+serde.workspace = true
 
 [lib]
 name = "reso_context"

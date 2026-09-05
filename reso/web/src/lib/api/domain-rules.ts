@@ -1,4 +1,5 @@
 import type { KyInstance } from 'ky';
+import type { Activity } from './activity';
 import type { PagedRequest, PagedResponse } from './pagination';
 
 export type ListAction = 'block' | 'allow';
@@ -49,6 +50,14 @@ export class DomainRules {
 	public async update(domain: string, action: ListAction) {
 		await this.httpClient.put('api/domain-rules', { json: { domain, action } });
 	}
+
+	public async details(id: string) {
+		const response = await this.httpClient.get(
+			`api/domain-rules/${id}/details`,
+		);
+
+		return await response.json<DomainRuleDetails>();
+	}
 }
 
 export interface DomainRule {
@@ -59,4 +68,17 @@ export interface DomainRule {
 	created_at: number;
 	enabled: boolean;
 	subscription_id: string | null;
+}
+
+export interface DomainRuleDetails {
+	rule: DomainRule;
+	/** Name of the subscription this rule came from, if it is not a manual rule. */
+	subscription_name: string | null;
+	/** Queries this rule blocked. */
+	total_blocked: number;
+	/** Queries this rule matched without blocking, i.e. an allow rule shadowing a block. */
+	total_allowed: number;
+	/** Timestamp of the most recent query attributed to this rule. */
+	last_seen_at: number | null;
+	activities: Activity[];
 }

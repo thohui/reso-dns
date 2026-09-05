@@ -42,6 +42,15 @@ impl ApiError {
             jar: None,
         }
     }
+    pub fn not_found() -> Self {
+        Self {
+            status_code: StatusCode::NOT_FOUND,
+            error: Cow::Borrowed("not_found"),
+            message: Cow::Borrowed("Not found."),
+            jar: None,
+        }
+    }
+
     pub fn server_error() -> Self {
         Self {
             status_code: StatusCode::INTERNAL_SERVER_ERROR,

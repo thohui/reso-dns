@@ -41,6 +41,7 @@ export class Activities {
 		if (f.qtype != null) params.set('qtype', f.qtype.toString());
 		if (f.blocked != null) params.set('blocked', f.blocked.toString());
 		if (f.cache_hit != null) params.set('cache_hit', f.cache_hit.toString());
+
 		if (f.rate_limited != null)
 			params.set('rate_limited', f.rate_limited.toString());
 
@@ -56,13 +57,16 @@ export class Activities {
 
 export type Activity = QueryActivity | ErrorActivity;
 
+export type DnsProtocol = 'UDP' | 'TCP' | 'DoT' | 'DoH';
+
 export interface ActivityBase {
 	timestamp: number;
-	transport: number;
+	transport: DnsProtocol;
 	client: string | null;
 	duration: number;
 	qname: string | null;
 	qtype: number | null;
+	upstream_protocol: DnsProtocol | null;
 }
 
 export interface QueryActivity extends ActivityBase {
@@ -83,18 +87,6 @@ export interface ErrorActivity extends ActivityBase {
 		error_type: number;
 		message: string;
 	};
-}
-
-export const TRANSPORT_LABELS: Record<number, string> = {
-	0: 'UDP',
-	1: 'TCP',
-	2: 'DoH',
-	3: 'DoT',
-	4: 'DoQ',
-};
-
-export function getTransportLabel(id: number) {
-	return TRANSPORT_LABELS[id] ?? 'Unknown';
 }
 
 export const RCODE_LABELS: Record<number, string> = {

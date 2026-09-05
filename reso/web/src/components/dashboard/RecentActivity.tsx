@@ -1,7 +1,7 @@
 import { Box, HStack, Icon, Text, VStack } from '@chakra-ui/react';
 import { Zap } from 'lucide-react';
 import { useRecentActivity } from '@/hooks/dashboard/useRecentActivity';
-import { type Activity, getTransportLabel } from '@/lib/api/activity';
+import type { Activity } from '@/lib/api/activity';
 import { getStatusInfo } from '@/lib/status-info';
 
 export function RecentActivity() {
@@ -82,7 +82,7 @@ function ActivityRow({ activity }: { activity: Activity }) {
 					bg='accent.muted'
 					color='accent.fg'
 				>
-					{getTransportLabel(activity.transport)}
+					{activity.transport}
 				</Box>
 				<Text
 					color='fg.faint'

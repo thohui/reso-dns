@@ -1,8 +1,9 @@
 use std::marker::PhantomData;
 
+use rusqlite::{ToSql, types::FromSql};
 use uuid::Uuid;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EntityId<T> {
     inner: Uuid,
     _phantom: PhantomData<T>,
@@ -25,12 +26,11 @@ impl<'de, T> serde::Deserialize<'de> for EntityId<T> {
 
 impl<T> Clone for EntityId<T> {
     fn clone(&self) -> Self {
-        Self {
-            inner: self.inner,
-            _phantom: self._phantom,
-        }
+        *self
     }
 }
+
+impl<T> Copy for EntityId<T> {}
 
 impl<T> EntityId<T> {
     pub fn new() -> Self {
@@ -51,5 +51,19 @@ impl<T> From<Uuid> for EntityId<T> {
             inner: value,
             _phantom: PhantomData,
         }
+    }
+}
+
+impl<T> ToSql for EntityId<T> {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
+        self.inner.to_sql()
+    }
+}
+
+impl<T> FromSql for EntityId<T> {
+    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        let uuid = Uuid::column_result(value)?;
+
+        rusqlite::types::FromSqlResult::Ok(EntityId::from(uuid))
     }
 }

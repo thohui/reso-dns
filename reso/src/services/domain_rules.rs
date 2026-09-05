@@ -38,9 +38,25 @@ fn normalize_base(s: &str) -> Option<String> {
     DomainName::from_user(s).ok().map(|n| n.to_string())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuleMatch {
+    Blocked(EntityId<DomainRule>),
+    Allowed(EntityId<DomainRule>),
+    NoMatch,
+}
+
+impl RuleMatch {
+    pub fn id(&self) -> Option<EntityId<DomainRule>> {
+        match self {
+            Self::Blocked(id) | Self::Allowed(id) => Some(*id),
+            Self::NoMatch => None,
+        }
+    }
+}
+
 pub struct Matchers {
-    pub blocklist_matcher: Arc<DomainListMatcher>,
-    pub allow_list_matcher: Arc<DomainListMatcher>,
+    pub blocklist_matcher: Arc<DomainListMatcher<EntityId<DomainRule>>>,
+    pub allow_list_matcher: Arc<DomainListMatcher<EntityId<DomainRule>>>,
 }
 
 impl Matchers {
@@ -50,10 +66,16 @@ impl Matchers {
         let block_list = domain_rule::list_enabled_by_action(db, ListAction::Block).await?;
         Ok(Self {
             blocklist_matcher: Arc::new(DomainListMatcher::load(
-                block_list.iter().filter(|d| d.enabled).map(|d| d.to_domain_pattern()),
+                block_list
+                    .iter()
+                    .filter(|d| d.enabled)
+                    .map(|d| (d.to_domain_pattern(), d.id)),
             )?),
             allow_list_matcher: Arc::new(DomainListMatcher::load(
-                allow_list.iter().filter(|d| d.enabled).map(|d| d.to_domain_pattern()),
+                allow_list
+                    .iter()
+                    .filter(|d| d.enabled)
+                    .map(|d| (d.to_domain_pattern(), d.id)),
             )?),
         })
     }
@@ -171,7 +193,8 @@ impl DomainRulesService {
         let rules = domain_rule::list_enabled_by_action(&self.connection, ListAction::Allow).await?;
 
         let new_matcher = Arc::new(
-            DomainListMatcher::load(rules.iter().map(|r| r.to_domain_pattern())).map_err(ServiceError::Internal)?,
+            DomainListMatcher::load(rules.iter().map(|r| (r.to_domain_pattern(), r.id)))
+                .map_err(ServiceError::Internal)?,
         );
 
         self.matchers.rcu(|current| {
@@ -189,7 +212,8 @@ impl DomainRulesService {
         let _guard = self.write_lock.lock().await;
         let rules = domain_rule::list_enabled_by_action(&self.connection, ListAction::Block).await?;
         let new_matcher = Arc::new(
-            DomainListMatcher::load(rules.iter().map(|r| r.to_domain_pattern())).map_err(ServiceError::Internal)?,
+            DomainListMatcher::load(rules.iter().map(|r| (r.to_domain_pattern(), r.id)))
+                .map_err(ServiceError::Internal)?,
         );
 
         self.matchers.rcu(|current| {
@@ -201,13 +225,18 @@ impl DomainRulesService {
 
         Ok(())
     }
-    /// Check if a given domain name is blocked by the matcher.
-    pub fn is_blocked(&self, name: &str) -> bool {
+
+    pub fn match_rule(&self, name: &str) -> RuleMatch {
         let matchers = self.matchers.load();
-        if matchers.blocklist_matcher.exists(name) {
-            return !matchers.allow_list_matcher.exists(name);
+
+        let Some(block_id) = matchers.blocklist_matcher.exists(name).copied() else {
+            return RuleMatch::NoMatch;
+        };
+
+        match matchers.allow_list_matcher.exists(name).copied() {
+            Some(allow_id) => RuleMatch::Allowed(allow_id),
+            None => RuleMatch::Blocked(block_id),
         }
-        false
     }
 
     /// List all subscriptions with their current domain counts (derived from domain_rules).
@@ -530,9 +559,9 @@ pub async fn fetch_domain_rules_from_list_subscription_task(
         tracing::warn!("list subscription {} contained no valid domains", subscription.url);
     }
 
-    let count = domain_rule::sync_subscription(subscription.id.clone(), domains, db).await?;
+    let count = domain_rule::sync_subscription(subscription.id, domains, db).await?;
 
-    list_subscription::update_after_sync(subscription.id.clone(), etag, last_modified, db).await?;
+    list_subscription::update_after_sync(subscription.id, etag, last_modified, db).await?;
 
     tracing::info!(
         "synced {} domains from list subscription: '{}'",

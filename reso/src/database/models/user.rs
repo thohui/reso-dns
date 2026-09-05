@@ -145,7 +145,7 @@ mod tests {
     async fn test_user_insert_and_find_by_id() {
         let db = setup_core_test_db().await.unwrap();
         let user = User::new("bob", "password_hash_bob");
-        let user_id = user.id.clone();
+        let user_id = user.id;
 
         insert(&db.conn, user).await.unwrap();
 

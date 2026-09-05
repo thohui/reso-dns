@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use once_cell::sync::OnceCell;
 use reso_dns::DnsMessage;
+use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 
 /// Classifies the kind of error that occurred during request processing.
@@ -18,17 +19,46 @@ pub enum ErrorType {
 }
 
 /// The type of DNS request.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[repr(u8)]
 pub enum DnsProtocol {
     /// UDP
-    UDP,
+    #[serde(rename = "UDP")]
+    UDP = 0,
     /// TCP
-    TCP,
+    #[serde(rename = "TCP")]
+    TCP = 1,
     /// DNS over HTTPS
-    DOH,
+    #[serde(rename = "DoH")]
+    DOH = 2,
+    #[serde(rename = "DoT")]
     /// DNS over TLS
-    DOT,
+    DOT = 3,
+}
+
+impl From<DnsProtocol> for i64 {
+    fn from(protocol: DnsProtocol) -> Self {
+        match protocol {
+            DnsProtocol::UDP => 0,
+            DnsProtocol::TCP => 1,
+            DnsProtocol::DOH => 2,
+            DnsProtocol::DOT => 3,
+        }
+    }
+}
+
+impl TryFrom<i64> for DnsProtocol {
+    type Error = anyhow::Error;
+
+    fn try_from(value: i64) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::UDP),
+            1 => Ok(Self::TCP),
+            2 => Ok(Self::DOH),
+            3 => Ok(Self::DOT),
+            _ => Err(anyhow::anyhow!("protocol not supported")),
+        }
+    }
 }
 
 /// Context for a DNS request.
@@ -156,7 +186,15 @@ pub trait DnsMiddleware<G, L>: Send + Sync {
         Ok(())
     }
     /// Called when an error occurs during request processing.
-    async fn on_error(&self, _ctx: &mut DnsRequestCtx<G, L>, _error: &ErrorType, _message: &str) {}
+    /// `_upstream_protocol` is the protocol of the upstream attempt the error came from, if any.
+    async fn on_error(
+        &self,
+        _ctx: &mut DnsRequestCtx<G, L>,
+        _error: &ErrorType,
+        _message: &str,
+        _upstream_protocol: Option<DnsProtocol>,
+    ) {
+    }
 }
 
 /// A budget for processing a DNS request, based on a deadline.

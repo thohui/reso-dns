@@ -39,8 +39,8 @@ impl EnvConfig {
             anyhow::bail!("RESO_DATABASE_PATH cannot point to the same path as RESO_METRICS_DATABASE_PATH")
         }
 
-        let dns_server_address = env::var("RESO_DNS_SERVER_ADDRESS").unwrap_or("127.0.0.1:53".to_owned());
-        let http_server_address = env::var("RESO_HTTP_SERVER_ADDRESS").unwrap_or("127.0.0.1:80".to_owned());
+        let dns_server_address = env::var("RESO_DNS_SERVER_ADDRESS").unwrap_or("0.0.0.0:53".to_owned());
+        let http_server_address = env::var("RESO_HTTP_SERVER_ADDRESS").unwrap_or("0.0.0.0:80".to_owned());
 
         let session_secret_path =
             env::var("RESO_SESSION_SECRET_PATH").unwrap_or(DEFAULT_SESSION_SECRET_PATH.to_owned());
