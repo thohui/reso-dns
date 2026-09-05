@@ -1,7 +1,7 @@
 use std::net::{IpAddr, SocketAddr};
 
 use async_trait::async_trait;
-use reso_context::{DnsRequestCtx, DnsResponse, ErrorType};
+use reso_context::{DnsProtocol, DnsRequestCtx, DnsResponse, ErrorType};
 use reso_dns::DnsResponseCode;
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
@@ -14,9 +14,42 @@ pub trait DnsResolver<G: Send + Sync, L> {
 /// DynResolver
 pub type DynResolver<G, L> = dyn DnsResolver<G, L> + Send + Sync;
 
+#[derive(Error, Debug)]
+#[error("{kind}")]
+pub struct ResolveError {
+    #[source]
+    kind: ResolveErrorKind,
+    protocol: Option<DnsProtocol>,
+}
+
+impl ResolveError {
+    pub fn kind(&self) -> &ResolveErrorKind {
+        &self.kind
+    }
+
+    /// Protocol of the upstream attempt this error came from, if one was made.
+    pub fn protocol(&self) -> Option<DnsProtocol> {
+        self.protocol
+    }
+
+    pub fn response_code(&self) -> DnsResponseCode {
+        self.kind.response_code()
+    }
+
+    pub fn error_type(&self) -> ErrorType {
+        self.kind.error_type()
+    }
+}
+
+impl From<ResolveErrorKind> for ResolveError {
+    fn from(kind: ResolveErrorKind) -> Self {
+        Self { kind, protocol: None }
+    }
+}
+
 /// Error type for DNS resolvers
 #[derive(Error, Debug)]
-pub enum ResolveError {
+pub enum ResolveErrorKind {
     #[error("request timed out")]
     Timeout,
 
@@ -33,14 +66,18 @@ pub enum ResolveError {
     Other(String),
 }
 
-impl ResolveError {
+impl ResolveErrorKind {
+    pub fn with_protocol(self, protocol: Option<DnsProtocol>) -> ResolveError {
+        ResolveError { kind: self, protocol }
+    }
+
     pub fn response_code(&self) -> DnsResponseCode {
         match self {
-            ResolveError::Timeout => DnsResponseCode::ServerFailure,
-            ResolveError::InvalidRequest(_) => DnsResponseCode::Refused,
-            ResolveError::InvalidResponse(_) => DnsResponseCode::ServerFailure,
-            ResolveError::MalformedResponse(_) => DnsResponseCode::ServerFailure,
-            ResolveError::Other(_) => DnsResponseCode::ServerFailure,
+            ResolveErrorKind::Timeout => DnsResponseCode::ServerFailure,
+            ResolveErrorKind::InvalidRequest(_) => DnsResponseCode::Refused,
+            ResolveErrorKind::InvalidResponse(_) => DnsResponseCode::ServerFailure,
+            ResolveErrorKind::MalformedResponse(_) => DnsResponseCode::ServerFailure,
+            ResolveErrorKind::Other(_) => DnsResponseCode::ServerFailure,
         }
     }
 
@@ -66,12 +103,12 @@ const DEFAULT_TLS_PORT: u16 = 853;
 pub enum Upstream {
     /// UDP and TCP
     Plain {
-        #[serde(deserialize_with = "de_plain_endpoint")]
+        #[serde(deserialize_with = "deserialize_plain_endpoint")]
         endpoint: SocketAddr,
     },
     /// DNS over TLS
     Tls {
-        #[serde(deserialize_with = "de_tls_endpoint")]
+        #[serde(deserialize_with = "deserialize_tls_endpoint")]
         endpoint: SocketAddr,
         /// Name the upstream certificate is validated against, and sent as SNI.
         /// This is an identity and not an adress, when absent the endpoint IP is used instead which
@@ -94,9 +131,7 @@ impl Upstream {
     }
 }
 
-/// Deserialize an endpoint, defaulting the port when only an IP is given.
-/// Accepts `1.1.1.1`, `1.1.1.1:53`, `2606:4700:4700::1111` and `[2606:4700:4700::1111]:853`.
-fn de_endpoint<'de, D>(deserializer: D, default_port: u16) -> Result<SocketAddr, D::Error>
+fn deserialize_endpoint<'de, D>(deserializer: D, default_port: u16) -> Result<SocketAddr, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -111,12 +146,12 @@ where
         .map_err(|_| serde::de::Error::custom(format!("invalid endpoint {s:?}: expected `IP` or `IP:port`")))
 }
 
-fn de_plain_endpoint<'de, D: Deserializer<'de>>(deserializer: D) -> Result<SocketAddr, D::Error> {
-    de_endpoint(deserializer, DEFAULT_PLAIN_PORT)
+fn deserialize_plain_endpoint<'de, D: Deserializer<'de>>(deserializer: D) -> Result<SocketAddr, D::Error> {
+    deserialize_endpoint(deserializer, DEFAULT_PLAIN_PORT)
 }
 
-fn de_tls_endpoint<'de, D: Deserializer<'de>>(deserializer: D) -> Result<SocketAddr, D::Error> {
-    de_endpoint(deserializer, DEFAULT_TLS_PORT)
+fn deserialize_tls_endpoint<'de, D: Deserializer<'de>>(deserializer: D) -> Result<SocketAddr, D::Error> {
+    deserialize_endpoint(deserializer, DEFAULT_TLS_PORT)
 }
 
 pub mod forwarder;

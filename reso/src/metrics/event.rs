@@ -1,7 +1,10 @@
 use reso_context::{DnsProtocol, ErrorType};
 use reso_dns::{DnsResponseCode, domain_name::DomainName, message::RecordType};
 
-use crate::database::models::activity_log::ActivityLog;
+use crate::{
+    database::models::{activity_log::ActivityLog, domain_rule::DomainRule},
+    uuid::EntityId,
+};
 
 #[derive(Debug, Clone)]
 pub struct QueryLogEvent {
@@ -14,7 +17,9 @@ pub struct QueryLogEvent {
     pub dur_ms: u64,
     pub cache_hit: bool,
     pub blocked: bool,
+    pub rule_id: Option<EntityId<DomainRule>>,
     pub rate_limited: bool,
+    pub upstream_protocol: Option<DnsProtocol>,
 }
 
 impl QueryLogEvent {
@@ -23,7 +28,7 @@ impl QueryLogEvent {
             ts_ms: self.ts_ms,
             kind: "query".to_string(),
             id: 0,
-            transport: self.transport as i64,
+            transport: i64::from(self.transport),
             client: self.client,
             qname: Some(self.qname.to_string()),
             qtype: Some(self.qtype.to_u16() as i64),
@@ -34,6 +39,8 @@ impl QueryLogEvent {
             rate_limited: Some(self.rate_limited),
             error_type: None,
             error_message: None,
+            rule_id: self.rule_id,
+            upstream_protocol: self.upstream_protocol.map(i64::from),
         }
     }
 }
@@ -48,6 +55,7 @@ pub struct ErrorLogEvent {
     pub dur_ms: u64,
     pub qname: Option<String>,
     pub qtype: Option<i64>,
+    pub upstream_protocol: Option<DnsProtocol>,
 }
 
 impl ErrorLogEvent {
@@ -56,7 +64,7 @@ impl ErrorLogEvent {
             ts_ms: self.ts_ms,
             kind: "error".to_string(),
             id: 0,
-            transport: self.transport as i64,
+            transport: i64::from(self.transport),
             client: self.client,
             qname: self.qname,
             qtype: self.qtype,
@@ -67,6 +75,8 @@ impl ErrorLogEvent {
             rate_limited: None,
             error_type: Some(self.r#type as i64),
             error_message: Some(self.message),
+            rule_id: None,
+            upstream_protocol: self.upstream_protocol.map(i64::from),
         }
     }
 }

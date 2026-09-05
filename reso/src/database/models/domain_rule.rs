@@ -77,6 +77,28 @@ pub async fn delete(db: &CoreDatabasePool, domain: &str) -> Result<bool, Databas
     Ok(rows > 0)
 }
 
+pub async fn get_by_id(db: &CoreDatabasePool, id: EntityId<DomainRule>) -> Result<Option<DomainRule>, DatabaseError> {
+    db.interact(move |c| {
+        let mut stmt = c.prepare(
+            "SELECT id, domain, action, match_type, created_at, enabled, subscription_id \
+                 FROM domain_rules WHERE id = ?1",
+        )?;
+        let mut iter = stmt.query_map(params![id.id()], |r| {
+            Ok(DomainRule {
+                id: EntityId::from(r.get::<_, Uuid>(0)?),
+                domain: r.get(1)?,
+                action: r.get(2)?,
+                match_type: r.get(3)?,
+                created_at: r.get(4)?,
+                enabled: r.get(5)?,
+                subscription_id: r.get::<_, Option<Uuid>>(6)?.map(EntityId::from),
+            })
+        })?;
+        iter.next().transpose()
+    })
+    .await
+}
+
 pub async fn list(
     db: &CoreDatabasePool,
     limit: i64,
@@ -384,7 +406,7 @@ mod tests {
         list_subscription::insert(&db.conn, sub.clone()).await.unwrap();
 
         let count = sync_subscription(
-            sub.id.clone(),
+            sub.id,
             vec![
                 ("a.com".into(), MatchType::Domain, ListAction::Block),
                 ("b.com".into(), MatchType::Domain, ListAction::Block),

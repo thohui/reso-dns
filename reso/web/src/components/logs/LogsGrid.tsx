@@ -23,20 +23,19 @@ import {
 	Clock,
 	Search,
 } from 'lucide-react';
-
+import React, { useCallback, useMemo, useState } from 'react';
 import { GridPage } from '@/components/GridPage';
 import { ProtocolBadge } from '@/components/ProtocolBadge';
 import { RecordTypeBadge } from '@/components/RecordTypeBadge';
 import { StatusBadge } from '@/components/StatusBadge';
-import {
-	type Activity,
-	type ActivityListFilter,
-	type SortColumn,
-	type SortDir,
+import type {
+	Activity,
+	ActivityListFilter,
+	SortColumn,
+	SortDir,
 } from '@/lib/api/activity';
 import { getStatusInfo } from '@/lib/status-info';
 import { formatDuration, formatTimestamp } from '@/lib/time';
-import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityDetailDrawer } from './ActivityDetailDrawer';
 
 const columnHelper = createColumnHelper<Activity>();
@@ -113,6 +112,15 @@ function buildColumns() {
 		}),
 		columnHelper.accessor('transport', {
 			header: 'Protocol',
+			enableSorting: false,
+			cell: ({ getValue }) => (
+				<Table.Cell py='3' px='4'>
+					<ProtocolBadge protocol={getValue()} size='md' />
+				</Table.Cell>
+			),
+		}),
+		columnHelper.accessor('upstream_protocol', {
+			header: 'Upstream Protocol',
 			enableSorting: false,
 			cell: ({ getValue }) => (
 				<Table.Cell py='3' px='4'>

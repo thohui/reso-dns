@@ -56,7 +56,7 @@ impl ApiKeysService {
 
         let (api_key, token) = DbApiKey::new(display_name, user_id, expires_at);
 
-        let id = api_key.id.clone();
+        let id = api_key.id;
         let created_at = api_key.created_at;
         let expires_at = api_key.expires_at;
         let display_name = api_key.display_name.clone();

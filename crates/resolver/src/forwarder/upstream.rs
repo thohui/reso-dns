@@ -311,11 +311,11 @@ pub enum UpstreamError {
     Other(String),
 }
 
-impl From<UpstreamError> for crate::ResolveError {
+impl From<UpstreamError> for crate::ResolveErrorKind {
     fn from(e: UpstreamError) -> Self {
         match e {
-            UpstreamError::SendTimeout | UpstreamError::RecvTimeout => crate::ResolveError::Timeout,
-            other => crate::ResolveError::Other(other.to_string()),
+            UpstreamError::SendTimeout | UpstreamError::RecvTimeout => crate::ResolveErrorKind::Timeout,
+            other => crate::ResolveErrorKind::Other(other.to_string()),
         }
     }
 }

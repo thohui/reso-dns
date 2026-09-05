@@ -18,7 +18,6 @@ import {
 	type ErrorActivity,
 	getErrorTypeLabel,
 	getResponseCodeLabel,
-	getTransportLabel,
 	type QueryActivity,
 } from '@/lib/api/activity';
 import { recordTypeName } from '@/lib/dns';
@@ -171,8 +170,8 @@ export function ActivityDetailDrawer({
 											value={activity.client || 'unknown'}
 										/>
 										<DetailRow
-											label='Transport'
-											value={getTransportLabel(activity.transport)}
+											label='Transport Protocol'
+											value={activity.transport}
 										/>
 										<DetailRow label='Time' value={time} />
 										<DetailRow label='Duration' value={durationStr} />
@@ -201,6 +200,10 @@ export function ActivityDetailDrawer({
 											borderWidth='1px'
 											borderColor='border'
 										>
+											<DetailRow
+												label='Upstream Protocol'
+												value={activity.upstream_protocol ?? 'Unknown'}
+											/>
 											<DetailRow
 												label='Response Code'
 												value={getResponseCodeLabel(activity.d.rcode)}
@@ -248,6 +251,10 @@ export function ActivityDetailDrawer({
 												value={getErrorTypeLabel(
 													(activity as ErrorActivity).d.error_type,
 												)}
+											/>
+											<DetailRow
+												label='Upstream Protocol'
+												value={activity.upstream_protocol ?? 'Unknown'}
 											/>
 											<DetailRow
 												label='Message'

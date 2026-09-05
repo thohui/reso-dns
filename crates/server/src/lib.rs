@@ -2,7 +2,7 @@ use std::{fmt, net::SocketAddr, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwap;
 use doh::run_doh;
-use reso_context::{DnsMiddleware, DnsRequestCtx, DnsResponse, ErrorType};
+use reso_context::{DnsMiddleware, DnsProtocol, DnsRequestCtx, DnsResponse, ErrorType};
 use reso_dns::DnsResponseCode;
 use reso_resolver::{DynResolver, ResolveError};
 use tcp::run_tcp;
@@ -33,6 +33,14 @@ impl ServerError {
         match self {
             ServerError::ResolveError(e) => e.error_type(),
             ServerError::MiddlewareError(_) => ErrorType::Other,
+        }
+    }
+
+    /// Protocol of the upstream attempt this error came from, if one was made.
+    pub fn upstream_protocol(&self) -> Option<DnsProtocol> {
+        match self {
+            ServerError::ResolveError(e) => e.protocol(),
+            ServerError::MiddlewareError(_) => None,
         }
     }
 }
@@ -163,7 +171,8 @@ async fn notify_error<G, L>(
 {
     let error_type = error.error_type();
     let message = error.to_string();
+    let upstream_protocol = error.upstream_protocol();
     for middleware in middlewares.iter().rev() {
-        middleware.on_error(ctx, &error_type, &message).await;
+        middleware.on_error(ctx, &error_type, &message, upstream_protocol).await;
     }
 }

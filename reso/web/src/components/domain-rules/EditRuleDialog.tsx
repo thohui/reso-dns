@@ -2,19 +2,19 @@ import {
 	Button,
 	Dialog,
 	Field,
-	HStack,
 	Heading,
+	HStack,
 	Icon,
 	IconButton,
 	Text,
 } from '@chakra-ui/react';
 import { AlertTriangle, Pencil, X } from 'lucide-react';
-import { getErrorMessage } from '@/lib/api/error';
-import { FormError } from '@/components/FormError';
 import { useState } from 'react';
-import type { DomainRule, ListAction } from '@/lib/api/domain-rules';
 import { ActionBadge } from '@/components/ActionBadge';
+import { FormError } from '@/components/FormError';
 import { MatchTypeBadge } from '@/components/MatchTypeBadge';
+import type { DomainRule, ListAction } from '@/lib/api/domain-rules';
+import { getErrorMessage } from '@/lib/api/error';
 
 interface EditRuleDialogProps {
 	rule: DomainRule;

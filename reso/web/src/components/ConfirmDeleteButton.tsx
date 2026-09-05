@@ -19,7 +19,8 @@ export function ConfirmDeleteButton({ onConfirm }: Props) {
 						color='status.error'
 						bg='status.errorMuted'
 						_hover={{ opacity: 0.8 }}
-						onClick={() => {
+						onClick={(e) => {
+							e.stopPropagation();
 							onConfirm();
 							setConfirming(false);
 						}}
@@ -31,7 +32,10 @@ export function ConfirmDeleteButton({ onConfirm }: Props) {
 						variant='ghost'
 						color='fg.muted'
 						_hover={{ bg: 'bg.subtle' }}
-						onClick={() => setConfirming(false)}
+						onClick={(e) => {
+							e.stopPropagation();
+							setConfirming(false);
+						}}
 					>
 						Cancel
 					</Button>
@@ -47,7 +51,10 @@ export function ConfirmDeleteButton({ onConfirm }: Props) {
 					color='fg.subtle'
 					_hover={{ color: 'status.error', bg: 'status.errorMuted' }}
 					transition='all 0.15s'
-					onClick={() => setConfirming(true)}
+					onClick={(e) => {
+						e.stopPropagation();
+						setConfirming(true);
+					}}
 				>
 					<Icon as={Trash2} boxSize='3.5' />
 				</IconButton>
