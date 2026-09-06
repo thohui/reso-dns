@@ -88,8 +88,13 @@ impl<'a> DnsMessageReader<'a> {
     pub fn read_qname(&mut self) -> ReadResult<DomainName> {
         let mut pos = self.position;
         let mut jumped = false;
-        let mut seen: SmallVec<[usize; 16]> = SmallVec::new();
+        let mut wire_len: usize = 1; // root terminator
         let mut labels: SmallVec<[SmallVec<[u8; 32]>; 4]> = SmallVec::new();
+
+        // max size of a qname is 255 bytes, a pointer is 2 bytes. -1 for the root terminator
+        // so at most we can only have 127 pointers.
+        const MAX_ALLOWED_PTRS: usize = 127 - 1;
+        let mut ptrs_followed = 0;
 
         loop {
             if pos >= self.buffer.len() {
@@ -99,13 +104,6 @@ impl<'a> DnsMessageReader<'a> {
                     have: self.buffer.len().saturating_sub(pos),
                 });
             }
-
-            // Check for loops
-            if seen.contains(&pos) {
-                return Err(DnsReadError::CompressionLoop { offset: pos });
-            }
-
-            seen.push(pos);
 
             let length = self.buffer[pos];
 
@@ -124,6 +122,11 @@ impl<'a> DnsMessageReader<'a> {
                     });
                 }
 
+                ptrs_followed += 1;
+                if ptrs_followed > MAX_ALLOWED_PTRS {
+                    return Err(DnsReadError::CompressionLoop { offset });
+                }
+
                 if !jumped {
                     self.position = pos + 2;
                 }
@@ -139,6 +142,7 @@ impl<'a> DnsMessageReader<'a> {
                 break;
             } else {
                 let label_len = length as usize;
+
                 pos += 1;
 
                 if pos + label_len > self.buffer.len() {
@@ -147,6 +151,11 @@ impl<'a> DnsMessageReader<'a> {
                         need: label_len,
                         have: self.buffer.len().saturating_sub(pos),
                     });
+                }
+
+                wire_len += 1 + label_len; // +1 for length prefix
+                if wire_len > 255 {
+                    return Err(DnsReadError::NameTooLong { len: wire_len });
                 }
 
                 labels.push(SmallVec::from_slice(&self.buffer[pos..pos + label_len]));

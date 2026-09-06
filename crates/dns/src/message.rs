@@ -62,14 +62,18 @@ impl DnsMessage {
         let number_of_authority_records = reader.read_u16()?; // NSCOUNT
         let number_of_additional_records = reader.read_u16()?; // ARCOUNT
 
-        let mut questions: SmallVec<[DnsQuestion; 1]> = SmallVec::with_capacity(number_of_questions as usize);
+        const MAX_PRE_ALLOC: usize = 3;
+
+        let mut questions: SmallVec<[DnsQuestion; 1]> =
+            SmallVec::with_capacity((number_of_questions as usize).min(MAX_PRE_ALLOC));
 
         for _ in 0..number_of_questions {
             let question = DnsQuestion::read_from(&mut reader)?;
             questions.push(question);
         }
 
-        let mut answers: SmallVec<[DnsRecord; 1]> = SmallVec::with_capacity(number_of_answers as usize);
+        let mut answers: SmallVec<[DnsRecord; 1]> =
+            SmallVec::with_capacity((number_of_answers as usize).min(MAX_PRE_ALLOC));
 
         for _ in 0..number_of_answers {
             let answer = DnsRecord::read_from(&mut reader)?;
@@ -77,14 +81,14 @@ impl DnsMessage {
         }
 
         let mut authority_records: SmallVec<[DnsRecord; 1]> =
-            SmallVec::with_capacity(number_of_authority_records as usize);
+            SmallVec::with_capacity((number_of_authority_records as usize).min(MAX_PRE_ALLOC));
 
         for _ in 0..number_of_authority_records {
             authority_records.push(DnsRecord::read_from(&mut reader)?);
         }
 
         let mut additional_records: SmallVec<[DnsRecord; 1]> =
-            SmallVec::with_capacity(number_of_additional_records as usize);
+            SmallVec::with_capacity((number_of_additional_records as usize).min(MAX_PRE_ALLOC));
 
         let mut edns: Option<Edns> = None;
 
