@@ -1,4 +1,4 @@
-# reso-dns
+# ResoDNS
 
 > **Work in progress:** expect breaking changes and missing features.
 
