@@ -2,7 +2,7 @@
 
 > **Work in progress:** expect breaking changes and missing features.
 
-A fast, self-hosted DNS resolver with a web UI. Supports forwarding over UDP and TCP, with query caching and domain blocking.
+A fast, self-hosted DNS resolver with a web UI. Forwards over plain DNS or DNS over TLS, caches answers, and blocks domains.
 
 ---
 
@@ -10,16 +10,23 @@ A fast, self-hosted DNS resolver with a web UI. Supports forwarding over UDP and
 
 ## Features
 
-- **Web UI** built-in dashboard for monitoring and configuration
-- **Query Cache** in-memory caching to reduce upstream lookups
-- **Blocklist** domain blocking
+- **Web UI** dashboard with query analytics, and every setting configurable from the browser
+- **Upstreams** forward to one or more servers, over plain DNS or DNS over TLS
+- **Caching** repeated lookups are answered locally instead of going upstream
+- **Domain rules** block or allow a domain on its own, together with its subdomains, or subdomains only
+- **List subscriptions** subscribe to public blocklists and keep them up to date automatically
+- **Local records** answer names on your own network
+- **Rate limiting** cap how many queries a single client can make
+- **Bypass prevention** stop devices from routing around Reso with iCloud Private Relay, Firefox canary or `resolver.arpa`
+- **Query logs** with filters and configurable retention
+- **API keys** for scripting against the HTTP API
+- **Single binary** no external database or services to run
 
 ## Screenshots
 
 ![Dashboard](docs/screenshots/dashboard.png)
 ![Logs](docs/screenshots/logs.png)
 ![Configuration](docs/screenshots/configuration.png)
-![Blocklist](docs/screenshots/blocklist.png)
 
 ## Getting started
 
@@ -29,36 +36,36 @@ Supports both `amd64` and `arm64` architectures.
 
 1. Create a `docker-compose.yml`:
 
-```yaml
-services:
-  reso:
-    image: ghcr.io/thohui/reso-dns:latest
-    network_mode: host
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_BIND_SERVICE
-    read_only: true
-    tmpfs:
-      - /tmp
-    volumes:
-      - reso-data:/data
-    environment:
-      RESO_DATABASE_PATH: /data/reso.db
-      RESO_METRICS_DATABASE_PATH: /data/reso_metrics.db
-      RESO_SESSION_SECRET_PATH: /data/reso_session.key
-      RESO_DNS_SERVER_ADDRESS: 0.0.0.0:53
-      RESO_HTTP_SERVER_ADDRESS: 0.0.0.0:80
+   ```yaml
+   services:
+     reso:
+       image: ghcr.io/thohui/reso-dns:latest
+       network_mode: host
+       cap_drop:
+         - ALL
+       cap_add:
+         - NET_BIND_SERVICE
+       read_only: true
+       tmpfs:
+         - /tmp
+       volumes:
+         - reso-data:/data
+       environment:
+         RESO_DATABASE_PATH: /data/reso.db
+         RESO_METRICS_DATABASE_PATH: /data/reso_metrics.db
+         RESO_SESSION_SECRET_PATH: /data/reso_session.key
+         RESO_DNS_SERVER_ADDRESS: 0.0.0.0:53
+         RESO_HTTP_SERVER_ADDRESS: 0.0.0.0:80
 
-volumes:
-  reso-data:
-```
+   volumes:
+     reso-data:
+   ```
 
 2. Start the container:
 
-```sh
-docker compose up -d
-```
+   ```sh
+   docker compose up -d
+   ```
 
 The web UI will be available at `http://<your-host>` and DNS on port 53.
 
