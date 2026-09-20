@@ -14,7 +14,7 @@ pub trait DnsResolver<G: Send + Sync, L> {
 /// DynResolver
 pub type DynResolver<G, L> = dyn DnsResolver<G, L> + Send + Sync;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 #[error("{kind}")]
 pub struct ResolveError {
     #[source]
@@ -48,7 +48,7 @@ impl From<ResolveErrorKind> for ResolveError {
 }
 
 /// Error type for DNS resolvers
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum ResolveErrorKind {
     #[error("request timed out")]
     Timeout,

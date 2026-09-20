@@ -2,6 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
+use moka::future::Cache;
 use rand::RngExt;
 use reso_context::{DnsProtocol, DnsRequestCtx};
 use reso_dns::{
@@ -9,7 +10,6 @@ use reso_dns::{
     domain_name::DomainName,
     message::{ClientSubnet, EdnsOptionData},
 };
-use reso_inflight::Inflight;
 
 use crate::{DnsResolver, DnsResponse, ResolveError, ResolveErrorKind};
 
@@ -56,13 +56,16 @@ impl TryFrom<&DnsMessage> for InflightCacheKey {
 /// Resolver that forwards the incoming request to a defined upstream server.
 pub struct ForwardResolver {
     upstreams: Arc<Upstreams>,
-    inflight_requests: Inflight<InflightCacheKey, (DnsResponseBytes, DnsProtocol)>,
+    inflight_requests: Cache<InflightCacheKey, (DnsResponseBytes, DnsProtocol)>,
 }
+
+const MAX_INFLIGHT_REQUESTS: u64 = 8192;
+const INFLIGHT_ENTRY_TTL: Duration = Duration::from_secs(1);
 
 impl ForwardResolver {
     pub async fn new(upstreams: &[crate::Upstream]) -> anyhow::Result<Self> {
         if upstreams.is_empty() {
-            tracing::warn!("No upstreams configured for forward resolver, it will not be able to resolve any queries!");
+            tracing::warn!("no upstreams configured for forward resolver, it will not be able to resolve any queries!");
         }
 
         tracing::debug!("creating new ForwardResolver instance with upstreams: {:?}", upstreams);
@@ -79,7 +82,10 @@ impl ForwardResolver {
                 },
             )
             .await?,
-            inflight_requests: Inflight::new(),
+            inflight_requests: Cache::builder()
+                .max_capacity(MAX_INFLIGHT_REQUESTS)
+                .time_to_live(INFLIGHT_ENTRY_TTL)
+                .build(),
         })
     }
 }
@@ -111,32 +117,23 @@ where
         let request_type = ctx.request_type();
         let budget = *ctx.budget();
 
-        let resp_arc = self
+        let result = self
             .inflight_requests
-            .get_or_run(key, async move |_| {
+            .try_get_with(key.clone(), async move {
                 let (randomized_query, _) = generate_tid(&query);
 
                 let request = UpstreamResolveRequest::new(request_type, randomized_query, budget, upstreams);
 
                 let (response, protocol) = request.resolve().await?;
 
-                Ok((DnsResponseBytes::new(response), protocol))
+                Ok::<_, ResolveError>((DnsResponseBytes::new(response), protocol))
             })
-            .await
-            .map_err(|e| match e.downcast::<ResolveError>() {
-                Ok(e) => e,
-                Err(e) => {
-                    let msg = e.to_string();
-                    if msg.contains("inflight cancelled") {
-                        ResolveErrorKind::Timeout.into()
-                    } else {
-                        ResolveErrorKind::Other(msg).into()
-                    }
-                }
-            })?;
+            .await;
 
-        let response_bytes = resp_arc.0.clone();
-        let response_protocol = resp_arc.1;
+        self.inflight_requests.invalidate(&key).await;
+
+        let (response_bytes, response_protocol) = result.map_err(|e| (*e).clone())?;
+
         let response = response_bytes.into_custom_response(query_message.id);
 
         let response_message = DnsMessage::decode(&response)

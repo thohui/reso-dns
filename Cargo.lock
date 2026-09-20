@@ -1840,17 +1840,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "reso-inflight"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "dashmap",
- "futures",
- "tokio",
- "tokio-util",
-]
-
-[[package]]
 name = "reso-list"
 version = "0.1.0"
 dependencies = [
@@ -1868,11 +1857,11 @@ dependencies = [
  "async-trait",
  "bytes",
  "dashmap",
+ "moka",
  "rand",
  "reso-cache",
  "reso-context",
  "reso-dns",
- "reso-inflight",
  "rustls",
  "rustls-platform-verifier",
  "serde",
