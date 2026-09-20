@@ -2,23 +2,9 @@ use crate::error::{DnsReadError, ReadResult};
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use idna::AsciiDenyList;
-
-fn escape_label(bytes: &[u8]) -> String {
-    let mut out = String::with_capacity(bytes.len());
-
-    for &byte in bytes {
-        if is_plain_ascii(byte) {
-            out.push(byte as char);
-        } else {
-            write_decimal_escape(&mut out, byte);
-        }
-    }
-
-    out
-}
 
 // \ and . are excluded since they're meaningful in domain name strings
 fn is_plain_ascii(byte: u8) -> bool {
@@ -36,8 +22,8 @@ fn write_decimal_escape(out: &mut String, byte: u8) {
     out.push((b'0' + ones) as char);
 }
 
-/// Reverses escape_label, \DDD becomes a byte value and \X becomes X
 pub fn unescape_label(label: &str) -> Vec<u8> {
+    // \DDD becomes a byte value and \X becomes X
     let mut out = Vec::with_capacity(label.len());
     let raw = label.as_bytes();
     let mut i = 0;
@@ -109,33 +95,63 @@ impl<'a> Iterator for LabelIter<'a> {
 }
 
 /// Labels are stored in DNS wire format, lowercased for case-insensitive comparison
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct DomainName {
-    labels: Arc<[u8]>,
-    display: Arc<str>,
+    inner: Arc<Inner>,
+}
+
+#[derive(Clone)]
+struct Inner {
+    labels: Box<[u8]>,
+    display: OnceLock<Box<str>>,
 }
 
 impl Hash for DomainName {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.display.hash(state);
+        self.inner.labels.hash(state);
     }
 }
 
 impl PartialEq for DomainName {
     fn eq(&self, other: &Self) -> bool {
-        self.display == other.display
+        self.inner.labels.eq(&other.inner.labels)
     }
 }
 
 impl Eq for DomainName {}
 
+impl std::fmt::Debug for DomainName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("DomainName").field(&self.as_str()).finish()
+    }
+}
+
+fn render(labels: &[u8]) -> Box<str> {
+    if labels.len() <= 1 {
+        return Box::from(".");
+    }
+
+    let mut out = String::with_capacity(labels.len());
+    for (i, label) in (LabelIter { data: labels }).enumerate() {
+        if i > 0 {
+            out.push('.');
+        }
+        for &byte in label {
+            if is_plain_ascii(byte) {
+                out.push(byte as char);
+            } else {
+                write_decimal_escape(&mut out, byte);
+            }
+        }
+    }
+    out.into_boxed_str()
+}
+
 impl DomainName {
     pub fn from_labels<L: AsRef<[u8]>>(raw_labels: &[L]) -> ReadResult<Self> {
-        let mut wire: Vec<u8> = Vec::with_capacity(64);
-        let mut display = String::with_capacity(32);
         let mut wire_len: usize = 1; // 1 for root terminator
 
-        for (i, item) in raw_labels.iter().enumerate() {
+        for item in raw_labels {
             let label = item.as_ref();
 
             if label.is_empty() {
@@ -149,27 +165,29 @@ impl DomainName {
             if wire_len > 255 {
                 return Err(DnsReadError::NameTooLong { len: wire_len });
             }
+        }
 
+        if raw_labels.is_empty() {
+            return Ok(Self::root());
+        }
+
+        let mut wire: Vec<u8> = Vec::with_capacity(wire_len);
+
+        for item in raw_labels {
+            let label = item.as_ref();
             wire.push(label.len() as u8);
             let label_start = wire.len();
             wire.extend_from_slice(label);
             wire[label_start..].make_ascii_lowercase();
-
-            if i > 0 {
-                display.push('.');
-            }
-            display.push_str(&escape_label(&wire[label_start..]));
-        }
-
-        if wire.is_empty() {
-            return Ok(Self::root());
         }
 
         wire.push(0); // root label terminator
 
         Ok(Self {
-            labels: Arc::from(wire.as_slice()),
-            display: Arc::from(display.as_str()),
+            inner: Arc::new(Inner {
+                labels: wire.into_boxed_slice(),
+                display: OnceLock::new(),
+            }),
         })
     }
 
@@ -210,25 +228,29 @@ impl DomainName {
 
     pub fn root() -> Self {
         Self {
-            labels: Arc::from([0u8].as_slice()),
-            display: Arc::from("."),
+            inner: Arc::new(Inner {
+                labels: Box::from([0u8].as_slice()),
+                display: OnceLock::new(),
+            }),
         }
     }
 
     pub fn is_root(&self) -> bool {
-        self.labels.len() == 1
+        self.inner.labels.len() == 1
     }
 
     pub fn as_str(&self) -> &str {
-        &self.display
+        self.inner.display.get_or_init(|| render(&self.inner.labels))
     }
 
     pub fn wire_len(&self) -> usize {
-        self.labels.len()
+        self.inner.labels.len()
     }
 
     pub fn label_iter(&self) -> impl Iterator<Item = &[u8]> {
-        LabelIter { data: &self.labels }
+        LabelIter {
+            data: &self.inner.labels,
+        }
     }
 }
 
@@ -236,13 +258,13 @@ impl Deref for DomainName {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
-        &self.display
+        self.as_str()
     }
 }
 
 impl Display for DomainName {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.display)
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -325,6 +347,7 @@ mod tests {
         let dn2 = DomainName::from_ascii("EXAMPLE.COM").unwrap();
         assert_eq!(dn1, dn2);
 
+        #[allow(clippy::mutable_key_type)]
         let mut set = HashSet::new();
         set.insert(dn1.clone());
         assert!(set.contains(&dn2));
