@@ -92,9 +92,7 @@ impl<T> DomainListMatcher<T> {
 
     /// Load a list of domain patterns into the matcher.
     pub fn load<'a>(patterns: impl IntoIterator<Item = (DomainPattern<'a>, T)>) -> anyhow::Result<Self> {
-        let mut root = Node::default();
-
-        let mut entries: Vec<T> = Vec::new();
+        let mut prepared: Vec<(NormalizedDomain, bool, bool, T)> = Vec::new();
 
         for (pat, data) in patterns {
             let (name, pattern_end, subdomain_match) = match pat {
@@ -113,6 +111,16 @@ impl<T> DomainListMatcher<T> {
                 continue;
             }
 
+            prepared.push((labels, pattern_end, subdomain_match, data));
+        }
+
+        // reverse label order makes every child insert an append instead of a memmove.
+        prepared.sort_by(|a, b| a.0.rev_labels().cmp(b.0.rev_labels()));
+
+        let mut root = Node::default();
+        let mut entries: Vec<T> = Vec::with_capacity(prepared.len());
+
+        for (labels, pattern_end, subdomain_match, data) in prepared {
             let mut node = &mut root;
             for label in labels.rev_labels() {
                 node = node.child_mut(label);

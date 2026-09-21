@@ -1,4 +1,4 @@
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -69,12 +69,17 @@ pub async fn insert(db: &CoreDatabasePool, domain_rule: DomainRule) -> Result<()
     Ok(())
 }
 
-pub async fn delete(db: &CoreDatabasePool, domain: &str) -> Result<bool, DatabaseError> {
+pub async fn delete(db: &CoreDatabasePool, domain: &str) -> Result<Option<ListAction>, DatabaseError> {
     let domain = domain.to_string();
-    let rows = db
-        .interact(move |c| c.execute("DELETE FROM domain_rules WHERE domain = ?1", params![domain]))
-        .await?;
-    Ok(rows > 0)
+    db.interact(move |c| {
+        c.query_row(
+            "DELETE FROM domain_rules WHERE domain = ?1 RETURNING action",
+            params![domain],
+            |r| r.get(0),
+        )
+        .optional()
+    })
+    .await
 }
 
 pub async fn get_by_id(db: &CoreDatabasePool, id: EntityId<DomainRule>) -> Result<Option<DomainRule>, DatabaseError> {
@@ -205,17 +210,17 @@ pub async fn update_action(db: &CoreDatabasePool, domain: &str, action: ListActi
     Ok(rows > 0)
 }
 
-pub async fn toggle(db: &CoreDatabasePool, domain: &str) -> Result<bool, DatabaseError> {
+pub async fn toggle(db: &CoreDatabasePool, domain: &str) -> Result<Option<ListAction>, DatabaseError> {
     let domain = domain.to_string();
-    let rows = db
-        .interact(move |c| {
-            c.execute(
-                "UPDATE domain_rules SET enabled = NOT enabled WHERE domain = ?1",
-                params![domain],
-            )
-        })
-        .await?;
-    Ok(rows > 0)
+    db.interact(move |c| {
+        c.query_row(
+            "UPDATE domain_rules SET enabled = NOT enabled WHERE domain = ?1 RETURNING action",
+            params![domain],
+            |r| r.get(0),
+        )
+        .optional()
+    })
+    .await
 }
 
 pub async fn sync_subscription(
@@ -367,7 +372,8 @@ mod tests {
         let before = list(&db.conn, 1, 0, None).await.unwrap();
         assert!(before[0].enabled);
 
-        toggle(&db.conn, "toggle.com").await.unwrap();
+        let toggled = toggle(&db.conn, "toggle.com").await.unwrap();
+        assert_eq!(toggled, Some(ListAction::Block));
 
         let after = list(&db.conn, 1, 0, None).await.unwrap();
         assert!(!after[0].enabled);
@@ -376,6 +382,8 @@ mod tests {
 
         let restored = list(&db.conn, 1, 0, None).await.unwrap();
         assert!(restored[0].enabled);
+
+        assert_eq!(toggle(&db.conn, "missing.com").await.unwrap(), None);
     }
 
     #[tokio::test]
@@ -386,8 +394,12 @@ mod tests {
         insert(&db.conn, rule).await.unwrap();
 
         assert_eq!(count(&db.conn, None).await.unwrap(), 1);
-        delete(&db.conn, "delete-me.com").await.unwrap();
+        assert_eq!(
+            delete(&db.conn, "delete-me.com").await.unwrap(),
+            Some(ListAction::Block)
+        );
         assert_eq!(count(&db.conn, None).await.unwrap(), 0);
+        assert_eq!(delete(&db.conn, "delete-me.com").await.unwrap(), None);
     }
 
     #[tokio::test]

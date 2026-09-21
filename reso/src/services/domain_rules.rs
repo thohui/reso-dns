@@ -125,13 +125,12 @@ impl DomainRulesService {
     pub async fn remove_domain(&self, domain: &str) -> Result<(), ServiceError> {
         let domain = normalize_bare_domain(domain)?;
 
-        let changed = domain_rule::delete(&self.connection, &domain).await?;
-
-        if !changed {
-            return Err(ServiceError::NotFound("Domain not found".into()));
+        match domain_rule::delete(&self.connection, &domain).await? {
+            Some(ListAction::Allow) => self.reload_allow_list().await?,
+            Some(ListAction::Block) => self.reload_blocklist().await?,
+            None => return Err(ServiceError::NotFound("Domain not found".into())),
         }
 
-        self.reload_all().await?;
         Ok(())
     }
 
@@ -153,18 +152,15 @@ impl DomainRulesService {
     pub async fn toggle_domain(&self, domain: &str) -> Result<(), ServiceError> {
         let domain = normalize_bare_domain(domain)?;
 
-        let changed = domain_rule::toggle(&self.connection, &domain).await?;
-
-        if !changed {
-            return Err(ServiceError::NotFound("Domain not found".into()));
+        match domain_rule::toggle(&self.connection, &domain).await? {
+            Some(ListAction::Allow) => self.reload_allow_list().await?,
+            Some(ListAction::Block) => self.reload_blocklist().await?,
+            None => return Err(ServiceError::NotFound("Domain not found".into())),
         }
-
-        self.reload_all().await?;
 
         Ok(())
     }
 
-    /// Reload both the blocklist and allowlist.
     async fn reload_all(&self) -> Result<(), ServiceError> {
         let _guard = self.write_lock.lock().await;
 
