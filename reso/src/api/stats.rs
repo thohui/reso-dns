@@ -84,7 +84,7 @@ pub async fn stats(global: State<SharedGlobal>, query: ApiQuery<StatsQuery>) -> 
     if query.client.is_none() && matches!(query.range, TopRange::All) {
         return Ok(Json(StatsResponse::from(global.stats.live().await)));
     }
-    let client = query.client.map(|c| c.to_string());
+    let client = query.client.map(|c| c.to_canonical().to_string());
     let since = range_to_duration(&query.range);
     let metrics = client_metrics::metrics_totals(&global.metrics_database, client, since)
         .await
