@@ -1,7 +1,7 @@
-use rusqlite::params;
+use rusqlite::{params, types::Value};
 use serde::Serialize;
 
-use crate::database::{DatabaseError, MetricsDatabasePool};
+use crate::database::{DatabaseError, MetricsDatabasePool, query::WhereBuilder};
 
 #[derive(Debug, Serialize)]
 pub struct TimelineBucket {
@@ -46,6 +46,52 @@ impl ClientMetrics {
         self.error_count += other.error_count;
         self.sum_duration += other.sum_duration;
     }
+}
+
+pub struct GenericMetrics {
+    pub total_count: i64,
+    /// Total number of blocked requests in this bucket.
+    pub blocked_count: i64,
+    /// Total number of cached requests in this bucket.
+    pub cached_count: i64,
+    /// Total number of errored requests in this bucket.
+    pub error_count: i64,
+    /// Sum of the duration of all requests in this bucket, in milliseconds.
+    pub sum_duration: i64,
+}
+
+/// Sum metrics since `since`, for a single client or across all clients when `client` is None.
+pub async fn metrics_totals(
+    db: &MetricsDatabasePool,
+    client: Option<String>,
+    since: i64,
+) -> Result<GenericMetrics, DatabaseError> {
+    db.interact(move |c| {
+
+        let mut b = WhereBuilder::new(1);
+        if let Some(client) = client {
+            b.eq("client", Value::Text(client));
+        }
+
+        let (where_clause, filter_params) = b.build();
+
+        let sql = format!(
+            "SELECT COALESCE(SUM(total_count), 0), COALESCE(SUM(blocked_count), 0), COALESCE(SUM(cached_count), 0), COALESCE(SUM(error_count), 0), COALESCE(SUM(sum_duration), 0)
+            FROM metrics_by_client
+            WHERE bucket_ts >= ?1 {where_clause}"
+        );
+        let params = std::iter::once(Value::Integer(since)).chain(filter_params);
+        c.query_row(&sql, rusqlite::params_from_iter(params), |r| {
+            Ok(GenericMetrics {
+                total_count: r.get(0)?,
+                blocked_count: r.get(1)?,
+                cached_count: r.get(2)?,
+                error_count: r.get(3)?,
+                sum_duration: r.get(4)?,
+            })
+        })
+    })
+    .await
 }
 
 /// Batch upsert client metrics
@@ -302,6 +348,78 @@ mod tests {
         let result = list_range_client_metrics(&db.conn, 1500, 2500).await.unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].bucket_ts, 2000);
+    }
+
+    #[tokio::test]
+    async fn metrics_totals_client_sums_only_that_client() {
+        let db = setup_metrics_test_db().await.unwrap();
+        let rows = vec![
+            make_client_metrics(1000, "a", 10, 2, 3, 1, 100),
+            make_client_metrics(2000, "a", 5, 1, 1, 0, 50),
+            make_client_metrics(1000, "b", 99, 9, 9, 9, 999),
+        ];
+        batch_upsert(&db.conn, &rows).await.unwrap();
+
+        let result = metrics_totals(&db.conn, Some("a".to_string()), 0).await.unwrap();
+        assert_eq!(result.total_count, 15);
+        assert_eq!(result.blocked_count, 3);
+        assert_eq!(result.cached_count, 4);
+        assert_eq!(result.error_count, 1);
+        assert_eq!(result.sum_duration, 150);
+    }
+
+    #[tokio::test]
+    async fn metrics_totals_client_respects_since_filter() {
+        let db = setup_metrics_test_db().await.unwrap();
+        let rows = vec![
+            make_client_metrics(1000, "a", 100, 0, 0, 0, 10),
+            make_client_metrics(2000, "a", 5, 0, 0, 0, 10),
+        ];
+        batch_upsert(&db.conn, &rows).await.unwrap();
+
+        let result = metrics_totals(&db.conn, Some("a".to_string()), 1500).await.unwrap();
+        assert_eq!(result.total_count, 5);
+    }
+
+    #[tokio::test]
+    async fn metrics_totals_client_returns_zeros_for_unknown_client() {
+        let db = setup_metrics_test_db().await.unwrap();
+        let rows = vec![make_client_metrics(1000, "a", 10, 0, 0, 0, 100)];
+        batch_upsert(&db.conn, &rows).await.unwrap();
+
+        let result = metrics_totals(&db.conn, Some("unknown".to_string()), 0).await.unwrap();
+        assert_eq!(result.total_count, 0);
+        assert_eq!(result.sum_duration, 0);
+    }
+
+    #[tokio::test]
+    async fn metrics_totals_sums_across_clients() {
+        let db = setup_metrics_test_db().await.unwrap();
+        let rows = vec![
+            make_client_metrics(1000, "a", 10, 2, 3, 1, 100),
+            make_client_metrics(2000, "a", 5, 1, 1, 0, 50),
+            make_client_metrics(1000, "b", 7, 0, 2, 2, 70),
+        ];
+        batch_upsert(&db.conn, &rows).await.unwrap();
+
+        let result = metrics_totals(&db.conn, None, 0).await.unwrap();
+        assert_eq!(result.total_count, 22);
+        assert_eq!(result.blocked_count, 3);
+        assert_eq!(result.cached_count, 6);
+        assert_eq!(result.error_count, 3);
+        assert_eq!(result.sum_duration, 220);
+    }
+
+    #[tokio::test]
+    async fn metrics_totals_returns_zeros_for_empty_table() {
+        let db = setup_metrics_test_db().await.unwrap();
+
+        let result = metrics_totals(&db.conn, None, 0).await.unwrap();
+        assert_eq!(result.total_count, 0);
+        assert_eq!(result.blocked_count, 0);
+        assert_eq!(result.cached_count, 0);
+        assert_eq!(result.error_count, 0);
+        assert_eq!(result.sum_duration, 0);
     }
 
     #[tokio::test]

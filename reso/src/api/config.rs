@@ -12,6 +12,7 @@ use crate::{global::SharedGlobal, services::config::Config};
 use super::{
     auth::{AllowedAuthMethods, auth_middleware},
     error::ApiError,
+    extract::ApiJson,
 };
 
 pub fn create_config_router(global: SharedGlobal) -> Router<SharedGlobal> {
@@ -28,7 +29,10 @@ pub async fn config(global: State<SharedGlobal>) -> Json<Arc<Config>> {
     Json(global.config.get_config())
 }
 
-pub async fn update(global: State<SharedGlobal>, Json(config): Json<Config>) -> Result<Json<Arc<Config>>, ApiError> {
+pub async fn update(
+    global: State<SharedGlobal>,
+    ApiJson(config): ApiJson<Config>,
+) -> Result<Json<Arc<Config>>, ApiError> {
     global.config.update_config(config).await?;
     Ok(Json(global.config.get_config()))
 }

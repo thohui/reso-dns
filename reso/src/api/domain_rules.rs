@@ -10,7 +10,7 @@ use crate::{
 };
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
+    extract::State,
     http::StatusCode,
     middleware,
     routing::{delete, get, patch, post, put},
@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use super::{
     auth::{AllowedAuthMethods, auth_middleware},
     error::ApiError,
+    extract::{ApiJson, ApiPath, ApiQuery},
     pagination::{PagedQuery, PagedResponse},
 };
 
@@ -38,7 +39,7 @@ pub fn create_domain_rules_router(global: SharedGlobal) -> Router<SharedGlobal> 
 }
 
 pub async fn list(
-    query: Query<PagedQuery>,
+    query: ApiQuery<PagedQuery>,
     global: State<SharedGlobal>,
 ) -> Result<Json<PagedResponse<DomainRule>>, ApiError> {
     let top = query.top();
@@ -92,7 +93,7 @@ pub struct DomainPayload {
 
 pub async fn add_domain(
     global: State<SharedGlobal>,
-    Json(payload): Json<AddDomainPayload>,
+    ApiJson(payload): ApiJson<AddDomainPayload>,
 ) -> Result<StatusCode, ApiError> {
     global
         .domain_rules
@@ -101,12 +102,18 @@ pub async fn add_domain(
     Ok(StatusCode::CREATED)
 }
 
-pub async fn remove_domain(global: State<SharedGlobal>, Json(payload): Json<DomainPayload>) -> Result<(), ApiError> {
+pub async fn remove_domain(
+    global: State<SharedGlobal>,
+    ApiJson(payload): ApiJson<DomainPayload>,
+) -> Result<(), ApiError> {
     global.domain_rules.remove_domain(&payload.domain).await?;
     Ok(())
 }
 
-pub async fn toggle_domain(global: State<SharedGlobal>, Json(payload): Json<DomainPayload>) -> Result<(), ApiError> {
+pub async fn toggle_domain(
+    global: State<SharedGlobal>,
+    ApiJson(payload): ApiJson<DomainPayload>,
+) -> Result<(), ApiError> {
     global.domain_rules.toggle_domain(&payload.domain).await?;
     Ok(())
 }
@@ -119,7 +126,7 @@ pub struct UpdateDomainPayload {
 
 pub async fn update_domain(
     global: State<SharedGlobal>,
-    Json(payload): Json<UpdateDomainPayload>,
+    ApiJson(payload): ApiJson<UpdateDomainPayload>,
 ) -> Result<(), ApiError> {
     global
         .domain_rules
@@ -142,7 +149,7 @@ const DETAILS_ACTIVITY_LIMIT: i64 = 5;
 
 pub async fn details(
     global: State<SharedGlobal>,
-    Path(id): Path<EntityId<DomainRule>>,
+    ApiPath(id): ApiPath<EntityId<DomainRule>>,
 ) -> Result<Json<DetailsResponse>, ApiError> {
     let rule = domain_rule::get_by_id(&global.core_database, id)
         .await

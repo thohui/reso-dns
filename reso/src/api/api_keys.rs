@@ -1,6 +1,6 @@
 use axum::{
     Extension, Json, Router,
-    extract::{Query, State},
+    extract::State,
     http::StatusCode,
     middleware,
     routing::{delete, get, post},
@@ -18,6 +18,7 @@ use crate::{
 use super::{
     auth::{AllowedAuthMethods, auth_middleware},
     error::ApiError,
+    extract::{ApiJson, ApiPath, ApiQuery},
     pagination::{PagedQuery, PagedResponse},
 };
 
@@ -77,7 +78,7 @@ impl From<CreatedApiKey> for CreatedApiKeyResponse {
 }
 
 pub async fn list(
-    query: Query<PagedQuery>,
+    query: ApiQuery<PagedQuery>,
     global: State<SharedGlobal>,
 ) -> Result<Json<PagedResponse<ApiKeyResponse>>, ApiError> {
     let top = query.top();
@@ -111,7 +112,7 @@ pub struct CreatePayload {
 pub async fn create(
     global: State<SharedGlobal>,
     Extension(user_id): Extension<EntityId<User>>,
-    Json(payload): Json<CreatePayload>,
+    ApiJson(payload): ApiJson<CreatePayload>,
 ) -> Result<(StatusCode, Json<CreatedApiKeyResponse>), ApiError> {
     let display_name = payload.display_name.trim();
 
@@ -142,10 +143,7 @@ pub struct IdPath {
     id: EntityId<DbApiKey>,
 }
 
-pub async fn remove(
-    global: State<SharedGlobal>,
-    axum::extract::Path(path): axum::extract::Path<IdPath>,
-) -> Result<(), ApiError> {
+pub async fn remove(global: State<SharedGlobal>, ApiPath(path): ApiPath<IdPath>) -> Result<(), ApiError> {
     global.api_keys.delete_api_key(&path.id).await.map_err(ApiError::from)?;
     Ok(())
 }

@@ -12,6 +12,7 @@ use crate::{database::models::list_subscription::ListSubscription, global::Share
 use super::{
     auth::{AllowedAuthMethods, auth_middleware},
     error::ApiError,
+    extract::ApiJson,
 };
 
 pub fn create_list_subscriptions_router(global: SharedGlobal) -> Router<SharedGlobal> {
@@ -75,7 +76,7 @@ fn default_sync_enabled() -> bool {
     true
 }
 
-pub async fn add(global: State<SharedGlobal>, Json(payload): Json<AddPayload>) -> Result<StatusCode, ApiError> {
+pub async fn add(global: State<SharedGlobal>, ApiJson(payload): ApiJson<AddPayload>) -> Result<StatusCode, ApiError> {
     let mut sub = ListSubscription::new(payload.name, payload.url);
     sub.sync_enabled = payload.sync_enabled;
     global.domain_rules.add_list_subscription(sub).await?;
@@ -87,17 +88,17 @@ pub struct IdPayload {
     id: EntityId<ListSubscription>,
 }
 
-pub async fn remove(global: State<SharedGlobal>, Json(payload): Json<IdPayload>) -> Result<(), ApiError> {
+pub async fn remove(global: State<SharedGlobal>, ApiJson(payload): ApiJson<IdPayload>) -> Result<(), ApiError> {
     global.domain_rules.remove_list_subscription(payload.id).await?;
     Ok(())
 }
 
-pub async fn toggle(global: State<SharedGlobal>, Json(payload): Json<IdPayload>) -> Result<(), ApiError> {
+pub async fn toggle(global: State<SharedGlobal>, ApiJson(payload): ApiJson<IdPayload>) -> Result<(), ApiError> {
     global.domain_rules.toggle_list_subscription(payload.id).await?;
     Ok(())
 }
 
-pub async fn toggle_sync(global: State<SharedGlobal>, Json(payload): Json<IdPayload>) -> Result<(), ApiError> {
+pub async fn toggle_sync(global: State<SharedGlobal>, ApiJson(payload): ApiJson<IdPayload>) -> Result<(), ApiError> {
     global
         .domain_rules
         .toggle_list_subscription_sync_enabled(payload.id)

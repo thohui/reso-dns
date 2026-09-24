@@ -133,41 +133,6 @@ fn map_row(row: &rusqlite::Row<'_>) -> Result<ActivityLog, rusqlite::Error> {
     })
 }
 
-pub struct Stats {
-    pub total: i64,
-    pub blocked: i64,
-    pub cached: i64,
-    pub errors: i64,
-    pub sum_duration: i64,
-}
-
-pub async fn stats(db: &MetricsDatabasePool) -> Result<Stats, DatabaseError> {
-    db.interact(move |c| {
-        c.query_row(
-            r#"
-            SELECT
-                COUNT(*) as total,
-                COALESCE(SUM(CASE WHEN blocked = 1 THEN 1 ELSE 0 END), 0) as blocked,
-                COALESCE(SUM(CASE WHEN cache_hit = 1 THEN 1 ELSE 0 END), 0) as cached,
-                COALESCE(SUM(CASE WHEN kind = 'error' THEN 1 ELSE 0 END), 0) as errors,
-                COALESCE(SUM(dur_ms), 0) as sum_duration
-            FROM activity_log
-            "#,
-            [],
-            |r| {
-                Ok(Stats {
-                    total: r.get(0)?,
-                    blocked: r.get(1)?,
-                    cached: r.get(2)?,
-                    errors: r.get(3)?,
-                    sum_duration: r.get(4)?,
-                })
-            },
-        )
-    })
-    .await
-}
-
 pub struct RuleStats {
     pub blocked: i64,
     pub allowed: i64,
@@ -889,40 +854,5 @@ mod tests {
     async fn test_batch_insert_empty() {
         let db = setup_metrics_test_db().await.unwrap();
         batch_insert(&db.conn, &[]).await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn test_stats_empty() {
-        let db = setup_metrics_test_db().await.unwrap();
-        let stats = stats(&db.conn).await.unwrap();
-
-        assert_eq!(stats.total, 0);
-        assert_eq!(stats.blocked, 0);
-        assert_eq!(stats.cached, 0);
-        assert_eq!(stats.errors, 0);
-        assert_eq!(stats.sum_duration, 0);
-    }
-
-    #[tokio::test]
-    async fn test_stats() {
-        let db = setup_metrics_test_db().await.unwrap();
-
-        let mut cached = make_query(1000);
-        cached.cache_hit = Some(true);
-
-        let mut blocked = make_query(2000);
-        blocked.blocked = Some(true);
-
-        batch_insert(&db.conn, &[cached, blocked, make_query(3000), make_error(4000)])
-            .await
-            .unwrap();
-
-        let stats = stats(&db.conn).await.unwrap();
-
-        assert_eq!(stats.total, 4);
-        assert_eq!(stats.blocked, 1);
-        assert_eq!(stats.cached, 1);
-        assert_eq!(stats.errors, 1);
-        assert_eq!(stats.sum_duration, 10 + 10 + 10 + 50);
     }
 }

@@ -1,14 +1,13 @@
-use axum::{
-    Json, Router,
-    extract::{Query, State},
-    middleware,
-    routing::get,
-};
+use std::net::IpAddr;
+
+use axum::{Json, Router, extract::State, middleware, routing::get};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    database::models::client_metrics::TimelineBucket,
-    database::models::{client_metrics, domain_metrics},
+    database::models::{
+        client_metrics::{self, TimelineBucket},
+        domain_metrics,
+    },
     global::SharedGlobal,
     metrics::service::LiveStats,
 };
@@ -16,10 +15,12 @@ use crate::{
 use super::{
     auth::{AllowedAuthMethods, auth_middleware},
     error::ApiError,
+    extract::{ApiQuery, empty_as_none},
 };
 
 pub fn create_stats_router(global: SharedGlobal) -> Router<SharedGlobal> {
     Router::new()
+        .route("/", get(stats))
         .route("/live", get(live_stats))
         .route("/top", get(top))
         .route("/timeline", get(timeline))
@@ -27,6 +28,72 @@ pub fn create_stats_router(global: SharedGlobal) -> Router<SharedGlobal> {
             (global, AllowedAuthMethods::Session | AllowedAuthMethods::ApiKey),
             auth_middleware,
         ))
+}
+
+fn default_stats_range() -> TopRange {
+    TopRange::All
+}
+
+#[derive(Deserialize)]
+pub struct StatsQuery {
+    #[serde(default, deserialize_with = "empty_as_none")]
+    client: Option<IpAddr>,
+    #[serde(default = "default_stats_range")]
+    range: TopRange,
+}
+
+#[derive(Serialize)]
+pub struct StatsResponse {
+    pub total_queries: u64,
+    /// Total queries blocked
+    pub total_blocked: u64,
+    /// Total queries cached
+    pub total_cached: u64,
+    /// Total errors
+    pub total_errors: u64,
+    /// Average response time
+    pub average_response_time: u64,
+}
+
+impl From<client_metrics::GenericMetrics> for StatsResponse {
+    fn from(value: client_metrics::GenericMetrics) -> Self {
+        Self {
+            total_queries: value.total_count as u64,
+            total_blocked: value.blocked_count as u64,
+            total_cached: value.cached_count as u64,
+            total_errors: value.error_count as u64,
+            average_response_time: value.sum_duration.checked_div(value.total_count).unwrap_or(0).max(0) as u64,
+        }
+    }
+}
+
+impl From<LiveStats> for StatsResponse {
+    fn from(value: LiveStats) -> Self {
+        let average = value.sum_duration.checked_div(value.total as u128).unwrap_or(0);
+        Self {
+            total_queries: value.total as u64,
+            total_blocked: value.blocked as u64,
+            total_cached: value.cached as u64,
+            total_errors: value.errors as u64,
+            average_response_time: u64::try_from(average).unwrap_or(u64::MAX),
+        }
+    }
+}
+
+pub async fn stats(global: State<SharedGlobal>, query: ApiQuery<StatsQuery>) -> Result<Json<StatsResponse>, ApiError> {
+    if query.client.is_none() && matches!(query.range, TopRange::All) {
+        return Ok(Json(StatsResponse::from(global.stats.live().await)));
+    }
+    let client = query.client.map(|c| c.to_string());
+    let since = range_to_duration(&query.range);
+    let metrics = client_metrics::metrics_totals(&global.metrics_database, client, since)
+        .await
+        .map_err(|e| {
+            tracing::error!("failed to get metrics totals: {}", e);
+            ApiError::server_error()
+        })?;
+
+    Ok(Json(StatsResponse::from(metrics)))
 }
 
 pub async fn live_stats(global: State<SharedGlobal>) -> Json<LiveStats> {
@@ -82,7 +149,7 @@ pub struct TopResponse {
 
 const MAX_TOP_LIMIT: usize = 100;
 
-pub async fn top(global: State<SharedGlobal>, query: Query<TopQuery>) -> Result<Json<TopResponse>, ApiError> {
+pub async fn top(global: State<SharedGlobal>, query: ApiQuery<TopQuery>) -> Result<Json<TopResponse>, ApiError> {
     let since = range_to_duration(&query.range);
     let db = &global.metrics_database;
 
@@ -129,7 +196,7 @@ pub struct TimelineResponse {
 
 pub async fn timeline(
     global: State<SharedGlobal>,
-    query: Query<TimelineQuery>,
+    query: ApiQuery<TimelineQuery>,
 ) -> Result<Json<TimelineResponse>, ApiError> {
     let since = range_to_duration(&query.range);
     let bucket_width = range_to_bucket_width(&query.range);

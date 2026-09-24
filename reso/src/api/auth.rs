@@ -16,7 +16,7 @@ use crate::{
     uuid::EntityId,
 };
 
-use super::{cookie, error::ApiError};
+use super::{cookie, error::ApiError, extract::ApiJson};
 
 bitflags::bitflags! {
     /// Allowed authentication methods for API routes.
@@ -60,7 +60,7 @@ pub struct CheckResponse {
 pub async fn setup(
     global: State<SharedGlobal>,
     jar: CookieJar,
-    payload: Json<LoginPayload>,
+    payload: ApiJson<LoginPayload>,
 ) -> Result<Response, ApiError> {
     let session_id = global.auth.setup(&payload.username, &payload.password).await?;
 
@@ -75,7 +75,7 @@ pub async fn setup(
 pub async fn login(
     global: State<SharedGlobal>,
     jar: CookieJar,
-    payload: Json<LoginPayload>,
+    payload: ApiJson<LoginPayload>,
 ) -> Result<Response, ApiError> {
     let session_id = global.auth.login(&payload.username, &payload.password).await?;
 
