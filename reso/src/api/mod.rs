@@ -26,6 +26,7 @@ mod config;
 mod cookie;
 mod domain_rules;
 mod error;
+mod extract;
 mod list_subscriptions;
 mod local_records;
 mod pagination;

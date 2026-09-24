@@ -20,6 +20,7 @@ use crate::{
         },
     },
     services::config::ConfigReceiver,
+    time::now_millis,
 };
 
 pub enum MetricsMessage {
@@ -99,19 +100,15 @@ pub struct Stats {
 
 impl Stats {
     pub async fn init(db: &MetricsDatabasePool) -> anyhow::Result<Self> {
-        let activity_stats = activity_log::stats(db).await?;
-        let ts_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis();
+        let metrics = client_metrics::metrics_totals(db, None, 0).await?;
         Ok(Self {
             query: Arc::new(RwLock::new(LiveStats {
-                total: activity_stats.total as usize,
-                blocked: activity_stats.blocked as usize,
-                cached: activity_stats.cached as usize,
-                errors: activity_stats.errors as usize,
-                sum_duration: activity_stats.sum_duration as u128,
-                live_since: ts_ms,
+                total: metrics.total_count.max(0) as usize,
+                blocked: metrics.blocked_count.max(0) as usize,
+                cached: metrics.cached_count.max(0) as usize,
+                errors: metrics.error_count.max(0) as usize,
+                sum_duration: metrics.sum_duration.max(0) as u128,
+                live_since: now_millis() as u128,
             })),
         })
     }

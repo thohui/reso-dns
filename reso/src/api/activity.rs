@@ -1,11 +1,5 @@
 use anyhow::Context;
-use axum::{
-    Json, Router,
-    extract::{Query, State},
-    middleware,
-    response::Result,
-    routing::get,
-};
+use axum::{Json, Router, extract::State, middleware, response::Result, routing::get};
 use reso_context::DnsProtocol;
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +15,7 @@ use crate::{
 use super::{
     auth::{AllowedAuthMethods, auth_middleware},
     error::ApiError,
+    extract::ApiQuery,
     pagination::PagedResponse,
 };
 
@@ -93,7 +88,7 @@ impl ActivityListQuery {
 
 pub async fn activity(
     global: State<SharedGlobal>,
-    Query(query): Query<ActivityListQuery>,
+    ApiQuery(query): ApiQuery<ActivityListQuery>,
 ) -> Result<Json<PagedResponse<Activity>>, ApiError> {
     let conn = &global.metrics_database;
 

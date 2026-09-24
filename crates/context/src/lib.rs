@@ -101,7 +101,7 @@ impl<G, L> DnsRequestCtx<G, L> {
 
     /// Request address
     pub fn request_address(&self) -> IpAddr {
-        self.request_address
+        self.request_address.to_canonical()
     }
 
     /// Request type

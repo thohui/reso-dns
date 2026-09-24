@@ -1,7 +1,7 @@
 use crate::{database::models::local_record::LocalRecord, global::SharedGlobal};
 use axum::{
     Json, Router,
-    extract::{Query, State},
+    extract::State,
     http::StatusCode,
     middleware,
     routing::{delete, get, patch, post},
@@ -11,6 +11,7 @@ use serde::Deserialize;
 use super::{
     auth::{AllowedAuthMethods, auth_middleware},
     error::ApiError,
+    extract::{ApiJson, ApiQuery},
     pagination::{PagedQuery, PagedResponse},
 };
 
@@ -27,7 +28,7 @@ pub fn create_local_records_router(global: SharedGlobal) -> Router<SharedGlobal>
 }
 
 pub async fn list(
-    query: Query<PagedQuery>,
+    query: ApiQuery<PagedQuery>,
     global: State<SharedGlobal>,
 ) -> Result<Json<PagedResponse<LocalRecord>>, ApiError> {
     let top = query.top();
@@ -70,7 +71,7 @@ fn default_ttl() -> u32 {
 
 pub async fn add_record(
     global: State<SharedGlobal>,
-    Json(payload): Json<AddRecordPayload>,
+    ApiJson(payload): ApiJson<AddRecordPayload>,
 ) -> Result<StatusCode, ApiError> {
     global
         .local_records
@@ -84,12 +85,12 @@ pub struct IdPayload {
     id: i64,
 }
 
-pub async fn remove_record(global: State<SharedGlobal>, Json(payload): Json<IdPayload>) -> Result<(), ApiError> {
+pub async fn remove_record(global: State<SharedGlobal>, ApiJson(payload): ApiJson<IdPayload>) -> Result<(), ApiError> {
     global.local_records.remove_record(payload.id).await?;
     Ok(())
 }
 
-pub async fn toggle_record(global: State<SharedGlobal>, Json(payload): Json<IdPayload>) -> Result<(), ApiError> {
+pub async fn toggle_record(global: State<SharedGlobal>, ApiJson(payload): ApiJson<IdPayload>) -> Result<(), ApiError> {
     global.local_records.toggle_record(payload.id).await?;
     Ok(())
 }

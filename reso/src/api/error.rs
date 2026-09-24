@@ -1,6 +1,10 @@
 use std::borrow::Cow;
 
-use axum::{http::StatusCode, response::IntoResponse};
+use axum::{
+    extract::rejection::{JsonRejection, PathRejection, QueryRejection},
+    http::StatusCode,
+    response::IntoResponse,
+};
 use axum_extra::extract::CookieJar;
 use serde::Serialize;
 
@@ -102,6 +106,46 @@ impl From<ServiceError> for ApiError {
                 Self::server_error()
             }
         }
+    }
+}
+
+impl ApiError {
+    fn from_rejection(status_code: StatusCode, message: String) -> Self {
+        // don't leak axum internals to the client
+        if status_code.is_server_error() {
+            tracing::error!("extractor rejection: {message}");
+            return Self::server_error();
+        }
+        let error = match status_code {
+            StatusCode::UNSUPPORTED_MEDIA_TYPE => "unsupported_media_type",
+            StatusCode::UNPROCESSABLE_ENTITY => "unprocessable_entity",
+            StatusCode::PAYLOAD_TOO_LARGE => "payload_too_large",
+            _ => "bad_request",
+        };
+        Self {
+            status_code,
+            error: Cow::Borrowed(error),
+            message: Cow::Owned(message),
+            jar: None,
+        }
+    }
+}
+
+impl From<QueryRejection> for ApiError {
+    fn from(rejection: QueryRejection) -> Self {
+        Self::from_rejection(rejection.status(), rejection.body_text())
+    }
+}
+
+impl From<JsonRejection> for ApiError {
+    fn from(rejection: JsonRejection) -> Self {
+        Self::from_rejection(rejection.status(), rejection.body_text())
+    }
+}
+
+impl From<PathRejection> for ApiError {
+    fn from(rejection: PathRejection) -> Self {
+        Self::from_rejection(rejection.status(), rejection.body_text())
     }
 }
 
