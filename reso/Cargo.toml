@@ -2,7 +2,6 @@
 name = "reso"
 version = "0.4.1"
 edition = "2024"
-
 [dependencies]
 thiserror.workspace = true
 serde.workspace = true
@@ -34,7 +33,7 @@ uuid = { version = "1.23.4", features = ["v7", "serde"] }
 argon2 = { version = "0.5.3", features = ["default", "std"] }
 axum-extra = { version = "0.12.6", features = ["cookie"] }
 aes-gcm = "0.11.0"
-base64 = "0.22.1"
+base64 = "0.23.1"
 serde_json = "1.0.150"
 tower-http = { version = "0.7.0", features = ["cors"] }
 futures.workspace = true
@@ -45,12 +44,13 @@ tokio-stream = { version = "0.1.18", features = ["full"] }
 dotenvy = "0.15.7"
 url = { version = "2.5.8", features = ["serde"] }
 tokio-util = "0.7.18"
-deadpool-sqlite = "0.13.0"
-rusqlite = { version = "0.38.0", features = ["bundled", "uuid"] }
+deadpool-sqlite = "0.14.0"
+rusqlite = { version = "0.40.0", features = ["bundled", "uuid"] }
 time = "0.3.53"
 reqwest = { version = "0.13.4", features = ["stream"] }
 bitflags = "2.11.1"
 mimalloc = "0.1.52"
+
 
 [dev-dependencies]
 tempfile = "3.27.0"
