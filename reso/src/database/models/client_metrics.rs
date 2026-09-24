@@ -39,12 +39,16 @@ pub struct ClientMetrics {
 }
 
 impl ClientMetrics {
-    pub fn merge(&mut self, other: &Self) {
-        self.total_count += other.total_count;
-        self.blocked_count += other.blocked_count;
-        self.cached_count += other.cached_count;
-        self.error_count += other.error_count;
-        self.sum_duration += other.sum_duration;
+    pub fn empty(bucket_ts: i64, client: String) -> Self {
+        Self {
+            bucket_ts,
+            client,
+            total_count: 0,
+            blocked_count: 0,
+            cached_count: 0,
+            error_count: 0,
+            sum_duration: 0,
+        }
     }
 }
 
@@ -96,25 +100,10 @@ pub async fn metrics_totals(
 
 /// Batch upsert client metrics
 /// on conflict, the counts and duration will be accumulated.
-pub async fn batch_upsert(db: &MetricsDatabasePool, rows: &[ClientMetrics]) -> Result<(), DatabaseError> {
+pub async fn batch_upsert(db: &MetricsDatabasePool, rows: Vec<ClientMetrics>) -> Result<(), DatabaseError> {
     if rows.is_empty() {
         return Ok(());
     }
-
-    let owned: Vec<_> = rows
-        .iter()
-        .map(|r| {
-            (
-                r.bucket_ts,
-                r.client.clone(),
-                r.total_count,
-                r.blocked_count,
-                r.cached_count,
-                r.error_count,
-                r.sum_duration,
-            )
-        })
-        .collect();
 
     db.interact(move |c| {
         let tx = c.transaction()?;
@@ -129,8 +118,16 @@ pub async fn batch_upsert(db: &MetricsDatabasePool, rows: &[ClientMetrics]) -> R
                      error_count = error_count + excluded.error_count,
                      sum_duration = sum_duration + excluded.sum_duration",
             )?;
-            for (bucket_ts, client, total, blocked, cached, errors, duration) in &owned {
-                stmt.execute(params![bucket_ts, client, total, blocked, cached, errors, duration])?;
+            for r in &rows {
+                stmt.execute(params![
+                    r.bucket_ts,
+                    r.client,
+                    r.total_count,
+                    r.blocked_count,
+                    r.cached_count,
+                    r.error_count,
+                    r.sum_duration
+                ])?;
             }
         }
         tx.commit()?;
@@ -322,9 +319,18 @@ mod tests {
     #[tokio::test]
     async fn batch_upsert_accumulates_on_conflict() {
         let db = setup_metrics_test_db().await.unwrap();
-        let rows = vec![make_client_metrics(1000, "192.168.1.1", 10, 2, 3, 1, 500)];
-        batch_upsert(&db.conn, &rows).await.unwrap();
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(
+            &db.conn,
+            vec![make_client_metrics(1000, "192.168.1.1", 10, 2, 3, 1, 500)],
+        )
+        .await
+        .unwrap();
+        batch_upsert(
+            &db.conn,
+            vec![make_client_metrics(1000, "192.168.1.1", 10, 2, 3, 1, 500)],
+        )
+        .await
+        .unwrap();
 
         let result = list_range_client_metrics(&db.conn, 0, 2000).await.unwrap();
         assert_eq!(result.len(), 1);
@@ -343,7 +349,7 @@ mod tests {
             make_client_metrics(2000, "a", 1, 0, 0, 0, 10),
             make_client_metrics(3000, "a", 1, 0, 0, 0, 10),
         ];
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, rows).await.unwrap();
 
         let result = list_range_client_metrics(&db.conn, 1500, 2500).await.unwrap();
         assert_eq!(result.len(), 1);
@@ -358,7 +364,7 @@ mod tests {
             make_client_metrics(2000, "a", 5, 1, 1, 0, 50),
             make_client_metrics(1000, "b", 99, 9, 9, 9, 999),
         ];
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, rows).await.unwrap();
 
         let result = metrics_totals(&db.conn, Some("a".to_string()), 0).await.unwrap();
         assert_eq!(result.total_count, 15);
@@ -375,7 +381,7 @@ mod tests {
             make_client_metrics(1000, "a", 100, 0, 0, 0, 10),
             make_client_metrics(2000, "a", 5, 0, 0, 0, 10),
         ];
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, rows).await.unwrap();
 
         let result = metrics_totals(&db.conn, Some("a".to_string()), 1500).await.unwrap();
         assert_eq!(result.total_count, 5);
@@ -385,7 +391,7 @@ mod tests {
     async fn metrics_totals_client_returns_zeros_for_unknown_client() {
         let db = setup_metrics_test_db().await.unwrap();
         let rows = vec![make_client_metrics(1000, "a", 10, 0, 0, 0, 100)];
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, rows).await.unwrap();
 
         let result = metrics_totals(&db.conn, Some("unknown".to_string()), 0).await.unwrap();
         assert_eq!(result.total_count, 0);
@@ -400,7 +406,7 @@ mod tests {
             make_client_metrics(2000, "a", 5, 1, 1, 0, 50),
             make_client_metrics(1000, "b", 7, 0, 2, 2, 70),
         ];
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, rows).await.unwrap();
 
         let result = metrics_totals(&db.conn, None, 0).await.unwrap();
         assert_eq!(result.total_count, 22);
@@ -430,7 +436,7 @@ mod tests {
             make_client_metrics(1000, "high", 20, 0, 0, 0, 10),
             make_client_metrics(1000, "mid", 10, 0, 0, 0, 10),
         ];
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, rows).await.unwrap();
 
         let result = top_clients(&db.conn, 0, 10).await.unwrap();
         assert_eq!(result.len(), 3);
@@ -447,7 +453,7 @@ mod tests {
             make_client_metrics(1000, "a", 10, 0, 0, 0, 10),
             make_client_metrics(2000, "a", 15, 0, 0, 0, 10),
         ];
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, rows).await.unwrap();
 
         let result = top_clients(&db.conn, 0, 10).await.unwrap();
         assert_eq!(result.len(), 1);
@@ -461,7 +467,7 @@ mod tests {
             make_client_metrics(1000, "a", 100, 0, 0, 0, 10),
             make_client_metrics(2000, "a", 5, 0, 0, 0, 10),
         ];
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, rows).await.unwrap();
 
         let result = top_clients(&db.conn, 1500, 10).await.unwrap();
         assert_eq!(result[0].1, 5);
@@ -475,7 +481,7 @@ mod tests {
             make_client_metrics(1000, "b", 5, 1, 0, 0, 50),
             make_client_metrics(2000, "a", 3, 0, 1, 0, 30),
         ];
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, rows).await.unwrap();
 
         // width 1 keeps each bucket_ts separate, so this only checks clients are summed
         let result = timeline(&db.conn, 0, 1).await.unwrap();
@@ -500,7 +506,7 @@ mod tests {
             make_client_metrics(60_000, "a", 5, 0, 0, 0, 0),
             make_client_metrics(350_000, "a", 2, 0, 0, 0, 0),
         ];
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, rows).await.unwrap();
 
         // with a 5 min width the first two fall in slot 0, the third in slot 300_000
         let result = timeline(&db.conn, 0, 5 * 60_000).await.unwrap();
@@ -522,7 +528,7 @@ mod tests {
             make_client_metrics(HOUR_MS + MINUTE_MS, "a", 10, 2, 3, 1, 100),
             make_client_metrics(HOUR_MS + 2 * MINUTE_MS, "a", 5, 1, 1, 0, 50),
         ];
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, rows).await.unwrap();
 
         compress_before(&db.conn, HOUR_MS * 3, HOUR_MS).await.unwrap();
 
@@ -537,7 +543,7 @@ mod tests {
         let db = setup_metrics_test_db().await.unwrap();
 
         let rows = vec![make_client_metrics(HOUR_MS + MINUTE_MS, "a", 10, 2, 3, 1, 100)];
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, rows).await.unwrap();
 
         compress_before(&db.conn, HOUR_MS * 3, HOUR_MS).await.unwrap();
         compress_before(&db.conn, HOUR_MS * 3, HOUR_MS).await.unwrap();
@@ -555,7 +561,7 @@ mod tests {
             make_client_metrics(DAY_MS + HOUR_MS, "a", 10, 2, 3, 1, 100),
             make_client_metrics(DAY_MS + 2 * HOUR_MS, "a", 5, 1, 1, 0, 50),
         ];
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, rows).await.unwrap();
 
         compress_before(&db.conn, DAY_MS * 3, DAY_MS).await.unwrap();
 

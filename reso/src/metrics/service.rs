@@ -208,41 +208,30 @@ impl MetricsService {
             return;
         }
 
-        let mut client_map: HashMap<(i64, String), ClientMetrics> = HashMap::with_capacity(self.batch.len());
-        let mut domain_map: HashMap<(i64, String), DomainMetrics> = HashMap::with_capacity(self.batch.len());
+        let mut client_map: HashMap<(i64, &str), ClientMetrics> = HashMap::with_capacity(self.batch.len());
+        let mut domain_map: HashMap<(i64, &str), DomainMetrics> = HashMap::with_capacity(self.batch.len());
 
         for event in &self.batch {
             // floor to nearest bucket interval
             let bucket_ts = (event.ts_ms / Self::BUCKET_INTERVAL_MS) * Self::BUCKET_INTERVAL_MS;
+            let blocked = event.blocked == Some(true);
 
-            let is_error = event.kind == "error";
-            let client_metrics = ClientMetrics {
-                bucket_ts,
-                client: event.client.clone(),
-                total_count: 1,
-                blocked_count: if event.blocked == Some(true) { 1 } else { 0 },
-                cached_count: if event.cache_hit == Some(true) { 1 } else { 0 },
-                error_count: if is_error { 1 } else { 0 },
-                sum_duration: event.dur_ms,
-            };
+            let m = client_map
+                .entry((bucket_ts, event.client.as_str()))
+                .or_insert_with(|| ClientMetrics::empty(bucket_ts, event.client.clone()));
 
-            client_map
-                .entry((bucket_ts, event.client.clone()))
-                .and_modify(|m| m.merge(&client_metrics))
-                .or_insert(client_metrics);
+            m.total_count += 1;
+            m.blocked_count += blocked as i64;
+            m.cached_count += (event.cache_hit == Some(true)) as i64;
+            m.error_count += (event.kind == "error") as i64;
+            m.sum_duration += event.dur_ms;
 
             if let Some(qname) = &event.qname {
-                let domain_metrics = DomainMetrics {
-                    blocked_count: if event.blocked == Some(true) { 1 } else { 0 },
-                    bucket_ts,
-                    qname: qname.clone(),
-                    total_count: 1,
-                };
-
-                domain_map
-                    .entry((bucket_ts, qname.clone()))
-                    .and_modify(|m| m.merge(&domain_metrics))
-                    .or_insert(domain_metrics);
+                let m = domain_map
+                    .entry((bucket_ts, qname.as_str()))
+                    .or_insert_with(|| DomainMetrics::empty(bucket_ts, qname.clone()));
+                m.total_count += 1;
+                m.blocked_count += blocked as i64;
             }
         }
 
@@ -251,14 +240,15 @@ impl MetricsService {
 
         let client_buckets: Vec<_> = client_map.into_values().collect();
         let domain_buckets: Vec<_> = domain_map.into_values().collect();
+        let (client_len, domain_len) = (client_buckets.len(), domain_buckets.len());
 
-        match client_metrics::batch_upsert(&self.connection, &client_buckets).await {
-            Ok(()) => tracing::debug!("flushed {} client metric buckets", client_buckets.len()),
+        match client_metrics::batch_upsert(&self.connection, client_buckets).await {
+            Ok(()) => tracing::debug!("flushed {client_len} client metric buckets"),
             Err(e) => tracing::error!("failed to upsert client metrics: {}", e),
         }
 
-        match domain_metrics::batch_upsert(&self.connection, &domain_buckets).await {
-            Ok(()) => tracing::debug!("flushed {} domain metric buckets", domain_buckets.len()),
+        match domain_metrics::batch_upsert(&self.connection, domain_buckets).await {
+            Ok(()) => tracing::debug!("flushed {domain_len} domain metric buckets"),
             Err(e) => tracing::error!("failed to upsert domain metrics: {}", e),
         }
 

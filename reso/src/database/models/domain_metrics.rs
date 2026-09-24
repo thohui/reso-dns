@@ -14,22 +14,21 @@ pub struct DomainMetrics {
 }
 
 impl DomainMetrics {
-    pub fn merge(&mut self, other: &Self) {
-        self.total_count += other.total_count;
-        self.blocked_count += other.blocked_count;
+    pub fn empty(bucket_ts: i64, qname: String) -> Self {
+        Self {
+            bucket_ts,
+            qname,
+            total_count: 0,
+            blocked_count: 0,
+        }
     }
 }
 
 /// Batch upsert a list of domain metrics. On conflict of (bucket_ts, qname), the counts will be summed.
-pub async fn batch_upsert(db: &MetricsDatabasePool, rows: &[DomainMetrics]) -> Result<(), DatabaseError> {
+pub async fn batch_upsert(db: &MetricsDatabasePool, rows: Vec<DomainMetrics>) -> Result<(), DatabaseError> {
     if rows.is_empty() {
         return Ok(());
     }
-
-    let owned: Vec<_> = rows
-        .iter()
-        .map(|r| (r.bucket_ts, r.qname.clone(), r.total_count, r.blocked_count))
-        .collect();
 
     db.interact(move |c| {
         let tx = c.transaction()?;
@@ -41,8 +40,8 @@ pub async fn batch_upsert(db: &MetricsDatabasePool, rows: &[DomainMetrics]) -> R
                      total_count = total_count + excluded.total_count,
                      blocked_count = blocked_count + excluded.blocked_count",
             )?;
-            for (bucket_ts, qname, total, blocked) in &owned {
-                stmt.execute(params![bucket_ts, qname, total, blocked])?;
+            for r in &rows {
+                stmt.execute(params![r.bucket_ts, r.qname, r.total_count, r.blocked_count])?;
             }
         }
         tx.commit()?;
@@ -194,9 +193,12 @@ mod tests {
     #[tokio::test]
     async fn batch_upsert_accumulates_on_conflict() {
         let db = setup_metrics_test_db().await.unwrap();
-        let rows = vec![make_domain_metrics(1000, "example.com", 10, 3)];
-        batch_upsert(&db.conn, &rows).await.unwrap();
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, vec![make_domain_metrics(1000, "example.com", 10, 3)])
+            .await
+            .unwrap();
+        batch_upsert(&db.conn, vec![make_domain_metrics(1000, "example.com", 10, 3)])
+            .await
+            .unwrap();
 
         let result = list_range(&db.conn, 0, 2000).await.unwrap();
         assert_eq!(result.len(), 1);
@@ -212,7 +214,7 @@ mod tests {
             make_domain_metrics(2000, "a.com", 1, 0),
             make_domain_metrics(3000, "a.com", 1, 0),
         ];
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, rows).await.unwrap();
 
         let result = list_range(&db.conn, 1500, 2500).await.unwrap();
         assert_eq!(result.len(), 1);
@@ -227,7 +229,7 @@ mod tests {
             make_domain_metrics(1000, "high.com", 20, 0),
             make_domain_metrics(1000, "mid.com", 10, 0),
         ];
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, rows).await.unwrap();
 
         let result = top_domains(&db.conn, 0, 10).await.unwrap();
         assert_eq!(result.len(), 3);
@@ -244,7 +246,7 @@ mod tests {
             make_domain_metrics(1000, "a.com", 10, 0),
             make_domain_metrics(2000, "a.com", 15, 0),
         ];
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, rows).await.unwrap();
 
         let result = top_domains(&db.conn, 0, 10).await.unwrap();
         assert_eq!(result.len(), 1);
@@ -259,7 +261,7 @@ mod tests {
             make_domain_metrics(1000, "blocked.com", 10, 8),
             make_domain_metrics(1000, "some-blocked.com", 5, 2),
         ];
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, rows).await.unwrap();
 
         let result = top_blocked(&db.conn, 0, 10).await.unwrap();
         assert_eq!(result.len(), 2);
@@ -279,7 +281,7 @@ mod tests {
             make_domain_metrics(HOUR_MS + MINUTE_MS, "a.com", 10, 3),
             make_domain_metrics(HOUR_MS + 2 * MINUTE_MS, "a.com", 5, 2),
         ];
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, rows).await.unwrap();
 
         compress_before(&db.conn, HOUR_MS * 3, HOUR_MS).await.unwrap();
 
@@ -294,7 +296,7 @@ mod tests {
         let db = setup_metrics_test_db().await.unwrap();
 
         let rows = vec![make_domain_metrics(HOUR_MS + MINUTE_MS, "a.com", 10, 3)];
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, rows).await.unwrap();
 
         compress_before(&db.conn, HOUR_MS * 3, HOUR_MS).await.unwrap();
         compress_before(&db.conn, HOUR_MS * 3, HOUR_MS).await.unwrap();
@@ -312,7 +314,7 @@ mod tests {
             make_domain_metrics(DAY_MS + HOUR_MS, "a.com", 10, 3),
             make_domain_metrics(DAY_MS + 2 * HOUR_MS, "a.com", 5, 2),
         ];
-        batch_upsert(&db.conn, &rows).await.unwrap();
+        batch_upsert(&db.conn, rows).await.unwrap();
 
         compress_before(&db.conn, DAY_MS * 3, DAY_MS).await.unwrap();
 
