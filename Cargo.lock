@@ -1743,7 +1743,7 @@ dependencies = [
 
 [[package]]
 name = "reso"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "aes-gcm",
  "anyhow",
