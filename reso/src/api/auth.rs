@@ -1,9 +1,8 @@
 use axum::{
     Extension, Json, Router,
     extract::{Request, State},
-    http::StatusCode,
-    middleware as axum_middleware,
-    middleware::Next,
+    http::{HeaderName, StatusCode},
+    middleware::{self as axum_middleware, Next},
     response::{IntoResponse, Response},
     routing::post,
 };
@@ -17,6 +16,8 @@ use crate::{
 };
 
 use super::{cookie, error::ApiError, extract::ApiJson};
+
+const API_KEY_HEADER: HeaderName = HeaderName::from_static("x-reso-api-key");
 
 bitflags::bitflags! {
     /// Allowed authentication methods for API routes.
@@ -131,39 +132,37 @@ pub async fn auth_middleware(
     mut req: Request,
     next: Next,
 ) -> Result<Response, ApiError> {
+    if allowed.contains(AllowedAuthMethods::ApiKey) {
+        let headers = req.headers();
+
+        let token = headers
+            .get(API_KEY_HEADER)
+            .and_then(|v| v.to_str().ok())
+            .or_else(|| {
+                headers
+                    .get(axum::http::header::AUTHORIZATION)
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|v| v.strip_prefix("Bearer "))
+            })
+            .map(|s| s.to_string());
+
+        if let Some(token) = token {
+            let key = try_api_key_auth(&global, token).await?;
+            req.extensions_mut().insert(key);
+            return Ok(next.run(req).await);
+        }
+    }
+
     if allowed.contains(AllowedAuthMethods::Session) {
         let cookie_value = CookieJar::from_headers(req.headers())
             .get(cookie::SESSION_COOKIE_KEY)
             .map(|c| c.value().to_string());
 
         if let Some(value) = cookie_value {
-            match try_session_auth(&global, value).await {
-                Ok((session_id, user_id)) => {
-                    req.extensions_mut().insert(session_id);
-                    req.extensions_mut().insert(user_id);
-                    return Ok(next.run(req).await);
-                }
-                Err(e) => return Err(e),
-            }
-        }
-    }
-
-    if allowed.contains(AllowedAuthMethods::ApiKey) {
-        let bearer = req
-            .headers()
-            .get(axum::http::header::AUTHORIZATION)
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.strip_prefix("Bearer "))
-            .map(|s| s.to_string());
-
-        if let Some(bearer) = bearer {
-            match try_api_key_auth(&global, bearer).await {
-                Ok(key) => {
-                    req.extensions_mut().insert(key);
-                    return Ok(next.run(req).await);
-                }
-                Err(e) => return Err(e),
-            }
+            let (session_id, user_id) = try_session_auth(&global, value).await?;
+            req.extensions_mut().insert(session_id);
+            req.extensions_mut().insert(user_id);
+            return Ok(next.run(req).await);
         }
     }
 
@@ -180,7 +179,7 @@ async fn try_session_auth(
     Ok((session_id, user_id))
 }
 
-async fn try_api_key_auth(global: &SharedGlobal, bearer: String) -> Result<EntityId<DbApiKey>, ApiError> {
-    let id = global.api_keys.verify_api_key(&bearer).await?;
+async fn try_api_key_auth(global: &SharedGlobal, token: String) -> Result<EntityId<DbApiKey>, ApiError> {
+    let id = global.api_keys.verify_api_key(&token).await?;
     Ok(id)
 }
