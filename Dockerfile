@@ -1,5 +1,5 @@
 # Build stage, needs Rust + Node.js for embedding the web UI assets into the binary
-FROM rust:1.93-bookworm AS builder
+FROM rust:1.95-bookworm AS builder
 
 # build.rs runs pnpm install + build
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
