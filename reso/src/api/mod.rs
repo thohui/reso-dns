@@ -3,21 +3,14 @@ use std::net::SocketAddr;
 use activity::create_activity_router;
 use api_keys::create_api_keys_router;
 use auth::create_auth_router;
-use axum::{
-    Router,
-    body::Body,
-    http::{
-        HeaderValue, Response, StatusCode, Uri,
-        header::{self, AUTHORIZATION, CONTENT_TYPE},
-    },
-    response::IntoResponse,
-};
+use axum::{Router, ServiceExt, extract::Request};
 use config::create_config_router;
 use domain_rules::create_domain_rules_router;
+use error::ApiError;
 use list_subscriptions::create_list_subscriptions_router;
 use local_records::create_local_records_router;
 use stats::create_stats_router;
-use tower_http::cors::{AllowMethods, CorsLayer};
+use tower_http::normalize_path::NormalizePath;
 
 mod activity;
 mod api_keys;
@@ -47,7 +40,8 @@ pub async fn serve_web(
         .nest("/list-subscriptions", create_list_subscriptions_router(global.clone()))
         .nest("/local-records", create_local_records_router(global.clone()))
         .nest("/config", create_config_router(global.clone()))
-        .nest("/api-keys", create_api_keys_router(global.clone()));
+        .nest("/api-keys", create_api_keys_router(global.clone()))
+        .fallback(|| async { ApiError::not_found().with_message("Route not found") });
 
     let mut app = Router::new().nest("/api", api).with_state(global);
 
@@ -59,8 +53,16 @@ pub async fn serve_web(
     // Add support for vite dev server in debug mode.
     #[cfg(debug_assertions)]
     {
+        use axum::http::{
+            HeaderValue,
+            header::{AUTHORIZATION, CONTENT_TYPE},
+        };
+        use tower_http::cors::{AllowMethods, CorsLayer};
+
+        let origin = HeaderValue::from_static("http://localhost:5173");
+
         let cors_layer = CorsLayer::new()
-            .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
+            .allow_origin(origin)
             .allow_credentials(true)
             .allow_methods(AllowMethods::mirror_request())
             .allow_headers([AUTHORIZATION, CONTENT_TYPE]);
@@ -69,8 +71,10 @@ pub async fn serve_web(
 
     tracing::info!("HTTP listening on {}", address);
 
+    let app = NormalizePath::trim_trailing_slash(app);
+
     let listener = tokio::net::TcpListener::bind(address).await?;
-    axum::serve(listener, app)
+    axum::serve(listener, ServiceExt::<Request>::into_make_service(app))
         .with_graceful_shutdown(shutdown.cancelled_owned())
         .await?;
 
@@ -85,10 +89,15 @@ pub async fn serve_web(
 pub struct Assets;
 
 #[cfg(feature = "embed-frontend")]
+use axum::{
+    http::{StatusCode, Uri, header},
+    response::{IntoResponse, Response},
+};
+#[cfg(feature = "embed-frontend")]
 use mime_guess::from_path;
 
 #[cfg(feature = "embed-frontend")]
-async fn static_handler(uri: Uri) -> Response<Body> {
+async fn static_handler(uri: Uri) -> Response {
     let mut path = uri.path().trim_start_matches('/');
 
     let has_extension = path.rsplit_once('.').is_some();
@@ -99,24 +108,20 @@ async fn static_handler(uri: Uri) -> Response<Body> {
         path = "index.html";
     }
 
-    match Assets::get(path) {
-        Some(content) => {
-            let mime = from_path(path).first_or_octet_stream();
+    let Some(content) = Assets::get(path) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
 
-            // cache files
-            let cache = if path.contains('.') && !path.ends_with(".html") {
-                "public, max-age=31536000, immutable"
-            } else {
-                "no-cache"
-            };
+    let mime = from_path(path).first_or_octet_stream();
 
-            Response::builder()
-                .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, HeaderValue::from_str(mime.as_ref()).unwrap())
-                .header(header::CACHE_CONTROL, cache)
-                .body(Body::from(content.data))
-                .unwrap()
-        }
-        None => StatusCode::NOT_FOUND.into_response(),
-    }
+    // cache files
+    let cache = if path.contains('.') && !path.ends_with(".html") {
+        "public, max-age=31536000, immutable"
+    } else {
+        "no-cache"
+    };
+
+    let headers = [(header::CONTENT_TYPE, mime.as_ref()), (header::CACHE_CONTROL, cache)];
+
+    (headers, content.data).into_response()
 }

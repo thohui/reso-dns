@@ -35,7 +35,7 @@ axum-extra = { version = "0.12.6", features = ["cookie"] }
 aes-gcm = "0.11.0"
 base64.workspace = true
 serde_json.workspace = true
-tower-http = { version = "0.7.0", features = ["cors"] }
+tower-http = { version = "0.7.0", features = ["cors", "normalize-path"] }
 futures.workspace = true
 rust-embed = { version = "8.11.0", features = ["axum"], optional = true }
 mime_guess = { version = "2.0.5" }
