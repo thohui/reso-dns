@@ -1,5 +1,4 @@
 import { Box, HStack, Icon, Text, VStack } from '@chakra-ui/react';
-import { Zap } from 'lucide-react';
 import { useRecentActivity } from '@/hooks/dashboard/useRecentActivity';
 import type { Activity } from '@/lib/api/activity';
 import { getStatusInfo } from '@/lib/status-info';
@@ -22,12 +21,9 @@ export function RecentActivity() {
 				borderBottomWidth='1px'
 				borderColor='border'
 			>
-				<HStack gap='2'>
-					<Icon as={Zap} boxSize='4' color='accent.subtle' />
-					<Text fontWeight='500' fontSize='sm'>
-						Recent Activity
-					</Text>
-				</HStack>
+				<Text fontWeight='500' fontSize='sm'>
+					Recent Activity
+				</Text>
 			</HStack>
 			<VStack gap='0' align='stretch' overflowX='auto'>
 				{activities?.items.slice(0, 5).map((activity, i) => (

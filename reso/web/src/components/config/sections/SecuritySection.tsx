@@ -1,17 +1,12 @@
 import { ConfigField } from '@/components/config/ConfigField';
 import { ConfigSection } from '@/components/config/ConfigSection';
-import { Shield } from 'lucide-react';
 import { type Control } from 'react-hook-form';
 import { ConfigSwitch } from './ConfigSwitch';
 import type { FormValues } from '@/lib/config/schema';
 
 export function SecuritySection({ control }: { control: Control<FormValues> }) {
 	return (
-		<ConfigSection
-			title='Security'
-			description='Options to block certain types of queries for improved privacy and security.'
-			icon={Shield}
-		>
+		<ConfigSection title='Security'>
 			<ConfigField
 				label='Block iCloud Private Relay'
 				description='Prevents Apple devices from bypassing Reso by routing DNS queries through iCloud Private Relay.'

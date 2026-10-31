@@ -1,21 +1,13 @@
-import { Box, HStack, Icon, Text } from '@chakra-ui/react';
-import type { Activity } from 'lucide-react';
+import { Box, Text } from '@chakra-ui/react';
 
 interface Props {
 	label: string;
 	value: string | number;
-	icon: typeof Activity;
 	accentColor: string;
 	isLoading?: boolean;
 }
 
-export function StatCard({
-	label,
-	value,
-	icon,
-	accentColor,
-	isLoading,
-}: Props) {
+export function StatCard({ label, value, accentColor, isLoading }: Props) {
 	return (
 		<Box
 			bg='bg.panel'
@@ -38,21 +30,17 @@ export function StatCard({
 				opacity='0.5'
 			/>
 
-			<HStack justify='space-between' mb='3' gap='2'>
-				<Text
-					color='fg.subtle'
-					fontSize='xs'
-					fontWeight='500'
-					textTransform='uppercase'
-					letterSpacing='0.05em'
-					flex='1'
-					minW='0'
-					truncate
-				>
-					{label}
-				</Text>
-				<Icon as={icon} boxSize='4' color='fg.faint' flexShrink={0} />
-			</HStack>
+			<Text
+				color='fg.subtle'
+				fontSize='xs'
+				fontWeight='500'
+				textTransform='uppercase'
+				letterSpacing='0.05em'
+				mb='3'
+				truncate
+			>
+				{label}
+			</Text>
 			<Text
 				fontSize='2xl'
 				fontWeight='600'

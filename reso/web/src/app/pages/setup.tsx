@@ -4,14 +4,12 @@ import {
 	Field,
 	Group,
 	Heading,
-	Icon,
 	Input,
 	Text,
 	VStack,
 } from '@chakra-ui/react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
-import { Lock, ShieldCheck, User } from 'lucide-react';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router';
@@ -79,18 +77,6 @@ export default function SetupPage() {
 			position='relative'
 		>
 			<Box
-				position='absolute'
-				top='50%'
-				left='50%'
-				transform='translate(-50%, -50%)'
-				w='600px'
-				h='600px'
-				borderRadius='full'
-				bg='radial-gradient(circle, rgba(233, 30, 120, 0.06) 0%, transparent 70%)'
-				pointerEvents='none'
-			/>
-
-			<Box
 				w='full'
 				maxW='380px'
 				bg='bg.panel'
@@ -146,21 +132,10 @@ export default function SetupPage() {
 							>
 								Username
 							</Field.Label>
-							<Group w='full' position='relative'>
-								<Box
-									position='absolute'
-									left='3'
-									top='50%'
-									transform='translateY(-50%)'
-									zIndex='1'
-									pointerEvents='none'
-								>
-									<Icon as={User} boxSize='4' color='fg.faint' />
-								</Box>
+							<Group w='full'>
 								<Input
 									type='text'
 									placeholder='Choose a username'
-									pl='10'
 									bg='bg.input'
 									borderColor='border.input'
 									borderRadius='lg'
@@ -186,21 +161,10 @@ export default function SetupPage() {
 							>
 								Password
 							</Field.Label>
-							<Group w='full' position='relative'>
-								<Box
-									position='absolute'
-									left='3'
-									top='50%'
-									transform='translateY(-50%)'
-									zIndex='1'
-									pointerEvents='none'
-								>
-									<Icon as={Lock} boxSize='4' color='fg.faint' />
-								</Box>
+							<Group w='full'>
 								<Input
 									type='password'
 									placeholder='Minimum 8 characters'
-									pl='10'
 									bg='bg.input'
 									borderColor='border.input'
 									borderRadius='lg'
@@ -226,21 +190,10 @@ export default function SetupPage() {
 							>
 								Confirm Password
 							</Field.Label>
-							<Group w='full' position='relative'>
-								<Box
-									position='absolute'
-									left='3'
-									top='50%'
-									transform='translateY(-50%)'
-									zIndex='1'
-									pointerEvents='none'
-								>
-									<Icon as={ShieldCheck} boxSize='4' color='fg.faint' />
-								</Box>
+							<Group w='full'>
 								<Input
 									type='password'
 									placeholder='Repeat your password'
-									pl='10'
 									bg='bg.input'
 									borderColor='border.input'
 									borderRadius='lg'
@@ -275,9 +228,6 @@ export default function SetupPage() {
 						</Button>
 					</VStack>
 				</form>
-				<Text color='fg.faint' fontSize='xs' textAlign='center' mt='6'>
-					Initial setup
-				</Text>
 			</Box>
 		</Box>
 	);

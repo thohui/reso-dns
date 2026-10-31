@@ -1,5 +1,5 @@
 import { Box, Button, Heading, Icon, Text, VStack } from '@chakra-ui/react';
-import { ArrowLeft, SearchX } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router';
 
 export default function NotFoundPage() {
@@ -14,20 +14,7 @@ export default function NotFoundPage() {
 			px='4'
 			position='relative'
 		>
-			<Box
-				position='absolute'
-				top='50%'
-				left='50%'
-				transform='translate(-50%, -50%)'
-				w='600px'
-				h='600px'
-				borderRadius='full'
-				bg='radial-gradient(circle, rgba(233, 30, 120, 0.06) 0%, transparent 70%)'
-				pointerEvents='none'
-			/>
-
 			<VStack gap='6' position='relative'>
-				<Icon as={SearchX} boxSize='16' color='accent.fg' />
 				<VStack gap='2'>
 					<Heading
 						size='lg'

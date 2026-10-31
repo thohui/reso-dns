@@ -1,14 +1,12 @@
-import { Box, Heading, HStack, Icon, Text } from '@chakra-ui/react';
-import type { LucideIcon } from 'lucide-react';
+import { Box, Heading, Text } from '@chakra-ui/react';
 
 export interface Props {
 	title: string;
 	description?: string;
-	icon: LucideIcon;
 	children: React.ReactNode;
 }
 
-export function ConfigSection({ title, description, icon, children }: Props) {
+export function ConfigSection({ title, description, children }: Props) {
 	return (
 		<Box
 			bg='bg.panel'
@@ -19,10 +17,9 @@ export function ConfigSection({ title, description, icon, children }: Props) {
 			mb='6'
 		>
 			<Box px={6} pt={6} pb={4}>
-				<HStack gap={3} mb={1}>
-					<Icon as={icon} boxSize={5} color='accent.fg' />
-					<Heading size='md'>{title}</Heading>
-				</HStack>
+				<Heading size='md' mb={1}>
+					{title}
+				</Heading>
 				{description && (
 					<Text color='fg.muted' fontSize='sm'>
 						{description}

@@ -1,5 +1,4 @@
 import { Box, Grid } from '@chakra-ui/react';
-import { AlertCircle, Ban, DatabaseBackup, Globe } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { LogsGrid, type SearchField } from '@/components/logs/LogsGrid';
@@ -79,26 +78,22 @@ export default function LogsPage() {
 				<StatCard
 					label='Total Queries'
 					value={liveData?.total ?? '—'}
-					icon={Globe}
-					accentColor='status.info'
+					accentColor='accent'
 				/>
 				<StatCard
 					label='Blocked'
 					value={liveData?.blocked ?? '—'}
-					icon={Ban}
-					accentColor='status.error'
+					accentColor='status.blocked'
 				/>
 				<StatCard
 					label='Cached'
 					value={liveData?.cached ?? '—'}
-					icon={DatabaseBackup}
-					accentColor='status.success'
+					accentColor='status.cached'
 				/>
 				<StatCard
 					label='Errors'
 					value={liveData?.errors ?? '—'}
-					icon={AlertCircle}
-					accentColor='status.warn'
+					accentColor='status.error'
 				/>
 			</Grid>
 			<Box flex='1' minH='0' display='flex' flexDir='column'>

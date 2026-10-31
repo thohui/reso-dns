@@ -4,14 +4,12 @@ import {
 	Field,
 	Group,
 	Heading,
-	Icon,
 	Input,
 	Text,
 	VStack,
 } from '@chakra-ui/react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
-import { Lock, User } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router';
 import z from 'zod';
@@ -62,18 +60,6 @@ export default function LoginPage() {
 			position='relative'
 		>
 			<Box
-				position='absolute'
-				top='50%'
-				left='50%'
-				transform='translate(-50%, -50%)'
-				w='600px'
-				h='600px'
-				borderRadius='full'
-				bg='radial-gradient(circle, rgba(233, 30, 120, 0.06) 0%, transparent 70%)'
-				pointerEvents='none'
-			/>
-
-			<Box
 				w='full'
 				maxW='380px'
 				bg='bg.panel'
@@ -96,9 +82,6 @@ export default function LoginPage() {
 						>
 							[ResoDNS]
 						</Heading>
-						<Text color='fg.muted' fontSize='sm' mt='1'>
-							Network-wide DNS Protection
-						</Text>
 					</Box>
 				</VStack>
 
@@ -114,21 +97,10 @@ export default function LoginPage() {
 							>
 								Username
 							</Field.Label>
-							<Group w='full' position='relative'>
-								<Box
-									position='absolute'
-									left='3'
-									top='50%'
-									transform='translateY(-50%)'
-									zIndex='1'
-									pointerEvents='none'
-								>
-									<Icon as={User} boxSize='4' color='fg.faint' />
-								</Box>
+							<Group w='full'>
 								<Input
 									type='text'
 									placeholder='Enter your username'
-									pl='10'
 									bg='bg.input'
 									borderColor='border.input'
 									borderRadius='lg'
@@ -156,21 +128,10 @@ export default function LoginPage() {
 							>
 								Password
 							</Field.Label>
-							<Group w='full' position='relative'>
-								<Box
-									position='absolute'
-									left='3'
-									top='50%'
-									transform='translateY(-50%)'
-									zIndex='1'
-									pointerEvents='none'
-								>
-									<Icon as={Lock} boxSize='4' color='fg.faint' />
-								</Box>
+							<Group w='full'>
 								<Input
 									type='password'
 									placeholder='Enter your password'
-									pl='10'
 									bg='bg.input'
 									borderColor='border.input'
 									borderRadius='lg'

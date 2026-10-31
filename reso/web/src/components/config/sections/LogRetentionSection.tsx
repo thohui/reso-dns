@@ -1,4 +1,3 @@
-import { FileText } from 'lucide-react';
 import { type Control, Controller } from 'react-hook-form';
 import { ConfigField } from '@/components/config/ConfigField';
 import { ConfigSection } from '@/components/config/ConfigSection';
@@ -12,11 +11,7 @@ export function LogRetentionSection({
 	control: Control<FormValues>;
 }) {
 	return (
-		<ConfigSection
-			title='Log Retention'
-			description='Configure activity log retention and cleanup.'
-			icon={FileText}
-		>
+		<ConfigSection title='Log Retention'>
 			<ConfigField
 				label='Log Queries'
 				description='Record DNS query activity to the log.'

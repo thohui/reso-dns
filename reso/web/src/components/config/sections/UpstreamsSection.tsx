@@ -34,7 +34,6 @@ export function UpstreamsSection({
 		<ConfigSection
 			title='Upstream Servers'
 			description='DNS servers that Reso forwards queries to. Queries are distributed across servers in round-robin order.'
-			icon={Server}
 		>
 			{upstreams.length > 0 ? (
 				<Box

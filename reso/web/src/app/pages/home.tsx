@@ -1,6 +1,5 @@
 import { Box, Button, HStack } from '@chakra-ui/react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { AlertCircle, Ban, Clock, DatabaseBackup, Globe } from 'lucide-react';
 import { useMemo, useState, useTransition } from 'react';
 import { QueryTimeline } from '@/components/dashboard/QueryTimeline';
 import { RecentActivity } from '@/components/dashboard/RecentActivity';
@@ -91,35 +90,30 @@ export default function HomePage() {
 				<StatCard
 					label='Total Queries'
 					value={totals.total}
-					icon={Globe}
 					accentColor='accent'
 					isLoading={timelineLoading}
 				/>
 				<StatCard
 					label='Queries Blocked'
 					value={totals.blocked}
-					icon={Ban}
 					accentColor='accent'
 					isLoading={timelineLoading}
 				/>
 				<StatCard
 					label='Total Errors'
 					value={totals.errors}
-					icon={AlertCircle}
 					accentColor='accent'
 					isLoading={timelineLoading}
 				/>
 				<StatCard
 					label='Queries Cached'
 					value={totals.cached}
-					icon={DatabaseBackup}
 					accentColor='accent'
 					isLoading={timelineLoading}
 				/>
 				<StatCard
 					label='Average Response Time'
 					value={`${avgResponse} ms`}
-					icon={Clock}
 					accentColor='accent'
 					isLoading={timelineLoading}
 				/>

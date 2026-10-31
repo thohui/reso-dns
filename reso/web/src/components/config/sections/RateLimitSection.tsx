@@ -3,7 +3,6 @@ import { ConfigSection } from '@/components/config/ConfigSection';
 import { DurationInput } from '@/components/config/DurationInput';
 import type { FormValues } from '@/lib/config/schema';
 import { Field, Input } from '@chakra-ui/react';
-import { Shield } from 'lucide-react';
 import { type Control, Controller } from 'react-hook-form';
 import { ConfigSwitch } from './ConfigSwitch';
 
@@ -13,11 +12,7 @@ export function RateLimitSection({
 	control: Control<FormValues>;
 }) {
 	return (
-		<ConfigSection
-			title='Rate Limiting'
-			description='Limit the number of queries per client within a time window.'
-			icon={Shield}
-		>
+		<ConfigSection title='Rate Limiting'>
 			<ConfigField
 				label='Enabled'
 				description='Enable rate limiting for DNS queries.'

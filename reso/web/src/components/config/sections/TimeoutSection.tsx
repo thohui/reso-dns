@@ -1,13 +1,12 @@
 import { ConfigField } from '@/components/config/ConfigField';
 import { ConfigSection } from '@/components/config/ConfigSection';
 import { DurationInput } from '@/components/config/DurationInput';
-import { Timer } from 'lucide-react';
 import { Controller, type Control } from 'react-hook-form';
 import type { FormValues } from '@/lib/config/schema';
 
 export function TimeoutSection({ control }: { control: Control<FormValues> }) {
 	return (
-		<ConfigSection title='Timeout' icon={Timer}>
+		<ConfigSection title='Timeout'>
 			<ConfigField
 				label='Timeout'
 				description='Maximum upstream response wait time per query'
