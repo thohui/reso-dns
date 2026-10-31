@@ -1,4 +1,10 @@
-use crate::{database::models::local_record::LocalRecord, global::SharedGlobal};
+use crate::{
+    database::models::{
+        MatchType,
+        local_record::{self, LocalRecord},
+    },
+    global::SharedGlobal,
+};
 use axum::{
     Json, Router,
     extract::State,
@@ -37,14 +43,14 @@ pub async fn list(
     let db_top: i64 = top.try_into().map_err(|_| ApiError::bad_request())?;
     let db_skip: i64 = skip.try_into().map_err(|_| ApiError::bad_request())?;
 
-    let records = LocalRecord::list(&global.core_database, db_top, db_skip)
+    let records = local_record::list(&global.core_database, db_top, db_skip)
         .await
         .map_err(|e| {
             tracing::error!("failed to list local records: {:?}", e);
             ApiError::server_error()
         })?;
 
-    let count: u64 = LocalRecord::row_count(&global.core_database)
+    let count: u64 = local_record::row_count(&global.core_database)
         .await
         .map_err(|e| {
             tracing::error!("failed to get local record count: {:?}", e);
@@ -59,6 +65,8 @@ pub async fn list(
 #[derive(Deserialize)]
 pub struct AddRecordPayload {
     name: String,
+    #[serde(default = "default_match_type")]
+    match_type: MatchType,
     record_type: u16,
     value: String,
     #[serde(default = "default_ttl")]
@@ -69,13 +77,23 @@ fn default_ttl() -> u32 {
     300
 }
 
+fn default_match_type() -> MatchType {
+    MatchType::Exact
+}
+
 pub async fn add_record(
     global: State<SharedGlobal>,
     ApiJson(payload): ApiJson<AddRecordPayload>,
 ) -> Result<StatusCode, ApiError> {
     global
         .local_records
-        .add_record(&payload.name, payload.record_type, &payload.value, payload.ttl)
+        .add_record(
+            &payload.name,
+            payload.match_type,
+            payload.record_type,
+            &payload.value,
+            payload.ttl,
+        )
         .await?;
     Ok(StatusCode::CREATED)
 }

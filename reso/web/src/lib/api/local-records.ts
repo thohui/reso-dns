@@ -1,5 +1,8 @@
 import type { KyInstance } from 'ky';
+import type { MatchType } from './domain-rules';
 import type { PagedRequest, PagedResponse } from './pagination';
+
+export type LocalRecordMatchType = Extract<MatchType, 'exact' | 'wildcard'>;
 
 export class LocalRecords {
 	private httpClient: KyInstance;
@@ -17,6 +20,7 @@ export class LocalRecords {
 
 	public async create(record: {
 		name: string;
+		match_type: LocalRecordMatchType;
 		record_type: number;
 		value: string;
 		ttl?: number;
@@ -42,6 +46,7 @@ export class LocalRecords {
 export interface LocalRecord {
 	id: number;
 	name: string;
+	match_type: LocalRecordMatchType;
 	record_type: number;
 	value: string;
 	ttl: number;

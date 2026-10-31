@@ -1,5 +1,6 @@
 import {
 	Button,
+	chakra,
 	Dialog,
 	Field,
 	Heading,
@@ -12,16 +13,19 @@ import {
 } from '@chakra-ui/react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, X } from 'lucide-react';
+import { type ReactNode, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import z from 'zod';
 import { FormError } from '@/components/FormError';
 import { getErrorMessage } from '@/lib/api/error';
+import type { LocalRecordMatchType } from '@/lib/api/local-records';
 import { LOCAL_RECORD_TYPES } from '@/lib/dns';
 
 interface LocalRecordDialogProps {
 	onClose: () => void;
 	onSubmit: (record: {
 		name: string;
+		match_type: LocalRecordMatchType;
 		record_type: number;
 		value: string;
 		ttl?: number;
@@ -41,6 +45,39 @@ const schema = z.object({
 	ttl: z.coerce.number().int().min(1).optional(),
 });
 
+const matchTypeOptions: { value: LocalRecordMatchType; label: string }[] = [
+	{ value: 'exact', label: 'Exact' },
+	{ value: 'wildcard', label: 'Wildcard' },
+];
+
+function D({ children }: { children: ReactNode }) {
+	return (
+		<chakra.span fontFamily='monospace' color='fg' fontWeight='500'>
+			{children}
+		</chakra.span>
+	);
+}
+
+function getMatchDescription(
+	name: string,
+	matchType: LocalRecordMatchType,
+): ReactNode {
+	const d = name.trim().replace(/^\*\./, '') || 'myapp.home';
+	if (matchType === 'wildcard') {
+		return (
+			<>
+				Answers subdomains like <D>app.{d}</D> and <D>nas.{d}</D>, but not{' '}
+				<D>{d}</D> itself.
+			</>
+		);
+	}
+	return (
+		<>
+			Answers <D>{d}</D> only.
+		</>
+	);
+}
+
 const VALUE_PLACEHOLDERS: Record<number, string> = {
 	1: 'e.g. 192.168.1.100',
 	28: 'e.g. fd00::1',
@@ -55,6 +92,7 @@ export function LocalRecordDialog({
 		register,
 		handleSubmit,
 		setError,
+		setValue,
 		watch,
 		formState: { errors, isSubmitting },
 	} = useForm({
@@ -67,11 +105,27 @@ export function LocalRecordDialog({
 		},
 	});
 
+	const [matchType, setMatchType] = useState<LocalRecordMatchType>('exact');
 	const recordType = watch('record_type') as number;
+	const nameValue = watch('name');
+
+	// typing *.home selects wildcard
+	const hasWildcardPrefix = (nameValue ?? '').trim().startsWith('*.');
+	const effectiveMatchType: LocalRecordMatchType = hasWildcardPrefix
+		? 'wildcard'
+		: matchType;
+
+	const selectMatchType = (value: LocalRecordMatchType) => {
+		setMatchType(value);
+		if (value === 'exact' && hasWildcardPrefix) {
+			setValue('name', (nameValue ?? '').trim().replace(/^\*\./, ''));
+		}
+	};
 
 	const onSubmitHandler = handleSubmit(async (data) => {
 		try {
-			await onSubmit(data);
+			const name = data.name.trim().toLowerCase().replace(/^\*\./, '');
+			await onSubmit({ ...data, name, match_type: effectiveMatchType });
 		} catch (e) {
 			setError('root', { message: await getErrorMessage(e) });
 		}
@@ -158,6 +212,48 @@ export function LocalRecordDialog({
 									</NativeSelect.Root>
 								</Field.Root>
 							</HStack>
+
+							<Field.Root mb='4'>
+								<Field.Label color='fg.muted' fontSize='sm'>
+									Match
+								</Field.Label>
+								<HStack gap='2'>
+									{matchTypeOptions.map(({ value, label }) => (
+										<Button
+											key={value}
+											type='button'
+											onClick={() => selectMatchType(value)}
+											aria-pressed={effectiveMatchType === value}
+											size='xs'
+											borderRadius='md'
+											borderWidth='1px'
+											bg={
+												effectiveMatchType === value
+													? 'accent.muted'
+													: 'bg.subtle'
+											}
+											color={
+												effectiveMatchType === value ? 'accent.fg' : 'fg.muted'
+											}
+											borderColor={
+												effectiveMatchType === value
+													? 'accent.subtle'
+													: 'border.input'
+											}
+											_hover={{
+												bg: 'accent.muted',
+												color: 'accent.fg',
+												borderColor: 'accent.subtle',
+											}}
+										>
+											{label}
+										</Button>
+									))}
+								</HStack>
+								<Text color='fg.subtle' fontSize='xs' mt='2'>
+									{getMatchDescription(nameValue ?? '', effectiveMatchType)}
+								</Text>
+							</Field.Root>
 
 							<HStack gap='3' mb='6' align='flex-start'>
 								<Field.Root invalid={!!errors.value} flex='1'>
