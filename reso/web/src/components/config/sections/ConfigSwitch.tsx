@@ -22,9 +22,8 @@ export function ConfigSwitch({
 					<Switch.HiddenInput />
 					<Switch.Control
 						bg={field.value ? 'accent' : 'bg.elevated'}
-						borderWidth='1px'
-						borderColor={field.value ? 'accent' : 'border.input'}
-						_hover={{ borderColor: 'accent' }}
+						boxShadow={`0 0 0 1px {colors.${field.value ? 'accent' : 'border.input'}}`}
+						_hover={{ boxShadow: '0 0 0 1px {colors.accent}' }}
 						transition='all 0.2s ease'
 					>
 						<Switch.Thumb bg='fg' />
