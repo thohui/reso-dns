@@ -11,7 +11,10 @@ import {
 } from '@/hooks/local-records/useLocalRecords';
 import { useRemoveLocalRecord } from '@/hooks/local-records/useRemoveLocalRecord';
 import { useToggleLocalRecord } from '@/hooks/local-records/useToggleLocalRecord';
-import type { LocalRecord } from '@/lib/api/local-records';
+import type {
+	LocalRecord,
+	LocalRecordMatchType,
+} from '@/lib/api/local-records';
 import type { PagedResponse } from '@/lib/api/pagination';
 
 export default function LocalRecordsPage() {
@@ -29,6 +32,7 @@ export default function LocalRecordsPage() {
 
 	const handleSubmit = async (record: {
 		name: string;
+		match_type: LocalRecordMatchType;
 		record_type: number;
 		value: string;
 		ttl?: number;

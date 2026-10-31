@@ -17,6 +17,7 @@ import { Globe, Plus, Search } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
 import { GridPage } from '@/components/GridPage';
+import { MatchTypeBadge } from '@/components/MatchTypeBadge';
 import { RecordTypeBadge } from '@/components/RecordTypeBadge';
 import { ToggleButton } from '@/components/ToggleButton';
 import type { LocalRecord } from '@/lib/api/local-records';
@@ -62,6 +63,14 @@ export function LocalRecordsGrid({
 						<Text fontFamily='mono' fontSize='sm' fontWeight='500'>
 							{getValue()}
 						</Text>
+					</Table.Cell>
+				),
+			}),
+			columnHelper.accessor('match_type', {
+				header: 'Match',
+				cell: ({ getValue }) => (
+					<Table.Cell py='3.5' px='4'>
+						<MatchTypeBadge matchType={getValue()} />
 					</Table.Cell>
 				),
 			}),

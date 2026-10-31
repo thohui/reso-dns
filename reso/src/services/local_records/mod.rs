@@ -1,22 +1,25 @@
-use std::{collections::HashMap, net::IpAddr, sync::Arc};
+mod zone;
+
+use std::{net::IpAddr, sync::Arc};
 
 use arc_swap::ArcSwap;
 use reso_dns::{ClassType, DnsRecord, RecordType, domain_name::DomainName, message::DnsRecordData};
 
-use crate::database::{CoreDatabasePool, models::local_record::LocalRecord};
+use crate::database::{
+    CoreDatabasePool,
+    models::{
+        MatchType,
+        local_record::{self, LocalRecord},
+    },
+};
 
 use super::ServiceError;
 
-/// A resolved local record ready to be served as a DNS answer.
-#[derive(Debug, Clone)]
-pub struct ResolvedRecord {
-    pub record: DnsRecord,
-}
-
-type RecordKey = (String, RecordType);
+use zone::LocalZone;
+pub use zone::{LocalLookup, ResolvedRecord};
 
 pub struct LocalRecordService {
-    records: ArcSwap<HashMap<RecordKey, Vec<ResolvedRecord>>>,
+    zone: ArcSwap<LocalZone>,
     connection: Arc<CoreDatabasePool>,
 }
 
@@ -35,18 +38,44 @@ fn parse_record_type(rtype: u16) -> Result<RecordType, ServiceError> {
 impl LocalRecordService {
     pub async fn initialize(connection: Arc<CoreDatabasePool>) -> anyhow::Result<Self> {
         let service = Self {
-            records: ArcSwap::new(Arc::new(HashMap::new())),
+            zone: ArcSwap::new(Arc::new(LocalZone::default())),
             connection,
         };
         service.reload().await?;
         Ok(service)
     }
 
-    pub async fn add_record(&self, name: &str, record_type: u16, value: &str, ttl: u32) -> Result<(), ServiceError> {
+    pub async fn add_record(
+        &self,
+        name: &str,
+        match_type: MatchType,
+        record_type: u16,
+        value: &str,
+        ttl: u32,
+    ) -> Result<(), ServiceError> {
+        if !matches!(match_type, MatchType::Exact | MatchType::Wildcard) {
+            return Err(ServiceError::BadRequest(
+                "Local records only support exact and wildcard matching".into(),
+            ));
+        }
+        if name.contains('*') {
+            return Err(ServiceError::BadRequest(
+                "Domain must not contain wildcards, use the wildcard match type instead".into(),
+            ));
+        }
+
         let rtype = parse_record_type(record_type)?;
-        parse_value(name, rtype, value)?;
-        let record = LocalRecord::new(name.to_string(), record_type, value.to_string(), ttl);
-        record.insert(&self.connection).await.map_err(|e| {
+        let resolved = parse_value(name, rtype, value)?;
+        self.check_cname_conflict(&resolved.record.name, match_type, rtype)
+            .await?;
+        let record = LocalRecord::new(
+            resolved.record.name.to_string(),
+            match_type,
+            record_type,
+            value.to_string(),
+            ttl,
+        );
+        local_record::insert(&self.connection, record).await.map_err(|e| {
             if e.is_unique_constraint_violation() {
                 ServiceError::Conflict("A record with the same name and type already exists.".into())
             } else {
@@ -57,8 +86,41 @@ impl LocalRecordService {
         Ok(())
     }
 
+    // a cname can't share its name with other records, not even another cname (RFC 1034 3.6.2)
+    // nas.home CNAME x + nas.home A 10.0.0.2 -> conflict
+    async fn check_cname_conflict(
+        &self,
+        name: &DomainName,
+        match_type: MatchType,
+        rtype: RecordType,
+    ) -> Result<(), ServiceError> {
+        let all = local_record::list_all(&self.connection).await?;
+
+        // backward compatibility: older rows may be stored as typed, e.g. NAS.Home.
+        let mut existing_types = all
+            .iter()
+            .filter(|r| r.match_type == match_type)
+            .filter(|r| DomainName::from_user(&r.name).is_ok_and(|n| n == *name))
+            .map(|r| RecordType::from(r.record_type));
+
+        let conflict = if rtype == RecordType::CNAME {
+            // a cname needs the name to itself
+            existing_types.next().is_some()
+        } else {
+            // anything else can't join a cname
+            existing_types.any(|t| t == RecordType::CNAME)
+        };
+
+        if conflict {
+            return Err(ServiceError::Conflict(
+                "A CNAME record cannot share its name with other records.".into(),
+            ));
+        }
+        Ok(())
+    }
+
     pub async fn remove_record(&self, id: i64) -> Result<(), ServiceError> {
-        let changed = LocalRecord::delete_by_id(&self.connection, id).await?;
+        let changed = local_record::delete_by_id(&self.connection, id).await?;
         if !changed {
             return Err(ServiceError::NotFound("Record not found".into()));
         }
@@ -67,7 +129,7 @@ impl LocalRecordService {
     }
 
     pub async fn toggle_record(&self, id: i64) -> Result<(), ServiceError> {
-        let changed = LocalRecord::toggle(&self.connection, id).await?;
+        let changed = local_record::toggle(&self.connection, id).await?;
 
         if !changed {
             return Err(ServiceError::NotFound("Record not found".into()));
@@ -77,15 +139,13 @@ impl LocalRecordService {
         Ok(())
     }
 
-    pub fn lookup(&self, name: &str, qtype: RecordType) -> Option<Vec<ResolvedRecord>> {
-        let records = self.records.load();
-        let key = (name.to_ascii_lowercase(), qtype);
-        records.get(&key).cloned()
+    pub fn lookup(&self, qname: &DomainName, qtype: RecordType) -> LocalLookup {
+        self.zone.load().lookup(qname, qtype)
     }
 
     async fn reload(&self) -> Result<(), ServiceError> {
-        let all = LocalRecord::list_all(&self.connection).await?;
-        let mut map: HashMap<RecordKey, Vec<ResolvedRecord>> = HashMap::new();
+        let all = local_record::list_all(&self.connection).await?;
+        let mut zone = LocalZone::default();
 
         for record in all.into_iter().filter(|r| r.enabled) {
             let rtype = RecordType::from(record.record_type);
@@ -100,11 +160,17 @@ impl LocalRecordService {
                 }
             };
 
-            let key = (resolved.record.name.to_ascii_lowercase(), resolved.record.record_type);
-            map.entry(key).or_default().push(resolved);
+            match record.match_type {
+                MatchType::Exact => zone.insert_exact(resolved),
+                MatchType::Wildcard => zone.insert_wildcard(resolved),
+                // Rejected by the API and the table constraint.
+                MatchType::Domain => {
+                    tracing::warn!("skipping local record id={} with domain match type", record.id);
+                }
+            }
         }
 
-        self.records.store(Arc::new(map));
+        self.zone.store(Arc::new(zone));
         Ok(())
     }
 }

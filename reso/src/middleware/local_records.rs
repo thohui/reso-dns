@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use reso_context::{DnsMiddleware, DnsRequestCtx, DnsResponse};
-use reso_dns::{DnsFlags, DnsMessageBuilder, DnsOpcode, DnsResponseCode, RecordType};
+use reso_dns::{DnsFlags, DnsMessageBuilder, DnsOpcode, DnsResponseCode};
 
-use crate::{global::Global, local::Local, middleware::echo_edns};
+use crate::{global::Global, local::Local, middleware::echo_edns, services::local_records::LocalLookup};
 
 pub struct LocalRecordsMiddleware;
 
@@ -15,17 +15,12 @@ impl DnsMiddleware<Global, Local> for LocalRecordsMiddleware {
             None => return Ok(None),
         };
 
-        // Only handle the supported record types.
-        if !matches!(question.qtype, RecordType::A | RecordType::AAAA | RecordType::CNAME) {
-            return Ok(None);
-        }
-
-        let resolved = match ctx.global().local_records.lookup(&question.qname, question.qtype) {
-            Some(r) => r,
-            None => return Ok(None),
+        // NODATA keeps address queries for local names from going upstream.
+        let answers = match ctx.global().local_records.lookup(&question.qname, question.qtype) {
+            LocalLookup::Answer(records) => records.into_iter().map(|r| r.record).collect(),
+            LocalLookup::NoData => Vec::new(),
+            LocalLookup::NotFound => return Ok(None),
         };
-
-        let answers = resolved.into_iter().map(|r| r.record).collect();
 
         let flags = DnsFlags::new(
             true,
