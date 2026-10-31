@@ -12,9 +12,10 @@ use tokio::{
 use super::event::{ErrorLogEvent, QueryLogEvent};
 use crate::{
     database::{
-        MetricsDatabasePool,
+        CoreDatabasePool, MetricsDatabasePool,
         models::{
             activity_log::{self, ActivityLog},
+            client,
             client_metrics::{self, ClientMetrics},
             domain_metrics::{self, DomainMetrics},
         },
@@ -33,6 +34,7 @@ pub enum MetricsMessage {
 /// Service for handling metrics.
 pub struct MetricsService {
     connection: Arc<MetricsDatabasePool>,
+    core_connection: Arc<CoreDatabasePool>,
     rx: Receiver<MetricsMessage>,
     batch: Vec<ActivityLog>,
     buffer_size: usize,
@@ -121,6 +123,7 @@ impl Stats {
 impl MetricsService {
     pub async fn new(
         connection: Arc<MetricsDatabasePool>,
+        core_connection: Arc<CoreDatabasePool>,
         buffer_size: usize,
         config_rx: ConfigReceiver,
     ) -> anyhow::Result<(MetricsHandle, Stats, Self)> {
@@ -134,6 +137,7 @@ impl MetricsService {
             },
             Self {
                 connection,
+                core_connection,
                 rx,
                 batch: Vec::with_capacity(buffer_size),
                 buffer_size,
@@ -210,6 +214,7 @@ impl MetricsService {
 
         let mut client_map: HashMap<(i64, &str), ClientMetrics> = HashMap::with_capacity(self.batch.len());
         let mut domain_map: HashMap<(i64, &str), DomainMetrics> = HashMap::with_capacity(self.batch.len());
+        let mut last_seen: HashMap<&str, i64> = HashMap::new();
 
         for event in &self.batch {
             // floor to nearest bucket interval
@@ -226,6 +231,9 @@ impl MetricsService {
             m.error_count += (event.kind == "error") as i64;
             m.sum_duration += event.dur_ms;
 
+            let ts = last_seen.entry(event.client.as_str()).or_insert(event.ts_ms);
+            *ts = (*ts).max(event.ts_ms);
+
             if let Some(qname) = &event.qname {
                 let m = domain_map
                     .entry((bucket_ts, qname.as_str()))
@@ -238,6 +246,7 @@ impl MetricsService {
         // we purposely don't use tokio::join here as it doesn't matter for sqlite,
         // because sqlite only allows one write at a time.
 
+        let seen: Vec<(String, i64)> = last_seen.into_iter().map(|(ip, ts)| (ip.to_string(), ts)).collect();
         let client_buckets: Vec<_> = client_map.into_values().collect();
         let domain_buckets: Vec<_> = domain_map.into_values().collect();
         let (client_len, domain_len) = (client_buckets.len(), domain_buckets.len());
@@ -251,6 +260,16 @@ impl MetricsService {
             Ok(()) => tracing::debug!("flushed {domain_len} domain metric buckets"),
             Err(e) => tracing::error!("failed to upsert domain metrics: {}", e),
         }
+
+        // spawned so a blocklist sync holding the core db write lock doesn't stall the flush loop
+        let core = self.core_connection.clone();
+        tokio::spawn(async move {
+            let seen_len = seen.len();
+            match client::batch_upsert(&core, seen).await {
+                Ok(()) => tracing::debug!("flushed {seen_len} seen clients"),
+                Err(e) => tracing::error!("failed to upsert seen clients: {}", e),
+            }
+        });
 
         if self.config_rx.borrow().logs.enabled {
             match activity_log::batch_insert(&self.connection, &self.batch).await {

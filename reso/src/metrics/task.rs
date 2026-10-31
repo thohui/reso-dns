@@ -4,8 +4,8 @@ use tokio::time::{self, MissedTickBehavior};
 
 use crate::{
     database::{
-        MetricsDatabasePool,
-        models::{activity_log, client_metrics, domain_metrics},
+        CoreDatabasePool, MetricsDatabasePool,
+        models::{activity_log, client, client_metrics, domain_metrics},
     },
     services::config::ConfigReceiver,
 };
@@ -18,6 +18,7 @@ pub const DAY_MS: i64 = 86_400_000;
 pub const COMPRESS_TO_HOUR_AFTER_MS: i64 = 24 * HOUR_MS;
 /// Buckets older than this are rolled up from 1 hour to 1 day buckets.
 pub const COMPRESS_TO_DAY_AFTER_MS: i64 = 31 * DAY_MS;
+pub const CLIENT_RETENTION_MS: i64 = 30 * DAY_MS;
 
 /// Task that periodically truncates old activity logs to save space.
 pub async fn run_metrics_truncation(
@@ -52,12 +53,7 @@ pub async fn run_metrics_truncation(
                     continue;
                 }
 
-                let retention = Duration::from_secs(retention_secs);
-                let cutoff = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as i64
-                    - retention.as_millis() as i64;
+                let cutoff = crate::time::now_millis() - Duration::from_secs(retention_secs).as_millis() as i64;
 
                 if let Err(e) = activity_log::delete_before(&db, cutoff).await {
                     tracing::error!("failed to truncate old activity logs: {}", e);
@@ -155,6 +151,28 @@ pub async fn run_metrics_compression(db: Arc<MetricsDatabasePool>, shutdown: tok
             }
             _ = shutdown.cancelled() => {
                 tracing::info!("shutting down metrics compression task");
+                break;
+            }
+        }
+    }
+}
+
+pub async fn run_client_pruning(db: Arc<CoreDatabasePool>, shutdown: tokio_util::sync::CancellationToken) {
+    let mut tick = time::interval(Duration::from_secs(3600));
+    tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
+
+    loop {
+        tokio::select! {
+            _ = tick.tick() => {
+                let cutoff = crate::time::now_millis() - CLIENT_RETENTION_MS;
+                match client::delete_before(&db, cutoff).await {
+                    Ok(0) => {}
+                    Ok(n) => tracing::info!("pruned {n} clients not seen in {} days", CLIENT_RETENTION_MS / DAY_MS),
+                    Err(e) => tracing::error!("failed to prune clients: {}", e),
+                }
+            }
+            _ = shutdown.cancelled() => {
+                tracing::info!("shutting down client pruning task");
                 break;
             }
         }

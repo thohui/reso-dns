@@ -4,6 +4,7 @@ use activity::create_activity_router;
 use api_keys::create_api_keys_router;
 use auth::create_auth_router;
 use axum::{Router, ServiceExt, extract::Request};
+use clients::create_clients_router;
 use config::create_config_router;
 use domain_rules::create_domain_rules_router;
 use error::ApiError;
@@ -15,6 +16,7 @@ use tower_http::normalize_path::NormalizePath;
 mod activity;
 mod api_keys;
 mod auth;
+mod clients;
 mod config;
 mod cookie;
 mod domain_rules;
@@ -41,6 +43,7 @@ pub async fn serve_web(
         .nest("/local-records", create_local_records_router(global.clone()))
         .nest("/config", create_config_router(global.clone()))
         .nest("/api-keys", create_api_keys_router(global.clone()))
+        .nest("/clients", create_clients_router(global.clone()))
         .fallback(|| async { ApiError::not_found().with_message("Route not found") });
 
     let mut app = Router::new().nest("/api", api).with_state(global);

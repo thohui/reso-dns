@@ -22,7 +22,7 @@ use tracing_subscriber::{Layer, fmt, layer::SubscriberExt, util::SubscriberInitE
 
 use crate::{
     database::{connect_metrics_db, run_metrics_db_migrations},
-    metrics::task::run_metrics_compression,
+    metrics::task::{run_client_pruning, run_metrics_compression},
     services::{api_keys::ApiKeysService, local_records::LocalRecordService},
 };
 mod api;
@@ -74,8 +74,13 @@ async fn run() -> anyhow::Result<()> {
 
     let config_service = ConfigService::initialize(core_db_connection.clone()).await?;
 
-    let (handle, stats, metrics_service) =
-        MetricsService::new(metrics_db_connection.clone(), 1000, config_service.subscribe()).await?;
+    let (handle, stats, metrics_service) = MetricsService::new(
+        metrics_db_connection.clone(),
+        core_db_connection.clone(),
+        1000,
+        config_service.subscribe(),
+    )
+    .await?;
 
     let cipher = AesGcm::new(&config.cookie_secret.into());
 
@@ -131,6 +136,10 @@ async fn run() -> anyhow::Result<()> {
     let compression_db = metrics_db_connection.clone();
     let compression_handle = tokio::spawn(run_metrics_compression(compression_db, compression_shutdown));
 
+    let client_pruning_shutdown = shutdown.child_token();
+    let client_pruning_db = global.core_database.clone();
+    let client_pruning_handle = tokio::spawn(run_client_pruning(client_pruning_db, client_pruning_shutdown));
+
     let web_handle = tokio::spawn(serve_web(
         config.http_server_address,
         global.clone(),
@@ -167,12 +176,17 @@ async fn run() -> anyhow::Result<()> {
         let _ = web_handle.await;
         let _ = truncate_handle.await;
         let _ = compression_handle.await;
+        let _ = client_pruning_handle.await;
     };
 
     match tokio::time::timeout(Duration::from_secs(10), drain).await {
         Ok(_) => tracing::info!("all connections drained"),
         Err(_) => tracing::warn!("drain timeout, forcing shutdown"),
     }
+
+    tracing::info!("waiting for metrics service to shut down");
+    let _ = metrics_handle.await;
+    tracing::info!("metrics service shut down");
 
     if let Err(e) = &global
         .metrics_database
@@ -189,10 +203,6 @@ async fn run() -> anyhow::Result<()> {
     {
         tracing::error!("failed to checkpoint core database: {}", e);
     }
-
-    tracing::info!("waiting for metrics service to shut down");
-    let _ = metrics_handle.await;
-    tracing::info!("metrics service shut down");
 
     tracing::info!("shutdown complete");
 

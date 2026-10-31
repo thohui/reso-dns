@@ -1,5 +1,6 @@
 pub mod activity_log;
 pub mod api_key;
+pub mod client;
 pub mod client_metrics;
 pub mod config;
 pub mod domain_metrics;
