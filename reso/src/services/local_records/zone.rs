@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use reso_dns::{DnsRecord, RecordType, domain_name::DomainName};
+use reso_dns::{DnsRecord, RecordType, domain_name::DomainName, message::DnsRecordData};
+
+/// Cname chain depth limit.
+const MAX_CNAME_CHAIN: usize = 8;
 
 /// A resolved local record ready to be served as a DNS answer.
 #[derive(Debug, Clone)]
@@ -96,6 +99,36 @@ impl LocalZone {
     }
 
     pub fn lookup(&self, qname: &DomainName, qtype: RecordType) -> LocalLookup {
+        let mut answers = match self.lookup_name(qname, qtype) {
+            LocalLookup::Answer(answers) => answers,
+            other => return other,
+        };
+
+        // cname queries get the cname only
+        if qtype == RecordType::CNAME {
+            return LocalLookup::Answer(answers);
+        }
+
+        // cnames are followed to their target (RFC 1034 4.3.2)
+        // alias.home -> alias.home CNAME host.home, host.home A 10.0.0.1
+        // example.com target -> chain ends at the cname
+        // TODO: add support for cnames pointing to external names. Some stub resolvers have support
+        // for this and make the additional query to reso, but others can fail and never send the
+        // query to resolve the cname.
+        for _ in 0..MAX_CNAME_CHAIN {
+            let Some(target) = cname_target(&answers) else {
+                break;
+            };
+            let LocalLookup::Answer(records) = self.lookup_name(&target, qtype) else {
+                break;
+            };
+            answers.extend(records);
+        }
+
+        LocalLookup::Answer(answers)
+    }
+
+    fn lookup_name(&self, qname: &DomainName, qtype: RecordType) -> LocalLookup {
         let name = qname.as_str();
 
         // existing names never hit a wildcard (RFC 4592 2.2)
@@ -144,6 +177,15 @@ impl LocalZone {
     }
 }
 
+// the last step decides if the chain continues
+fn cname_target(records: &[ResolvedRecord]) -> Option<DomainName> {
+    let record = &records.last()?.record;
+    match &record.data {
+        DnsRecordData::DomainName(target) if record.record_type == RecordType::CNAME => Some(target.clone()),
+        _ => None,
+    }
+}
+
 fn ancestors(name: &str) -> impl Iterator<Item = &str> {
     name.match_indices('.')
         .filter_map(|(i, _)| name.get(i + 1..))
@@ -154,12 +196,34 @@ fn ancestors(name: &str) -> impl Iterator<Item = &str> {
 mod tests {
     use std::net::Ipv4Addr;
 
-    use reso_dns::{ClassType, message::DnsRecordData};
+    use reso_dns::ClassType;
 
     use super::*;
 
     fn name(s: &str) -> DomainName {
         DomainName::from_user(s).unwrap()
+    }
+
+    fn cname(owner: &str, target: &str) -> ResolvedRecord {
+        ResolvedRecord {
+            record: DnsRecord::new(
+                name(owner),
+                RecordType::CNAME,
+                ClassType::IN,
+                300,
+                DnsRecordData::DomainName(name(target)),
+            ),
+        }
+    }
+
+    fn answer_names(lookup: LocalLookup) -> Vec<(String, RecordType)> {
+        match lookup {
+            LocalLookup::Answer(records) => records
+                .iter()
+                .map(|r| (r.record.name.to_string(), r.record.record_type))
+                .collect(),
+            _ => Vec::new(),
+        }
     }
 
     fn a(owner: &str, ip: [u8; 4]) -> ResolvedRecord {
@@ -289,5 +353,70 @@ mod tests {
             zone.lookup(&DomainName::root(), RecordType::A),
             LocalLookup::NotFound
         ));
+    }
+
+    #[test]
+    fn test_cname_chain_followed() {
+        let mut zone = LocalZone::default();
+        zone.insert_exact(cname("alias.home", "mid.home"));
+        zone.insert_exact(cname("mid.home", "host.home"));
+        zone.insert_exact(a("host.home", [10, 0, 0, 1]));
+
+        assert_eq!(
+            answer_names(zone.lookup(&name("alias.home"), RecordType::A)),
+            vec![
+                ("alias.home".into(), RecordType::CNAME),
+                ("mid.home".into(), RecordType::CNAME),
+                ("host.home".into(), RecordType::A),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_cname_query_not_followed() {
+        let mut zone = LocalZone::default();
+        zone.insert_exact(cname("alias.home", "host.home"));
+        zone.insert_exact(a("host.home", [10, 0, 0, 1]));
+
+        assert_eq!(
+            answer_names(zone.lookup(&name("alias.home"), RecordType::CNAME)),
+            vec![("alias.home".into(), RecordType::CNAME)]
+        );
+    }
+
+    #[test]
+    fn test_wildcard_cname_followed() {
+        let mut zone = LocalZone::default();
+        zone.insert_wildcard(cname("home", "host.home"));
+        zone.insert_exact(a("host.home", [10, 0, 0, 1]));
+
+        assert_eq!(
+            answer_names(zone.lookup(&name("x.home"), RecordType::A)),
+            vec![
+                ("x.home".into(), RecordType::CNAME),
+                ("host.home".into(), RecordType::A),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_cname_to_outside_target_ends_chain() {
+        let mut zone = LocalZone::default();
+        zone.insert_exact(cname("alias.home", "example.com"));
+
+        assert_eq!(
+            answer_names(zone.lookup(&name("alias.home"), RecordType::A)),
+            vec![("alias.home".into(), RecordType::CNAME)]
+        );
+    }
+
+    #[test]
+    fn test_cname_loop_stops_at_depth_limit() {
+        let mut zone = LocalZone::default();
+        zone.insert_exact(cname("a.home", "b.home"));
+        zone.insert_exact(cname("b.home", "a.home"));
+
+        let answers = answer_names(zone.lookup(&name("a.home"), RecordType::A));
+        assert_eq!(answers.len(), MAX_CNAME_CHAIN + 1);
     }
 }

@@ -92,6 +92,7 @@ export function LocalRecordDialog({
 		register,
 		handleSubmit,
 		setError,
+		setValue,
 		watch,
 		formState: { errors, isSubmitting },
 	} = useForm({
@@ -108,15 +109,23 @@ export function LocalRecordDialog({
 	const recordType = watch('record_type') as number;
 	const nameValue = watch('name');
 
+	// typing *.home selects wildcard
+	const hasWildcardPrefix = (nameValue ?? '').trim().startsWith('*.');
+	const effectiveMatchType: LocalRecordMatchType = hasWildcardPrefix
+		? 'wildcard'
+		: matchType;
+
+	const selectMatchType = (value: LocalRecordMatchType) => {
+		setMatchType(value);
+		if (value === 'exact' && hasWildcardPrefix) {
+			setValue('name', (nameValue ?? '').trim().replace(/^\*\./, ''));
+		}
+	};
+
 	const onSubmitHandler = handleSubmit(async (data) => {
 		try {
-			const name = data.name.trim().toLowerCase();
-			const bare = name.replace(/^\*\./, '');
-			await onSubmit({
-				...data,
-				name: bare,
-				match_type: bare !== name ? 'wildcard' : matchType,
-			});
+			const name = data.name.trim().toLowerCase().replace(/^\*\./, '');
+			await onSubmit({ ...data, name, match_type: effectiveMatchType });
 		} catch (e) {
 			setError('root', { message: await getErrorMessage(e) });
 		}
@@ -213,15 +222,23 @@ export function LocalRecordDialog({
 										<Button
 											key={value}
 											type='button'
-											onClick={() => setMatchType(value)}
-											aria-pressed={matchType === value}
+											onClick={() => selectMatchType(value)}
+											aria-pressed={effectiveMatchType === value}
 											size='xs'
 											borderRadius='md'
 											borderWidth='1px'
-											bg={matchType === value ? 'accent.muted' : 'bg.subtle'}
-											color={matchType === value ? 'accent.fg' : 'fg.muted'}
+											bg={
+												effectiveMatchType === value
+													? 'accent.muted'
+													: 'bg.subtle'
+											}
+											color={
+												effectiveMatchType === value ? 'accent.fg' : 'fg.muted'
+											}
 											borderColor={
-												matchType === value ? 'accent.subtle' : 'border.input'
+												effectiveMatchType === value
+													? 'accent.subtle'
+													: 'border.input'
 											}
 											_hover={{
 												bg: 'accent.muted',
@@ -234,7 +251,7 @@ export function LocalRecordDialog({
 									))}
 								</HStack>
 								<Text color='fg.subtle' fontSize='xs' mt='2'>
-									{getMatchDescription(nameValue ?? '', matchType)}
+									{getMatchDescription(nameValue ?? '', effectiveMatchType)}
 								</Text>
 							</Field.Root>
 

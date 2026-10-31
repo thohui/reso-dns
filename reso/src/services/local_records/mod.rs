@@ -66,6 +66,9 @@ impl LocalRecordService {
 
         let rtype = parse_record_type(record_type)?;
         let resolved = parse_value(name, rtype, value)?;
+        if resolved.record.name.is_root() {
+            return Err(ServiceError::BadRequest("Domain must not be the root".into()));
+        }
         self.check_cname_conflict(&resolved.record.name, match_type, rtype)
             .await?;
         let record = LocalRecord::new(
