@@ -25,7 +25,7 @@ fn client_config() -> Result<Arc<ClientConfig>, UpstreamError> {
 }
 
 fn build_client_config() -> Result<Arc<ClientConfig>, String> {
-    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
 
     let mut config = ClientConfig::builder_with_provider(provider)
         .with_safe_default_protocol_versions()

@@ -26,7 +26,7 @@ url.workspace = true
 tokio-rustls.workspace = true
 rustls.workspace = true
 rustls-pemfile = "2.2.0"
-hyper-rustls = { version = "0.27.7", features = ["ring"] }
+hyper-rustls = "0.27.7"
 tokio-util.workspace = true
 
 [lib]

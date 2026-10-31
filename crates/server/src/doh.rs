@@ -62,7 +62,7 @@ where
     G: Send + Sync + 'static,
     L: Send + Sync + Default + 'static,
 {
-    let _ = rustls::crypto::ring::default_provider().install_default();
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let certs = load_certs(&config.cert_path)?;
     let key = load_private_key(&config.key_path)?;

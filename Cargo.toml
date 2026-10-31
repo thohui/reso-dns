@@ -19,7 +19,7 @@ thiserror = "2.0.18"
 rand = { version = "0.10.2" }
 sha2 = "0.11.0"
 dashmap = "6.2.1"
-rustls = { version = "0.23.46", features = ["ring"] }
+rustls = "0.23.46"
 tokio-rustls = "0.26.4"
 tokio-util = "0.7.18"
 url = "2.5.8"
