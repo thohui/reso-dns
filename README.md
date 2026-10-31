@@ -84,8 +84,9 @@ The web UI will be available at `http://<your-host>` and DNS on port 53.
 
 ### Prerequisites
 
-- [Rust](https://rustup.rs/) 1.93+
+- [Rust](https://rustup.rs/) 1.95+
 - [pnpm](https://pnpm.io/installation)
+- Node 22.12+
 
 ### Build
 
