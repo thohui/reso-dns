@@ -307,6 +307,9 @@ pub enum UpstreamError {
     /// because it is almost always a misconfiguration, not a transient network fault.
     #[error("upstream tls error: {0}")]
     Tls(String),
+    /// No idle connection or free slot became available in time. This is local load, not an upstream fault.
+    #[error("upstream connection pool exhausted")]
+    PoolExhausted,
     #[error("upstream error: {0}")]
     Other(String),
 }

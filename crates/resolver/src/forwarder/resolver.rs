@@ -76,8 +76,8 @@ impl ForwardResolver {
                 // TODO: make this configurable by the client.
                 Limits {
                     connect_timeout: Duration::from_secs(2),
-                    max_tcp_connections: 10,
-                    max_idle_tcp_connections: 5,
+                    max_tcp_connections: 16,
+                    max_idle_tcp_connections: 8,
                     tcp_ttl: Duration::from_secs(10),
                 },
             )

@@ -175,20 +175,23 @@ impl UpstreamResolveRequest {
     /// Resolve the upstream request over TCP.
     async fn resolve_tcp(&self, pool: &TcpPool, query: &[u8]) -> Result<Bytes, UpstreamError> {
         let deadline = self.request_budget.deadline();
-        let mut conn = pool.get_or_connect(deadline).await?;
+        let (mut conn, reused) = pool.get_or_connect(deadline).await?;
 
-        let result = conn.send_and_receive(query, deadline).await;
+        let result = match conn.send_and_receive(query, deadline).await {
+            // the server may have closed an idle connection right as we picked it up
+            Err(UpstreamError::SendError(e) | UpstreamError::RecvError(e))
+                if reused && is_closed_by_peer(&e) && self.has_budget(MIN_REMAINING_TO_START_ATTEMPT) =>
+            {
+                tracing::debug!(upstream = %pool.addr, error = %e, "reused tcp connection failed, retrying on a new one");
+                conn = pool.connect(conn.into_permit(), deadline).await?;
+                conn.send_and_receive(query, deadline).await
+            }
+            result => result,
+        };
 
-        match result {
-            Ok(resp_bytes) => {
-                pool.put_back(conn, true);
-                Ok(resp_bytes)
-            }
-            Err(e) => {
-                pool.put_back(conn, false);
-                Err(e)
-            }
-        }
+        let healthy = result.is_ok();
+        pool.put_back(conn, healthy);
+        result
     }
 
     /// Resolve the upstream request over UDP.
@@ -201,4 +204,12 @@ impl UpstreamResolveRequest {
 
         mux.load().send_and_receive(query, deadline).await
     }
+}
+
+fn is_closed_by_peer(e: &std::io::Error) -> bool {
+    use std::io::ErrorKind::*;
+    matches!(
+        e.kind(),
+        UnexpectedEof | ConnectionReset | ConnectionAborted | BrokenPipe
+    )
 }

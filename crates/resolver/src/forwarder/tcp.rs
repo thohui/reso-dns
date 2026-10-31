@@ -15,7 +15,7 @@ use tokio::{
 };
 use tokio_rustls::client::TlsStream;
 
-use tokio::sync::Semaphore;
+use tokio::sync::{Notify, Semaphore};
 
 use super::{
     dot::TlsUpstream,
@@ -73,6 +73,8 @@ pub(crate) struct TcpPool {
     idle: Mutex<VecDeque<TcpConn>>,
     /// Total connections
     connections: Arc<Semaphore>,
+    /// Woken when a connection is put back into the idle pool.
+    returned: Notify,
 }
 
 impl TcpPool {
@@ -83,6 +85,7 @@ impl TcpPool {
             tls,
             idle: Mutex::new(VecDeque::new()),
             connections: Arc::new(Semaphore::new(limits.max_tcp_connections)),
+            returned: Notify::new(),
         })
     }
 
@@ -123,25 +126,51 @@ impl TcpPool {
         None
     }
 
-    /// Get an idle conn or connect a new one if under cap.
-    pub async fn get_or_connect(&self, deadline: Instant) -> Result<TcpConn, UpstreamError> {
-        tokio::select! {
-            biased;
-            _ = tokio::time::sleep_until(deadline) => Err(UpstreamError::SendTimeout),
-            res = self.get_or_connect_inner(deadline) => res
+    /// Get an idle conn or connect a new one, waiting for a free slot when at the cap.
+    pub async fn get_or_connect(&self, deadline: Instant) -> Result<(TcpConn, bool), UpstreamError> {
+        // capped so a saturated pool doesn't eat the budget needed to fail over to another upstream
+        let wait_deadline = (Instant::now() + self.limits.connect_timeout).min(deadline);
+
+        let permit = match timeout_at(wait_deadline, self.wait_for_slot()).await {
+            Ok(Ok(Slot::Idle(conn))) => return Ok((conn, true)),
+            Ok(Ok(Slot::New(permit))) => permit,
+            Ok(Err(e)) => return Err(e),
+            Err(_) => return Err(UpstreamError::PoolExhausted),
+        };
+
+        Ok((self.connect(permit, deadline).await?, false))
+    }
+
+    async fn wait_for_slot(&self) -> Result<Slot, UpstreamError> {
+        loop {
+            // idle connections keep their permit, so also wake up when one is put back.
+            // registered before try_get so a put_back in between isn't missed
+            let returned = self.returned.notified();
+            tokio::pin!(returned);
+            returned.as_mut().enable();
+
+            if let Some(conn) = self.try_get() {
+                tracing::debug!(upstream = %self.addr, "reusing idle tcp connection");
+                return Ok(Slot::Idle(conn));
+            }
+
+            tokio::select! {
+                permit = self.acquire_permit() => return Ok(Slot::New(permit?)),
+                _ = &mut returned => {}
+            }
         }
     }
 
-    async fn get_or_connect_inner(&self, deadline: Instant) -> Result<TcpConn, UpstreamError> {
-        if let Some(c) = self.try_get() {
-            tracing::debug!(upstream = %self.addr, "reusing idle tcp connection");
-            return Ok(c);
-        }
+    async fn acquire_permit(&self) -> Result<OwnedSemaphorePermit, UpstreamError> {
+        self.connections
+            .clone()
+            .acquire_owned()
+            .await
+            .map_err(|_| UpstreamError::Other(format!("upstream {} connection pool closed", self.addr)))
+    }
 
-        let permit = self.connections.clone().try_acquire_owned().map_err(|_| {
-            UpstreamError::Other(format!("upstream {} at max concurrent connection attempts", self.addr))
-        })?;
-
+    /// Open a new connection in the slot held by `permit`.
+    pub async fn connect(&self, permit: OwnedSemaphorePermit, deadline: Instant) -> Result<TcpConn, UpstreamError> {
         tracing::debug!(upstream = %self.addr, tls = self.tls.is_some(), "opening new tcp connection");
 
         TcpConn::connect(
@@ -161,6 +190,8 @@ impl TcpPool {
             let mut idle = self.idle.lock().unwrap_or_else(|e| e.into_inner());
             if idle.len() < self.limits.max_idle_tcp_connections {
                 idle.push_back(conn);
+                drop(idle);
+                self.returned.notify_one();
             } else {
                 tracing::trace!(upstream = %self.addr, "idle pool full, dropping connection");
             }
@@ -172,12 +203,17 @@ impl TcpPool {
     }
 }
 
+enum Slot {
+    Idle(TcpConn),
+    New(OwnedSemaphorePermit),
+}
+
 /// A single connection to an upstream server, plain or TLS.
 pub struct TcpConn {
     /// The transport
     stream: Stream,
     /// Permit that keeps the connection slot
-    _permit: OwnedSemaphorePermit,
+    permit: OwnedSemaphorePermit,
     /// Time-to-live for this connection
     pub ttl: Instant,
     /// Reusable buffer for receiving data
@@ -194,7 +230,7 @@ impl TcpConn {
         tls: Option<&TlsUpstream>,
         deadline: Instant,
         connect_timeout: Duration,
-        _permit: OwnedSemaphorePermit,
+        permit: OwnedSemaphorePermit,
         ttl: Instant,
     ) -> Result<Self, UpstreamError> {
         // TCP connect can take a long time if the server is unresponsive, so we apply the
@@ -211,7 +247,7 @@ impl TcpConn {
 
         Ok(Self {
             stream,
-            _permit,
+            permit,
             ttl,
             recv_buf: BytesMut::with_capacity(MAX_RECEIVE_BUFFER_SIZE),
             send_buf: Vec::with_capacity(MAX_RECEIVE_BUFFER_SIZE),
@@ -228,6 +264,11 @@ impl TcpConn {
             Some(tls) => Ok(Stream::Tls(Box::new(tls.handshake(sock).await?))),
             None => Ok(Stream::Plain(sock)),
         }
+    }
+
+    /// Close the connection but keep its slot, so a replacement doesn't have to queue for one.
+    pub fn into_permit(self) -> OwnedSemaphorePermit {
+        self.permit
     }
 
     /// Check if the connection is still open without blocking.
