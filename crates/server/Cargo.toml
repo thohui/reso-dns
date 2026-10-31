@@ -21,13 +21,13 @@ hyper = { version = "1.7.0", features = ["full"] }
 http-body-util = "0.1.3"
 hyper-util = { version = "0.1.16", features = ["full"] }
 tower = { version = "0.5.2", features = ["full"] }
-base64 = "0.22.1"
-url = "2.5.7"
-tokio-rustls = "0.26.2"
-rustls = "0.23.31"
+base64.workspace = true
+url.workspace = true
+tokio-rustls.workspace = true
+rustls.workspace = true
 rustls-pemfile = "2.2.0"
 hyper-rustls = { version = "0.27.7", features = ["ring"] }
-tokio-util = "0.7.18"
+tokio-util.workspace = true
 
 [lib]
 name = "reso_server"

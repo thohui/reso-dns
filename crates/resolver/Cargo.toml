@@ -18,12 +18,12 @@ moka.workspace = true
 rand.workspace = true
 dashmap.workspace = true
 serde.workspace = true
-rustls = { version = "0.23", features = ["ring"] }
-tokio-rustls = "0.26"
+rustls.workspace = true
+tokio-rustls.workspace = true
 rustls-platform-verifier = "0.7"
 
 [dev-dependencies]
-serde_json = "1"
+serde_json.workspace = true
 
 [lib]
 name = "reso_resolver"
