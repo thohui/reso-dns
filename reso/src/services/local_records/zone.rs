@@ -92,6 +92,15 @@ impl LocalZone {
     /// Adds the record to `*.<owner>`.
     pub fn insert_wildcard(&mut self, record: ResolvedRecord) {
         let name = record.record.name.clone();
+
+        // *.home is a name too, so x.*.home has no source (RFC 4592 3.3.2)
+        // *.home -> 10.0.0.1, x.*.home -> upstream
+        if let Ok(owner) = DomainName::from_ascii(format!("*.{name}")) {
+            let mut literal = record.clone();
+            literal.record.name = owner.clone();
+            self.node_mut(owner.as_str()).records.push(literal);
+        }
+
         self.node_mut(name.as_str())
             .wildcard
             .get_or_insert_with(NameRecords::default)
@@ -418,5 +427,23 @@ mod tests {
 
         let answers = answer_names(zone.lookup(&name("a.home"), RecordType::A));
         assert_eq!(answers.len(), MAX_CNAME_CHAIN + 1);
+    }
+
+    #[test]
+    fn test_star_name_blocks_wildcard() {
+        let mut zone = LocalZone::default();
+        zone.insert_wildcard(a("home", [10, 0, 0, 1]));
+
+        let owner = DomainName::from_ascii("*.home").unwrap();
+        assert_eq!(
+            answer_ip(zone.lookup(&owner, RecordType::A)),
+            Some(("*.home".into(), Ipv4Addr::new(10, 0, 0, 1)))
+        );
+
+        let below = DomainName::from_ascii("x.*.home").unwrap();
+        assert!(matches!(zone.lookup(&below, RecordType::A), LocalLookup::NotFound));
+
+        // regular names still match
+        assert!(answer_ip(zone.lookup(&name("x.home"), RecordType::A)).is_some());
     }
 }
