@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use arc_swap::ArcSwap;
@@ -18,6 +18,12 @@ const MAX_MESSAGE_SIZE: usize = 65535;
 
 /// Max queries per opened TCP connection.
 const MAX_QUERIES_PER_CONNECTION: usize = 100;
+
+/// Close connections that don't write a query within the 10s window.
+const IDLE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Pause after a failed accept
+const ACCEPT_ERROR_BACKOFF: Duration = Duration::from_millis(100);
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run_tcp<G, L>(
@@ -43,7 +49,15 @@ where
                 }
             }
             result = listener.accept() => {
-                let (mut stream, client) = result?;
+                let (mut stream, client) = match result {
+                    Ok(v) => v,
+                    Err(e) => {
+                        tracing::warn!("TCP accept failed: {}", e);
+                        tokio::time::sleep(ACCEPT_ERROR_BACKOFF).await;
+                        continue
+                    }
+                };
+
                 let state = state.clone();
                 let shutdown = shutdown.clone();
 
@@ -62,7 +76,12 @@ where
 
                         let len_res = tokio::select! {
                             _ = shutdown.cancelled() => return,
-                            res = stream.read_exact(&mut len_buf) => res,
+                            res = tokio::time::timeout(IDLE_TIMEOUT, stream.read_exact(&mut len_buf)) => res,
+                        };
+
+                        let Ok(len_res) = len_res else {
+                            tracing::debug!(%client, "TCP connection idle (len_res), closing");
+                            return;
                         };
 
                         if let Err(e) = len_res {
@@ -83,7 +102,12 @@ where
 
                         let body_res = tokio::select! {
                             _ = shutdown.cancelled() => return,
-                           res = stream.read_exact(&mut buf) => res,
+                           res = tokio::time::timeout(IDLE_TIMEOUT, stream.read_exact(&mut buf)) => res,
+                        };
+
+                        let Ok(body_res) = body_res else {
+                            tracing::debug!(%client, "TCP connection idle (body_res), closing");
+                            return;
                         };
 
                         if let Err(e) = body_res {
@@ -145,9 +169,12 @@ where
 /// Write a DNS friendly response to a TCP stream.
 async fn write_tcp_response(stream: &mut tokio::net::TcpStream, response: &Bytes) -> anyhow::Result<()> {
     let len = u16::try_from(response.len()).context("DNS payload exceeds 65535 bytes")?;
-    stream.write_u16(len).await?;
-    stream.write_all(response).await?;
-    Ok(())
+    tokio::time::timeout(IDLE_TIMEOUT, async {
+        stream.write_u16(len).await?;
+        stream.write_all(response).await?;
+        Ok(())
+    })
+    .await?
 }
 
 /// Write a DNS message indicating a server error over TCP.
