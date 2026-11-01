@@ -22,7 +22,7 @@ import {
 	Settings,
 } from 'lucide-react';
 import { Suspense, useState } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import Logo from '@/assets/logo.svg?react';
 import { PageLoader } from '@/components/PageLoader';
 import { useLogout } from '@/hooks/auth/useLogout';
@@ -46,16 +46,10 @@ const menuItems: MenuItem[] = [
 ];
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
-	const location = useLocation();
 	const navigate = useNavigate();
 	const logout = useLogout();
 	const { data: liveData } = useLiveStats();
 	const uptime = useUptime(liveData?.live_since);
-
-	const handleNavigate = (path: string) => {
-		navigate(path);
-		onNavigate?.();
-	};
 
 	const handleLogout = async () => {
 		await logout.mutateAsync();
@@ -94,36 +88,38 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 				</Tooltip.Positioner>
 			</Tooltip.Root>
 
-			<VStack gap='0.5' align='stretch' flex='1'>
-				{menuItems.map((item) => {
-					const isActive = location.pathname === item.path;
-					return (
-						<Button
-							key={item.path}
-							variant='ghost'
-							justifyContent='flex-start'
-							bg={isActive ? 'accent.muted' : 'transparent'}
-							color={isActive ? 'accent.fg' : 'fg.muted'}
-							borderWidth='1px'
-							borderColor={isActive ? 'accent.muted' : 'transparent'}
-							_hover={{
-								bg: isActive ? 'accent.muted' : 'bg.subtle',
-								color: isActive ? 'accent.fg' : 'fg',
-							}}
-							onClick={() => handleNavigate(item.path)}
-							px='3'
-							py='2'
-							h='auto'
-							fontSize='sm'
-							fontWeight={isActive ? '500' : '400'}
-							borderRadius='lg'
-							transition='all 0.15s ease'
-						>
+			<VStack as='nav' aria-label='Main' gap='0.5' align='stretch' flex='1'>
+				{menuItems.map((item) => (
+					<Button
+						key={item.path}
+						asChild
+						variant='ghost'
+						justifyContent='flex-start'
+						color='fg.muted'
+						borderWidth='1px'
+						borderColor='transparent'
+						_hover={{ bg: 'bg.subtle', color: 'fg' }}
+						_currentPage={{
+							bg: 'accent.muted',
+							color: 'accent.fg',
+							borderColor: 'accent.muted',
+							fontWeight: '500',
+							_hover: { bg: 'accent.muted', color: 'accent.fg' },
+						}}
+						px='3'
+						py='2'
+						h='auto'
+						fontSize='sm'
+						fontWeight='400'
+						borderRadius='lg'
+						transition='all 0.15s ease'
+					>
+						<NavLink to={item.path} end onClick={onNavigate}>
 							<Icon as={item.icon} boxSize='4' mr='3' />
 							{item.label}
-						</Button>
-					);
-				})}
+						</NavLink>
+					</Button>
+				))}
 			</VStack>
 
 			<Box borderTopWidth='1px' borderColor='border' pt='3' mt='3'>
