@@ -58,7 +58,7 @@ impl EnvConfig {
                         decoded.len()
                     );
                 }
-                let secret: [u8; 32] = decoded.try_into().unwrap();
+                let secret = decoded.into_boxed_slice();
                 let mut file = OpenOptions::new()
                     .write(true)
                     .create(true)
