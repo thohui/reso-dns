@@ -17,7 +17,7 @@ pub struct ApiError {
     pub error: Cow<'static, str>,
     pub message: Cow<'static, str>,
     #[serde(skip_serializing)]
-    jar: Option<CookieJar>,
+    jar: Option<Box<CookieJar>>,
 }
 
 impl ApiError {
@@ -65,7 +65,10 @@ impl ApiError {
     }
 
     pub fn with_cookie_jar(self, jar: CookieJar) -> Self {
-        Self { jar: Some(jar), ..self }
+        Self {
+            jar: Some(Box::new(jar)),
+            ..self
+        }
     }
 
     pub fn with_message(mut self, str: &'static str) -> Self {
@@ -150,14 +153,14 @@ impl From<PathRejection> for ApiError {
 }
 
 impl IntoResponse for ApiError {
-    fn into_response(self) -> axum::response::Response {
+    fn into_response(mut self) -> axum::response::Response {
         let status = self.status_code;
-        let jar = self.jar.clone();
+        let jar = self.jar.take();
 
         let resp = (status, axum::Json(self));
 
         match jar {
-            Some(jar) => (jar, resp).into_response(),
+            Some(jar) => (*jar, resp).into_response(),
             None => resp.into_response(),
         }
     }
