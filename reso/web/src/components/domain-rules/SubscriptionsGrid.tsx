@@ -36,7 +36,7 @@ export function SubscriptionsGrid({
 				cell: ({ row }) => {
 					const sub = row.original;
 					return (
-						<Table.Cell py='3.5' px='4'>
+						<Table.Cell py='3' px='4'>
 							<Box>
 								<Text fontSize='sm' fontWeight='500'>
 									{sub.name}
@@ -52,7 +52,7 @@ export function SubscriptionsGrid({
 			columnHelper.accessor('domain_count', {
 				header: 'Domains',
 				cell: (info) => (
-					<Table.Cell py='3.5' px='4' textAlign='right'>
+					<Table.Cell py='3' px='4' textAlign='right'>
 						<Text color='fg.muted' fontSize='sm'>
 							{info.getValue().toLocaleString()}
 						</Text>
@@ -62,7 +62,7 @@ export function SubscriptionsGrid({
 			columnHelper.accessor('last_synced_at', {
 				header: 'Last Synced',
 				cell: (info) => (
-					<Table.Cell py='3.5' px='4' style={{ textAlign: 'right' }}>
+					<Table.Cell py='3' px='4' style={{ textAlign: 'right' }}>
 						<Text color='fg.muted' fontSize='sm'>
 							{formatTimeAgo(info.getValue())}
 						</Text>
@@ -73,7 +73,7 @@ export function SubscriptionsGrid({
 				id: 'status',
 				header: 'Status',
 				cell: ({ row }) => (
-					<Table.Cell py='3.5' px='4' textAlign='center'>
+					<Table.Cell py='3' px='4' textAlign='center'>
 						<ToggleButton
 							enabled={row.original.enabled}
 							label='subscription'
@@ -87,7 +87,7 @@ export function SubscriptionsGrid({
 				header: 'Sync',
 				cell: ({ row }) => {
 					return (
-						<Table.Cell py='3.5' px='4' textAlign='center'>
+						<Table.Cell py='3' px='4' textAlign='center'>
 							<ToggleButton
 								enabled={row.original.sync_enabled}
 								label='subscription'

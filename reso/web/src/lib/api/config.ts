@@ -23,6 +23,12 @@ export class Config {
 export interface ConfigModel {
 	dns: DnsConfig;
 	logs: LogsConfig;
+	clients: ClientsConfig;
+}
+
+export interface ClientsConfig {
+	/** null uses the default gateway, empty disables naming. */
+	ptr_servers: string[] | null;
 }
 
 export interface LogsConfig {

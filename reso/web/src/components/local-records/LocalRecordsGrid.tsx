@@ -59,7 +59,7 @@ export function LocalRecordsGrid({
 			columnHelper.accessor('name', {
 				header: 'Name',
 				cell: ({ getValue }) => (
-					<Table.Cell py='3.5' px='4'>
+					<Table.Cell py='3' px='4'>
 						<Text fontFamily='mono' fontSize='sm' fontWeight='500'>
 							{getValue()}
 						</Text>
@@ -69,7 +69,7 @@ export function LocalRecordsGrid({
 			columnHelper.accessor('match_type', {
 				header: 'Match',
 				cell: ({ getValue }) => (
-					<Table.Cell py='3.5' px='4'>
+					<Table.Cell py='3' px='4'>
 						<MatchTypeBadge matchType={getValue()} />
 					</Table.Cell>
 				),
@@ -78,7 +78,7 @@ export function LocalRecordsGrid({
 				header: 'Type',
 				cell: ({ getValue }) => {
 					return (
-						<Table.Cell py='3.5' px='4'>
+						<Table.Cell py='3' px='4'>
 							<RecordTypeBadge recordType={getValue()} size='md' />
 						</Table.Cell>
 					);
@@ -87,7 +87,7 @@ export function LocalRecordsGrid({
 			columnHelper.accessor('value', {
 				header: 'Value',
 				cell: ({ getValue }) => (
-					<Table.Cell py='3.5' px='4'>
+					<Table.Cell py='3' px='4'>
 						<Text fontFamily='mono' fontSize='sm' color='fg.muted'>
 							{getValue()}
 						</Text>
@@ -97,7 +97,7 @@ export function LocalRecordsGrid({
 			columnHelper.accessor('ttl', {
 				header: 'TTL',
 				cell: ({ getValue }) => (
-					<Table.Cell py='3.5' px='4' textAlign='right'>
+					<Table.Cell py='3' px='4' textAlign='right'>
 						<Text color='fg.muted' fontSize='sm'>
 							{getValue()}s
 						</Text>
@@ -107,7 +107,7 @@ export function LocalRecordsGrid({
 			columnHelper.accessor('created_at', {
 				header: 'Added',
 				cell: ({ getValue }) => (
-					<Table.Cell py='3.5' px='4' textAlign='right'>
+					<Table.Cell py='3' px='4' textAlign='right'>
 						<Text color='fg.muted' fontSize='sm'>
 							{formatTimeAgo(getValue())}
 						</Text>
@@ -118,7 +118,7 @@ export function LocalRecordsGrid({
 				id: 'status',
 				header: 'Status',
 				cell: ({ row }) => (
-					<Table.Cell py='3.5' px='4' textAlign='center'>
+					<Table.Cell py='3' px='4' textAlign='center'>
 						<ToggleButton
 							enabled={row.original.enabled}
 							label='record'

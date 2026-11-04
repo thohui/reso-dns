@@ -137,25 +137,42 @@ export const upstreamSchema = z.discriminatedUnion('kind', [
 	}),
 ]);
 
-export const configSchema = z.object({
-	upstreams: z.array(upstreamSchema),
-	timeout: z.number().min(1),
-	rate_limit: z.object({
-		enabled: z.boolean(),
-		window_duration: z.number().int().min(1),
-		max_queries_per_window: z.number().int().min(1),
-	}),
-	security: z.object({
-		block_icloud_private_relay: z.boolean(),
-		block_firefox_canary: z.boolean(),
-		block_designated_resolver: z.boolean(),
-	}),
-	logs: z.object({
-		enabled: z.boolean(),
-		truncation_enabled: z.boolean(),
-		retention_secs: z.number().int().min(60),
-		truncate_interval_secs: z.number().int().min(60),
-	}),
-});
+export const configSchema = z
+	.object({
+		upstreams: z.array(upstreamSchema),
+		ptr_servers_auto: z.boolean(),
+		ptr_servers: z.array(z.string()),
+		timeout: z.number().min(1),
+		rate_limit: z.object({
+			enabled: z.boolean(),
+			window_duration: z.number().int().min(1),
+			max_queries_per_window: z.number().int().min(1),
+		}),
+		security: z.object({
+			block_icloud_private_relay: z.boolean(),
+			block_firefox_canary: z.boolean(),
+			block_designated_resolver: z.boolean(),
+		}),
+		logs: z.object({
+			enabled: z.boolean(),
+			truncation_enabled: z.boolean(),
+			retention_secs: z.number().int().min(60),
+			truncate_interval_secs: z.number().int().min(60),
+		}),
+	})
+	.superRefine((data, ctx) => {
+		// hidden while the default gateway is used, so stale entries must not block saving
+		if (data.ptr_servers_auto) return;
+		data.ptr_servers.forEach((server, i) => {
+			const result = endpointInputSchema.safeParse(server);
+			for (const issue of result.error?.issues ?? []) {
+				ctx.addIssue({
+					code: 'custom',
+					message: issue.message,
+					path: ['ptr_servers', i],
+				});
+			}
+		});
+	});
 
 export type FormValues = z.infer<typeof configSchema>;

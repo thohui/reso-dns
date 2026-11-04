@@ -10,11 +10,12 @@ export function ConfirmDeleteButton({ onConfirm }: Props) {
 	const [confirming, setConfirming] = useState(false);
 
 	return (
-		<Table.Cell py='3.5' px='4'>
+		<Table.Cell py='3' px='4'>
 			{confirming ? (
 				<HStack gap='1'>
 					<Button
-						size='md'
+						size='xs'
+						h='6'
 						variant='ghost'
 						color='status.error'
 						bg='status.errorMuted'
@@ -28,7 +29,8 @@ export function ConfirmDeleteButton({ onConfirm }: Props) {
 						Confirm
 					</Button>
 					<Button
-						size='md'
+						size='xs'
+						h='6'
 						variant='ghost'
 						color='fg.muted'
 						_hover={{ bg: 'bg.subtle' }}
@@ -42,7 +44,7 @@ export function ConfirmDeleteButton({ onConfirm }: Props) {
 				</HStack>
 			) : (
 				<IconButton
-					size='md'
+					size='2xs'
 					aria-label='Delete'
 					cursor='pointer'
 					variant='ghost'

@@ -20,7 +20,7 @@ impl WhereBuilder {
         }
     }
 
-    fn escape_like(s: &str) -> String {
+    pub fn escape_like(s: &str) -> String {
         s.replace('\\', r"\\").replace('%', r"\%").replace('_', r"\_")
     }
 

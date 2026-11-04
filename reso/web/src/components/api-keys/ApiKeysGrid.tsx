@@ -54,7 +54,7 @@ export function ApiKeysGrid({
 			columnHelper.accessor('display_name', {
 				header: 'Display Name',
 				cell: ({ getValue }) => (
-					<Table.Cell py='3.5' px='4'>
+					<Table.Cell py='3' px='4'>
 						<Text fontSize='sm' fontWeight='500'>
 							{getValue()}
 						</Text>
@@ -64,7 +64,7 @@ export function ApiKeysGrid({
 			columnHelper.accessor('created_by', {
 				header: 'Created by',
 				cell: ({ getValue }) => (
-					<Table.Cell py='3.5' px='4'>
+					<Table.Cell py='3' px='4'>
 						<Text fontSize='sm' fontWeight='500'>
 							{getValue()}
 						</Text>
@@ -74,7 +74,7 @@ export function ApiKeysGrid({
 			columnHelper.accessor('created_at', {
 				header: 'Created',
 				cell: ({ getValue }) => (
-					<Table.Cell py='3.5' px='4' textAlign='right'>
+					<Table.Cell py='3' px='4' textAlign='right'>
 						<Text color='fg.muted' fontSize='sm'>
 							{formatTimeAgo(getValue())}
 						</Text>
@@ -87,7 +87,7 @@ export function ApiKeysGrid({
 					const expiresAt = getValue();
 					const label = expiresAt != null ? formatTimeAgo(expiresAt) : 'Never';
 					return (
-						<Table.Cell py='3.5' px='4' textAlign='right'>
+						<Table.Cell py='3' px='4' textAlign='right'>
 							<Text color='fg.muted' fontSize='sm'>
 								{label}
 							</Text>

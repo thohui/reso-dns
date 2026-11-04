@@ -1,13 +1,19 @@
 use rusqlite::params;
 use serde::Serialize;
 
-use crate::database::{CoreDatabasePool, DatabaseError};
+use crate::{
+    database::{CoreDatabasePool, DatabaseError, query::WhereBuilder},
+    reverse::HostnameCheck,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Client {
     pub ip: String,
     pub first_seen_at: i64,
     pub last_seen_at: i64,
+    pub hostname: Option<String>,
+    pub hostname_checked_at: Option<i64>,
+    pub display_name: Option<String>,
 }
 
 impl Client {
@@ -16,6 +22,9 @@ impl Client {
             ip: r.get(0)?,
             first_seen_at: r.get(1)?,
             last_seen_at: r.get(2)?,
+            hostname: r.get(3)?,
+            hostname_checked_at: r.get(4)?,
+            display_name: r.get(5)?,
         })
     }
 }
@@ -49,25 +58,132 @@ pub async fn batch_upsert(db: &CoreDatabasePool, seen: Vec<(String, i64)>) -> Re
     .await
 }
 
-pub async fn list(db: &CoreDatabasePool, limit: i64, offset: i64) -> Result<Vec<Client>, DatabaseError> {
+const SEARCH_FILTER: &str = "?1 IS NULL
+     OR ip LIKE ?1 ESCAPE '\\'
+     OR hostname LIKE ?1 ESCAPE '\\'
+     OR display_name LIKE ?1 ESCAPE '\\'";
+
+fn search_pattern(search: Option<String>) -> Option<String> {
+    search.map(|s| format!("%{}%", WhereBuilder::escape_like(&s)))
+}
+
+pub async fn list(
+    db: &CoreDatabasePool,
+    limit: i64,
+    offset: i64,
+    search: Option<String>,
+) -> Result<Vec<Client>, DatabaseError> {
+    let pattern = search_pattern(search);
     db.interact(move |c| {
-        let mut stmt = c.prepare(
-            "SELECT ip, first_seen_at, last_seen_at FROM clients ORDER BY last_seen_at DESC, ip LIMIT ?1 OFFSET ?2",
-        )?;
-        let iter = stmt.query_map(params![limit, offset], Client::from_row)?;
+        let mut stmt = c.prepare(&format!(
+            "SELECT ip, first_seen_at, last_seen_at, hostname, hostname_checked_at, display_name
+             FROM clients WHERE {SEARCH_FILTER}
+             ORDER BY last_seen_at DESC, ip LIMIT ?2 OFFSET ?3"
+        ))?;
+        let iter = stmt.query_map(params![pattern, limit, offset], Client::from_row)?;
         iter.collect::<rusqlite::Result<Vec<_>>>()
     })
     .await
 }
 
-pub async fn row_count(db: &CoreDatabasePool) -> Result<i64, DatabaseError> {
-    db.interact(|c| c.query_row("SELECT COUNT(*) FROM clients", [], |r| r.get(0)))
-        .await
+pub async fn due_for_hostname_check(
+    db: &CoreDatabasePool,
+    checked_before_ms: i64,
+    limit: i64,
+) -> Result<Vec<String>, DatabaseError> {
+    db.interact(move |c| {
+        // NULLs sort first in ascending order
+        let mut stmt = c.prepare(
+            "SELECT ip FROM clients
+             WHERE hostname_checked_at IS NULL OR hostname_checked_at < ?1
+             ORDER BY hostname_checked_at, last_seen_at DESC
+             LIMIT ?2",
+        )?;
+        let iter = stmt.query_map(params![checked_before_ms, limit], |r| r.get(0))?;
+        iter.collect::<rusqlite::Result<Vec<_>>>()
+    })
+    .await
+}
+
+pub async fn batch_set_hostnames(
+    db: &CoreDatabasePool,
+    checks: Vec<(String, HostnameCheck)>,
+    checked_at: i64,
+    failed_checked_at: i64,
+) -> Result<(), DatabaseError> {
+    if checks.is_empty() {
+        return Ok(());
+    }
+
+    db.interact(move |c| {
+        let tx = c.transaction()?;
+        {
+            let mut set = tx.prepare("UPDATE clients SET hostname = ?2, hostname_checked_at = ?3 WHERE ip = ?1")?;
+            let mut touch = tx.prepare("UPDATE clients SET hostname_checked_at = ?2 WHERE ip = ?1")?;
+            for (ip, check) in &checks {
+                match check {
+                    HostnameCheck::Found(hostname) => {
+                        set.execute(params![ip, hostname, checked_at])?;
+                    }
+                    HostnameCheck::NotFound => {
+                        set.execute(params![ip, None::<String>, checked_at])?;
+                    }
+                    HostnameCheck::Failed => {
+                        touch.execute(params![ip, failed_checked_at])?;
+                    }
+                }
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    })
+    .await
+}
+
+pub async fn reset_hostname_checks(db: &CoreDatabasePool, clear_hostnames: bool) -> Result<usize, DatabaseError> {
+    let sql = if clear_hostnames {
+        "UPDATE clients SET hostname = NULL, hostname_checked_at = NULL"
+    } else {
+        "UPDATE clients SET hostname_checked_at = NULL"
+    };
+    db.interact(move |c| c.execute(sql, [])).await
+}
+
+pub async fn set_display_name(
+    db: &CoreDatabasePool,
+    ip: String,
+    display_name: Option<String>,
+) -> Result<bool, DatabaseError> {
+    db.interact(move |c| {
+        c.execute(
+            "UPDATE clients SET display_name = ?2 WHERE ip = ?1",
+            params![ip, display_name],
+        )
+        .map(|n| n > 0)
+    })
+    .await
+}
+
+pub async fn row_count(db: &CoreDatabasePool, search: Option<String>) -> Result<i64, DatabaseError> {
+    let pattern = search_pattern(search);
+    db.interact(move |c| {
+        c.query_row(
+            &format!("SELECT COUNT(*) FROM clients WHERE {SEARCH_FILTER}"),
+            params![pattern],
+            |r| r.get(0),
+        )
+    })
+    .await
 }
 
 pub async fn delete_before(db: &CoreDatabasePool, cutoff_ms: i64) -> Result<usize, DatabaseError> {
-    db.interact(move |c| c.execute("DELETE FROM clients WHERE last_seen_at < ?1", params![cutoff_ms]))
-        .await
+    db.interact(move |c| {
+        c.execute(
+            "DELETE FROM clients WHERE last_seen_at < ?1 AND display_name IS NULL",
+            params![cutoff_ms],
+        )
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -75,23 +191,80 @@ mod tests {
     use super::*;
     use crate::database::setup_core_test_db;
 
+    fn found(hostname: &str) -> HostnameCheck {
+        HostnameCheck::Found(hostname.into())
+    }
+
     #[tokio::test]
-    async fn test_upsert_inserts_new_clients() {
+    async fn test_due_for_hostname_check_unchecked_first_then_oldest() {
         let db = setup_core_test_db().await.unwrap();
-        batch_upsert(&db.conn, vec![("10.0.0.1".into(), 100), ("10.0.0.2".into(), 200)])
+        batch_upsert(
+            &db.conn,
+            vec![
+                ("10.0.0.1".into(), 100),
+                ("10.0.0.2".into(), 100),
+                ("10.0.0.3".into(), 100),
+                ("10.0.0.4".into(), 100),
+            ],
+        )
+        .await
+        .unwrap();
+        batch_set_hostnames(&db.conn, vec![("10.0.0.1".into(), HostnameCheck::Failed)], 500, 500)
+            .await
+            .unwrap();
+        batch_set_hostnames(&db.conn, vec![("10.0.0.2".into(), HostnameCheck::Failed)], 300, 300)
+            .await
+            .unwrap();
+        batch_set_hostnames(&db.conn, vec![("10.0.0.3".into(), HostnameCheck::Failed)], 1000, 1000)
             .await
             .unwrap();
 
-        assert_eq!(row_count(&db.conn).await.unwrap(), 2);
-        let clients = list(&db.conn, 10, 0).await.unwrap();
-        assert_eq!(
-            clients[0],
-            Client {
-                ip: "10.0.0.2".into(),
-                first_seen_at: 200,
-                last_seen_at: 200
-            }
-        );
+        let due = due_for_hostname_check(&db.conn, 900, 10).await.unwrap();
+        assert_eq!(due, vec!["10.0.0.4", "10.0.0.2", "10.0.0.1"]);
+
+        let limited = due_for_hostname_check(&db.conn, 900, 1).await.unwrap();
+        assert_eq!(limited, vec!["10.0.0.4"]);
+    }
+
+    #[tokio::test]
+    async fn test_set_hostnames_found_not_found_failed() {
+        let db = setup_core_test_db().await.unwrap();
+        batch_upsert(&db.conn, vec![("10.0.0.1".into(), 100), ("10.0.0.2".into(), 100)])
+            .await
+            .unwrap();
+        batch_set_hostnames(
+            &db.conn,
+            vec![
+                ("10.0.0.1".into(), found("laptop.lan")),
+                ("10.0.0.2".into(), found("phone.lan")),
+            ],
+            200,
+            200,
+        )
+        .await
+        .unwrap();
+
+        // a failed lookup keeps the old name, an answered one without a name clears it
+        batch_set_hostnames(
+            &db.conn,
+            vec![
+                ("10.0.0.1".into(), HostnameCheck::Failed),
+                ("10.0.0.2".into(), HostnameCheck::NotFound),
+            ],
+            300,
+            300,
+        )
+        .await
+        .unwrap();
+
+        let clients = list(&db.conn, 10, 0, None).await.unwrap();
+        let laptop = clients.iter().find(|c| c.ip == "10.0.0.1").unwrap();
+        assert_eq!(laptop.hostname.as_deref(), Some("laptop.lan"));
+        assert_eq!(laptop.hostname_checked_at, Some(300));
+
+        let phone = clients.iter().find(|c| c.ip == "10.0.0.2").unwrap();
+        assert_eq!(phone.hostname, None);
+        assert_eq!(phone.hostname_checked_at, Some(300));
     }
 
     #[tokio::test]
@@ -101,7 +274,7 @@ mod tests {
         batch_upsert(&db.conn, vec![("10.0.0.1".into(), 100)]).await.unwrap();
         batch_upsert(&db.conn, vec![("10.0.0.1".into(), later)]).await.unwrap();
 
-        let clients = list(&db.conn, 10, 0).await.unwrap();
+        let clients = list(&db.conn, 10, 0, None).await.unwrap();
         assert_eq!(clients.len(), 1);
         assert_eq!(clients[0].first_seen_at, 100);
         assert_eq!(clients[0].last_seen_at, later);
@@ -118,7 +291,7 @@ mod tests {
         .await
         .unwrap();
 
-        let clients = list(&db.conn, 10, 0).await.unwrap();
+        let clients = list(&db.conn, 10, 0, None).await.unwrap();
         assert_eq!(clients[0].last_seen_at, 100);
     }
 
@@ -128,7 +301,7 @@ mod tests {
         batch_upsert(&db.conn, vec![("10.0.0.1".into(), 300)]).await.unwrap();
         batch_upsert(&db.conn, vec![("10.0.0.1".into(), 100)]).await.unwrap();
 
-        let clients = list(&db.conn, 10, 0).await.unwrap();
+        let clients = list(&db.conn, 10, 0, None).await.unwrap();
         assert_eq!(clients[0].first_seen_at, 100);
         assert_eq!(clients[0].last_seen_at, 300);
     }
@@ -147,24 +320,124 @@ mod tests {
         .await
         .unwrap();
 
-        let ips: Vec<String> = list(&db.conn, 10, 0).await.unwrap().into_iter().map(|c| c.ip).collect();
+        let ips: Vec<String> = list(&db.conn, 10, 0, None)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|c| c.ip)
+            .collect();
         assert_eq!(ips, vec!["10.0.0.2", "10.0.0.3", "10.0.0.1"]);
 
-        let page = list(&db.conn, 1, 1).await.unwrap();
+        let page = list(&db.conn, 1, 1, None).await.unwrap();
         assert_eq!(page[0].ip, "10.0.0.3");
     }
 
     #[tokio::test]
-    async fn test_delete_before_removes_stale_clients() {
+    async fn test_search_matches_ip_hostname_and_display_name() {
         let db = setup_core_test_db().await.unwrap();
-        batch_upsert(&db.conn, vec![("10.0.0.1".into(), 100), ("10.0.0.2".into(), 300)])
+        batch_upsert(
+            &db.conn,
+            vec![
+                ("192.168.1.10".into(), 300),
+                ("192.168.1.20".into(), 200),
+                ("10.0.0.5".into(), 100),
+            ],
+        )
+        .await
+        .unwrap();
+        batch_set_hostnames(&db.conn, vec![("192.168.1.20".into(), found("printer.lan"))], 400, 400)
+            .await
+            .unwrap();
+        set_display_name(&db.conn, "10.0.0.5".into(), Some("Living room TV".into()))
+            .await
+            .unwrap();
+
+        let ips = |clients: Vec<Client>| clients.into_iter().map(|c| c.ip).collect::<Vec<_>>();
+
+        assert_eq!(
+            ips(list(&db.conn, 10, 0, Some("192.168".into())).await.unwrap()),
+            vec!["192.168.1.10", "192.168.1.20"]
+        );
+        assert_eq!(
+            ips(list(&db.conn, 10, 0, Some("printer".into())).await.unwrap()),
+            vec!["192.168.1.20"]
+        );
+        assert_eq!(
+            ips(list(&db.conn, 10, 0, Some("tv".into())).await.unwrap()),
+            vec!["10.0.0.5"]
+        );
+        assert_eq!(row_count(&db.conn, Some("192.168".into())).await.unwrap(), 2);
+        assert_eq!(row_count(&db.conn, Some("%".into())).await.unwrap(), 0);
+        assert_eq!(row_count(&db.conn, None).await.unwrap(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_failed_lookups_store_failed_checked_at() {
+        let db = setup_core_test_db().await.unwrap();
+        batch_upsert(&db.conn, vec![("10.0.0.1".into(), 100), ("10.0.0.2".into(), 100)])
+            .await
+            .unwrap();
+        batch_set_hostnames(
+            &db.conn,
+            vec![
+                ("10.0.0.1".into(), found("laptop.lan")),
+                ("10.0.0.2".into(), HostnameCheck::Failed),
+            ],
+            500,
+            200,
+        )
+        .await
+        .unwrap();
+
+        let clients = list(&db.conn, 10, 0, None).await.unwrap();
+        let checked_at = |ip: &str| clients.iter().find(|c| c.ip == ip).unwrap().hostname_checked_at;
+        assert_eq!(checked_at("10.0.0.1"), Some(500));
+        assert_eq!(checked_at("10.0.0.2"), Some(200));
+    }
+
+    #[tokio::test]
+    async fn test_reset_hostname_checks() {
+        let db = setup_core_test_db().await.unwrap();
+        batch_upsert(&db.conn, vec![("10.0.0.1".into(), 100)]).await.unwrap();
+        batch_set_hostnames(&db.conn, vec![("10.0.0.1".into(), found("laptop.lan"))], 200, 200)
+            .await
+            .unwrap();
+
+        reset_hostname_checks(&db.conn, false).await.unwrap();
+        let clients = list(&db.conn, 10, 0, None).await.unwrap();
+        assert_eq!(clients[0].hostname.as_deref(), Some("laptop.lan"));
+        assert_eq!(clients[0].hostname_checked_at, None);
+
+        reset_hostname_checks(&db.conn, true).await.unwrap();
+        let clients = list(&db.conn, 10, 0, None).await.unwrap();
+        assert_eq!(clients[0].hostname, None);
+    }
+
+    #[tokio::test]
+    async fn test_delete_before_keeps_named_clients() {
+        let db = setup_core_test_db().await.unwrap();
+        batch_upsert(
+            &db.conn,
+            vec![
+                ("10.0.0.1".into(), 100),
+                ("10.0.0.2".into(), 100),
+                ("10.0.0.3".into(), 300),
+            ],
+        )
+        .await
+        .unwrap();
+        set_display_name(&db.conn, "10.0.0.2".into(), Some("Living room TV".into()))
             .await
             .unwrap();
 
         assert_eq!(delete_before(&db.conn, 200).await.unwrap(), 1);
 
-        let clients = list(&db.conn, 10, 0).await.unwrap();
-        assert_eq!(clients.len(), 1);
-        assert_eq!(clients[0].ip, "10.0.0.2");
+        let ips: Vec<String> = list(&db.conn, 10, 0, None)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|c| c.ip)
+            .collect();
+        assert_eq!(ips, vec!["10.0.0.3", "10.0.0.2"]);
     }
 }

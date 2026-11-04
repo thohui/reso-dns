@@ -52,7 +52,7 @@ export function DomainRulesGrid({
 			columnHelper.accessor('domain', {
 				header: 'Domain',
 				cell: ({ row, getValue }) => (
-					<Table.Cell py='3.5' px='4'>
+					<Table.Cell py='3' px='4'>
 						<Text
 							as='button'
 							fontFamily="'Mozilla Text', sans-serif"
@@ -74,7 +74,7 @@ export function DomainRulesGrid({
 			columnHelper.accessor('match_type', {
 				header: 'Match',
 				cell: ({ getValue }) => (
-					<Table.Cell py='3.5' px='4'>
+					<Table.Cell py='3' px='4'>
 						<MatchTypeBadge matchType={getValue()} />
 					</Table.Cell>
 				),
@@ -82,7 +82,7 @@ export function DomainRulesGrid({
 			columnHelper.accessor('action', {
 				header: 'Action',
 				cell: ({ getValue }) => (
-					<Table.Cell py='3.5' px='4'>
+					<Table.Cell py='3' px='4'>
 						<ActionBadge action={getValue()} />
 					</Table.Cell>
 				),
@@ -90,7 +90,7 @@ export function DomainRulesGrid({
 			columnHelper.accessor('created_at', {
 				header: 'Added',
 				cell: (info) => (
-					<Table.Cell py='3.5' px='4' textAlign='right'>
+					<Table.Cell py='3' px='4' textAlign='right'>
 						<Text color='fg.muted' fontSize='sm'>
 							{formatTimeAgo(info.getValue())}
 						</Text>
@@ -101,7 +101,7 @@ export function DomainRulesGrid({
 				id: 'status',
 				header: 'Status',
 				cell: ({ row }) => (
-					<Table.Cell py='3.5' px='4' textAlign='center'>
+					<Table.Cell py='3' px='4' textAlign='center'>
 						<ToggleButton
 							enabled={row.original.enabled}
 							label='rule'
@@ -114,8 +114,10 @@ export function DomainRulesGrid({
 				id: 'edit',
 				header: '',
 				cell: ({ row }) => (
-					<Table.Cell py='3.5' px='4'>
+					<Table.Cell py='3' px='4'>
 						<IconButton
+							aria-label='Edit rule'
+							size='2xs'
 							variant='ghost'
 							p='1'
 							borderRadius='md'
