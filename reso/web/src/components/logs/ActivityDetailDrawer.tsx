@@ -10,6 +10,7 @@ import {
 	VStack,
 } from '@chakra-ui/react';
 import { Ban } from 'lucide-react';
+import { ClientLabel } from '@/components/ClientLabel';
 import { StatusBadge } from '@/components/StatusBadge';
 import { toastError } from '@/components/Toaster';
 import { useAddDomainRule } from '@/hooks/domain-rules/useAddDomainRule';
@@ -23,7 +24,13 @@ import {
 import { recordTypeName } from '@/lib/dns';
 import { getStatusInfo } from '@/lib/status-info';
 
-function DetailRow({ label, value }: { label: string; value: string }) {
+function DetailRow({
+	label,
+	value,
+}: {
+	label: string;
+	value: React.ReactNode;
+}) {
 	return (
 		<HStack justify='space-between' py='2'>
 			<Text
@@ -167,7 +174,12 @@ export function ActivityDetailDrawer({
 										/>
 										<DetailRow
 											label='Client'
-											value={activity.client || 'unknown'}
+											value={
+												<ClientLabel
+													ip={activity.client}
+													name={activity.client_name}
+												/>
+											}
 										/>
 										<DetailRow
 											label='Transport Protocol'

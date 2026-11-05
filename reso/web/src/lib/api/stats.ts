@@ -49,6 +49,7 @@ export type TopRange =
 export interface TopEntry {
 	name: string;
 	count: number;
+	label?: string;
 }
 
 export interface TopResponse {

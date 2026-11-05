@@ -17,11 +17,10 @@ import { Monitor, Pencil, Search } from 'lucide-react';
 import React, { useMemo } from 'react';
 import { GridPage } from '@/components/GridPage';
 import type { Client } from '@/lib/api/clients';
+import { normalizeHostname } from '@/lib/clients';
 import { formatTimeAgo } from '@/lib/time';
 
 const columnHelper = createColumnHelper<Client>();
-
-const normalizeHostname = (hostname?: string | null) => hostname?.split('.')[0];
 
 interface ClientsGridProps {
 	clients: Client[];

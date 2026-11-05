@@ -51,17 +51,26 @@ fn reverse_name(ip: IpAddr) -> Option<DomainName> {
 #[cfg(target_os = "linux")]
 pub fn default_gateway() -> Option<IpAddr> {
     let route_table = std::fs::read_to_string("/proc/net/route").ok()?;
-    route_table.lines().skip(1).find_map(|line| {
-        let mut fields = line.split_whitespace();
-        let destination = fields.nth(1)?;
-        let gateway = fields.next()?;
-        if destination != "00000000" {
-            return None;
-        }
-        let raw = u32::from_str_radix(gateway, 16).ok()?;
-        let ip = Ipv4Addr::from(raw.to_ne_bytes());
-        (!ip.is_unspecified()).then_some(IpAddr::V4(ip))
-    })
+    route_table
+        .lines()
+        .skip(1)
+        .filter_map(|line| {
+            let fields: Vec<&str> = line.split_whitespace().collect();
+            let [_, destination, gateway, flags, _, _, metric, mask, ..] = fields.as_slice() else {
+                return None;
+            };
+            // 0x2 = RTF_GATEWAY, the mask check skips split routes like 0.0.0.0/1
+            let flags = u16::from_str_radix(flags, 16).ok()?;
+            if *destination != "00000000" || *mask != "00000000" || flags & 0x2 == 0 {
+                return None;
+            }
+            let raw = u32::from_str_radix(gateway, 16).ok()?;
+            let ip = Ipv4Addr::from(raw.to_ne_bytes());
+            let metric: u32 = metric.parse().ok()?;
+            (!ip.is_unspecified()).then_some((metric, IpAddr::V4(ip)))
+        })
+        .min_by_key(|(metric, _)| *metric)
+        .map(|(_, ip)| ip)
 }
 
 #[cfg(not(target_os = "linux"))]

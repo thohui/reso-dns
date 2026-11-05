@@ -5,7 +5,6 @@ use crate::{
 use axum::{
     Json, Router,
     extract::State,
-    http::StatusCode,
     middleware,
     routing::{get, put},
 };
@@ -76,7 +75,7 @@ pub async fn update(
     global: State<SharedGlobal>,
     ApiPath(ip): ApiPath<String>,
     ApiJson(payload): ApiJson<UpdatePayload>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<(), ApiError> {
     let display_name = payload
         .display_name
         .map(|n| n.trim().to_string())
@@ -100,5 +99,5 @@ pub async fn update(
         return Err(ApiError::not_found());
     }
 
-    Ok(StatusCode::NO_CONTENT)
+    Ok(())
 }

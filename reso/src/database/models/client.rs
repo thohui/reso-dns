@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use rusqlite::params;
 use serde::Serialize;
 
@@ -172,6 +174,40 @@ pub async fn row_count(db: &CoreDatabasePool, search: Option<String>) -> Result<
             params![pattern],
             |r| r.get(0),
         )
+    })
+    .await
+}
+
+pub async fn names_for(db: &CoreDatabasePool, mut ips: Vec<String>) -> Result<HashMap<String, String>, DatabaseError> {
+    ips.sort_unstable();
+    ips.dedup();
+    if ips.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    db.interact(move |c| {
+        let placeholders = vec!["?"; ips.len()].join(",");
+        let mut stmt = c.prepare(&format!(
+            "SELECT ip, display_name, hostname FROM clients
+             WHERE ip IN ({placeholders}) AND COALESCE(display_name, hostname) IS NOT NULL"
+        ))?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(&ips), |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, Option<String>>(1)?,
+                r.get::<_, Option<String>>(2)?,
+            ))
+        })?;
+
+        let mut names = HashMap::new();
+        for row in rows {
+            let (ip, display_name, hostname) = row?;
+            let short_hostname = hostname.and_then(|h| h.split('.').next().map(str::to_string));
+            if let Some(name) = display_name.or(short_hostname) {
+                names.insert(ip, name);
+            }
+        }
+        Ok(names)
     })
     .await
 }
@@ -439,5 +475,56 @@ mod tests {
             .map(|c| c.ip)
             .collect();
         assert_eq!(ips, vec!["10.0.0.3", "10.0.0.2"]);
+    }
+
+    #[tokio::test]
+    async fn test_names_for_prefers_display_name() {
+        let db = setup_core_test_db().await.unwrap();
+        batch_upsert(
+            &db.conn,
+            vec![
+                ("10.0.0.1".into(), 100),
+                ("10.0.0.2".into(), 100),
+                ("10.0.0.3".into(), 100),
+            ],
+        )
+        .await
+        .unwrap();
+        batch_set_hostnames(
+            &db.conn,
+            vec![
+                ("10.0.0.1".into(), found("laptop.lan")),
+                ("10.0.0.2".into(), found("tv.lan")),
+            ],
+            200,
+            200,
+        )
+        .await
+        .unwrap();
+        set_display_name(&db.conn, "10.0.0.2".into(), Some("Mr. Smith's TV".into()))
+            .await
+            .unwrap();
+
+        let names = names_for(
+            &db.conn,
+            vec![
+                "10.0.0.1".into(),
+                "10.0.0.2".into(),
+                "10.0.0.2".into(),
+                "10.0.0.3".into(),
+                "10.0.0.9".into(),
+            ],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            names,
+            HashMap::from([
+                ("10.0.0.1".to_string(), "laptop".to_string()),
+                ("10.0.0.2".to_string(), "Mr. Smith's TV".to_string()),
+            ])
+        );
+        assert!(names_for(&db.conn, vec![]).await.unwrap().is_empty());
     }
 }

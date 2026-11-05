@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use arc_swap::ArcSwap;
-use serde::{Deserialize, Deserializer, Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
     database::{CoreDatabasePool, models::config as db_config},
@@ -18,8 +18,6 @@ use super::ServiceError;
 pub struct Config {
     pub dns: DnsConfig,
     pub logs: LogsConfig,
-    /// Missing in requests from before client naming, falls back to the default gateway.
-    #[serde(default)]
     pub clients: ClientsConfig,
 }
 
@@ -53,7 +51,7 @@ pub struct DnsConfig {
 pub struct ClientsConfig {
     /// If the ptr_servers are None, then we are falling back to the default gateway.
     /// If the ptr_servers are an empty vec, then we don't do anything.
-    #[serde(deserialize_with = "deserialize_dns_endpoints")]
+    #[serde(default, deserialize_with = "deserialize_dns_endpoints")]
     pub ptr_servers: Option<Vec<SocketAddr>>,
 }
 
