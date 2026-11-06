@@ -23,6 +23,7 @@ pub const COMPRESS_TO_DAY_AFTER_MS: i64 = 31 * DAY_MS;
 pub const CLIENT_RETENTION_MS: i64 = 30 * DAY_MS;
 
 const HOSTNAME_RECHECK_AFTER_MS: i64 = 6 * HOUR_MS;
+const HOSTNAME_RETRY_NOT_FOUND_AFTER_MS: i64 = 30 * MINUTE_MS;
 const HOSTNAME_RETRY_FAILED_AFTER_MS: i64 = 10 * MINUTE_MS;
 const HOSTNAME_LOOKUP_TIMEOUT: Duration = Duration::from_secs(1);
 
@@ -256,7 +257,7 @@ async fn resolve_due_hostnames(db: &CoreDatabasePool, servers: &[SocketAddr]) {
                 Ok(addr) if reverse::is_private_ip(addr) => {
                     reverse::lookup_ptr(servers, addr, HOSTNAME_LOOKUP_TIMEOUT).await
                 }
-                _ => HostnameCheck::NotFound,
+                _ => HostnameCheck::Skipped,
             };
             (ip, check)
         })
@@ -270,8 +271,9 @@ async fn resolve_due_hostnames(db: &CoreDatabasePool, servers: &[SocketAddr]) {
         .count();
     let total = checks.len();
 
+    let not_found_checked_at = now - HOSTNAME_RECHECK_AFTER_MS + HOSTNAME_RETRY_NOT_FOUND_AFTER_MS;
     let failed_checked_at = now - HOSTNAME_RECHECK_AFTER_MS + HOSTNAME_RETRY_FAILED_AFTER_MS;
-    match client::batch_set_hostnames(db, checks, now, failed_checked_at).await {
+    match client::batch_set_hostnames(db, checks, now, not_found_checked_at, failed_checked_at).await {
         Ok(()) => tracing::debug!("resolved {found}/{total} client hostnames"),
         Err(e) => tracing::error!("failed to store client hostnames: {}", e),
     }

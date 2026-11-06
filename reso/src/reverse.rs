@@ -16,6 +16,7 @@ use tokio::{net::UdpSocket, time::Instant};
 pub enum HostnameCheck {
     Found(String),
     NotFound,
+    Skipped,
     Failed,
 }
 
@@ -87,7 +88,7 @@ pub async fn lookup_ptr(servers: &[SocketAddr], ip: IpAddr, timeout: Duration) -
     for server in servers {
         match query_ptr(*server, &name, timeout).await {
             Ok(HostnameCheck::Found(hostname)) => return HostnameCheck::Found(hostname),
-            Ok(HostnameCheck::NotFound) => {}
+            Ok(HostnameCheck::NotFound | HostnameCheck::Skipped) => {}
             Ok(HostnameCheck::Failed) => any_failed = true,
             Err(e) => {
                 tracing::debug!(%server, %ip, "ptr lookup failed: {e}");
@@ -149,7 +150,9 @@ fn ptr_result(response: &DnsMessage, name: &DomainName) -> HostnameCheck {
             .filter(|r| r.name == *name)
             .find_map(|r| match (r.record_type(), r.data()) {
                 (RecordType::PTR, DnsRecordData::DomainName(target)) if !target.is_root() => {
-                    Some(HostnameCheck::Found(display_hostname(target)))
+                    let hostname = display_hostname(target);
+                    let usable = hostname.split('.').next().is_some_and(|label| !label.trim().is_empty());
+                    usable.then_some(HostnameCheck::Found(hostname))
                 }
                 _ => None,
             })

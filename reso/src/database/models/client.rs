@@ -111,6 +111,7 @@ pub async fn batch_set_hostnames(
     db: &CoreDatabasePool,
     checks: Vec<(String, HostnameCheck)>,
     checked_at: i64,
+    not_found_checked_at: i64,
     failed_checked_at: i64,
 ) -> Result<(), DatabaseError> {
     if checks.is_empty() {
@@ -128,6 +129,9 @@ pub async fn batch_set_hostnames(
                         set.execute(params![ip, hostname, checked_at])?;
                     }
                     HostnameCheck::NotFound => {
+                        set.execute(params![ip, None::<String>, not_found_checked_at])?;
+                    }
+                    HostnameCheck::Skipped => {
                         set.execute(params![ip, None::<String>, checked_at])?;
                     }
                     HostnameCheck::Failed => {
@@ -245,15 +249,33 @@ mod tests {
         )
         .await
         .unwrap();
-        batch_set_hostnames(&db.conn, vec![("10.0.0.1".into(), HostnameCheck::Failed)], 500, 500)
-            .await
-            .unwrap();
-        batch_set_hostnames(&db.conn, vec![("10.0.0.2".into(), HostnameCheck::Failed)], 300, 300)
-            .await
-            .unwrap();
-        batch_set_hostnames(&db.conn, vec![("10.0.0.3".into(), HostnameCheck::Failed)], 1000, 1000)
-            .await
-            .unwrap();
+        batch_set_hostnames(
+            &db.conn,
+            vec![("10.0.0.1".into(), HostnameCheck::Failed)],
+            500,
+            500,
+            500,
+        )
+        .await
+        .unwrap();
+        batch_set_hostnames(
+            &db.conn,
+            vec![("10.0.0.2".into(), HostnameCheck::Failed)],
+            300,
+            300,
+            300,
+        )
+        .await
+        .unwrap();
+        batch_set_hostnames(
+            &db.conn,
+            vec![("10.0.0.3".into(), HostnameCheck::Failed)],
+            1000,
+            1000,
+            1000,
+        )
+        .await
+        .unwrap();
 
         let due = due_for_hostname_check(&db.conn, 900, 10).await.unwrap();
         assert_eq!(due, vec!["10.0.0.4", "10.0.0.2", "10.0.0.1"]);
@@ -276,6 +298,7 @@ mod tests {
             ],
             200,
             200,
+            200,
         )
         .await
         .unwrap();
@@ -287,6 +310,7 @@ mod tests {
                 ("10.0.0.1".into(), HostnameCheck::Failed),
                 ("10.0.0.2".into(), HostnameCheck::NotFound),
             ],
+            300,
             300,
             300,
         )
@@ -381,9 +405,15 @@ mod tests {
         )
         .await
         .unwrap();
-        batch_set_hostnames(&db.conn, vec![("192.168.1.20".into(), found("printer.lan"))], 400, 400)
-            .await
-            .unwrap();
+        batch_set_hostnames(
+            &db.conn,
+            vec![("192.168.1.20".into(), found("printer.lan"))],
+            400,
+            400,
+            400,
+        )
+        .await
+        .unwrap();
         set_display_name(&db.conn, "10.0.0.5".into(), Some("Living room TV".into()))
             .await
             .unwrap();
@@ -420,6 +450,7 @@ mod tests {
                 ("10.0.0.2".into(), HostnameCheck::Failed),
             ],
             500,
+            500,
             200,
         )
         .await
@@ -435,7 +466,7 @@ mod tests {
     async fn test_reset_hostname_checks() {
         let db = setup_core_test_db().await.unwrap();
         batch_upsert(&db.conn, vec![("10.0.0.1".into(), 100)]).await.unwrap();
-        batch_set_hostnames(&db.conn, vec![("10.0.0.1".into(), found("laptop.lan"))], 200, 200)
+        batch_set_hostnames(&db.conn, vec![("10.0.0.1".into(), found("laptop.lan"))], 200, 200, 200)
             .await
             .unwrap();
 
@@ -496,6 +527,7 @@ mod tests {
                 ("10.0.0.1".into(), found("laptop.lan")),
                 ("10.0.0.2".into(), found("tv.lan")),
             ],
+            200,
             200,
             200,
         )
