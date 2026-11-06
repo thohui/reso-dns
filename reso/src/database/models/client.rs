@@ -438,28 +438,48 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_failed_lookups_store_failed_checked_at() {
+    async fn test_hostname_checks_store_checked_at_per_result() {
         let db = setup_core_test_db().await.unwrap();
-        batch_upsert(&db.conn, vec![("10.0.0.1".into(), 100), ("10.0.0.2".into(), 100)])
+        batch_upsert(
+            &db.conn,
+            vec![
+                ("10.0.0.1".into(), 100),
+                ("10.0.0.2".into(), 100),
+                ("10.0.0.3".into(), 100),
+                ("8.8.8.8".into(), 100),
+            ],
+        )
+        .await
+        .unwrap();
+        batch_set_hostnames(&db.conn, vec![("8.8.8.8".into(), found("dns.google"))], 200, 200, 200)
             .await
             .unwrap();
+
         batch_set_hostnames(
             &db.conn,
             vec![
                 ("10.0.0.1".into(), found("laptop.lan")),
-                ("10.0.0.2".into(), HostnameCheck::Failed),
+                ("10.0.0.2".into(), HostnameCheck::NotFound),
+                ("10.0.0.3".into(), HostnameCheck::Failed),
+                ("8.8.8.8".into(), HostnameCheck::Skipped),
             ],
-            500,
-            500,
-            200,
+            1000,
+            400,
+            300,
         )
         .await
         .unwrap();
 
         let clients = list(&db.conn, 10, 0, None).await.unwrap();
-        let checked_at = |ip: &str| clients.iter().find(|c| c.ip == ip).unwrap().hostname_checked_at;
-        assert_eq!(checked_at("10.0.0.1"), Some(500));
-        assert_eq!(checked_at("10.0.0.2"), Some(200));
+        let client = |ip: &str| clients.iter().find(|c| c.ip == ip).unwrap();
+        assert_eq!(client("10.0.0.1").hostname_checked_at, Some(1000));
+        assert_eq!(client("10.0.0.2").hostname_checked_at, Some(400));
+        assert_eq!(client("10.0.0.3").hostname_checked_at, Some(300));
+        assert_eq!(client("8.8.8.8").hostname_checked_at, Some(1000));
+        assert_eq!(client("8.8.8.8").hostname, None);
+
+        let due = due_for_hostname_check(&db.conn, 500, 10).await.unwrap();
+        assert_eq!(due, vec!["10.0.0.3", "10.0.0.2"]);
     }
 
     #[tokio::test]

@@ -247,6 +247,15 @@ mod tests {
             .build();
         assert_eq!(ptr_result(&unrelated, &qname), HostnameCheck::NotFound);
 
+        for target in ["\\001", "xn--.lan", "\\032.lan"] {
+            let blank = DnsMessageBuilder::new()
+                .add_question(question.clone())
+                .add_answer(ptr("5.2.168.192.in-addr.arpa", target))
+                .with_response(DnsResponseCode::NoError)
+                .build();
+            assert_eq!(ptr_result(&blank, &qname), HostnameCheck::NotFound, "{target}");
+        }
+
         let nx = DnsMessageBuilder::new()
             .add_question(question.clone())
             .with_response(DnsResponseCode::NxDomain)
