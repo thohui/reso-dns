@@ -205,7 +205,13 @@ pub async fn run_client_hostname_resolution(
                     tracing::debug!("no default gateway to ask for client hostnames yet, skipping");
                     return;
                 }
-                if last_servers.as_ref().is_some_and(|last| *last != servers) {
+                // naming may have been disabled before a restart, without this tick ever seeing the change
+                let changed = match &last_servers {
+                    Some(last) => *last != servers,
+                    None => disabled,
+                };
+
+                if changed {
                     match client::reset_hostname_checks(&db, disabled).await {
                         Ok(_) => tracing::info!("ptr servers changed, looking up all client hostnames again"),
                         Err(e) => {
@@ -264,7 +270,6 @@ async fn resolve_due_hostnames(db: &CoreDatabasePool, servers: &[SocketAddr]) {
         .count();
     let total = checks.len();
 
-    // backdated so the lookup comes due again after the retry delay instead of the full recheck interval
     let failed_checked_at = now - HOSTNAME_RECHECK_AFTER_MS + HOSTNAME_RETRY_FAILED_AFTER_MS;
     match client::batch_set_hostnames(db, checks, now, failed_checked_at).await {
         Ok(()) => tracing::debug!("resolved {found}/{total} client hostnames"),

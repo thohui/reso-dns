@@ -110,7 +110,10 @@ export function EditClientDialog({
 									autoFocus
 									value={displayName}
 									maxLength={MAX_DISPLAY_NAME_LENGTH}
-									onChange={(e) => setDisplayName(e.target.value)}
+									onChange={(e) => {
+										setDisplayName(e.target.value);
+										setError(null);
+									}}
 									placeholder={client.hostname ?? 'Living room TV'}
 									bg='bg.input'
 									borderColor='border.input'

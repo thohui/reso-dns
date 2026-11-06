@@ -30,7 +30,7 @@ export default function ClientsPage() {
 	const handleUpdate = async (ip: string, displayName: string | null) => {
 		await updateMutation.mutateAsync({ ip, display_name: displayName });
 		queryClient.invalidateQueries({ queryKey: ['clients'] });
-		setEditing(null);
+		setEditing((current) => (current?.ip === ip ? null : current));
 	};
 
 	return (
