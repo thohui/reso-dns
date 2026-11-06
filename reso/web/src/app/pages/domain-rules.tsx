@@ -125,7 +125,7 @@ export default function DomainRulesPage() {
 	const handleEditRule = async (domain: string, action: ListAction) => {
 		await updateRule.mutateAsync({ domain, action });
 		invalidateRules();
-		setEditingRule(null);
+		setEditingRule((current) => (current?.domain === domain ? null : current));
 	};
 
 	const handleAddSubscription = async (

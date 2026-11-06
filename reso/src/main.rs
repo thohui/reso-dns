@@ -22,7 +22,7 @@ use tracing_subscriber::{Layer, fmt, layer::SubscriberExt, util::SubscriberInitE
 
 use crate::{
     database::{connect_metrics_db, run_metrics_db_migrations},
-    metrics::task::{run_client_pruning, run_metrics_compression},
+    metrics::task::{run_client_hostname_resolution, run_client_pruning, run_metrics_compression},
     services::{api_keys::ApiKeysService, local_records::LocalRecordService},
 };
 mod api;
@@ -33,6 +33,7 @@ mod local;
 mod metrics;
 mod middleware;
 mod ratelimit;
+mod reverse;
 mod server_builder;
 mod services;
 mod time;
@@ -140,6 +141,13 @@ async fn run() -> anyhow::Result<()> {
     let client_pruning_db = global.core_database.clone();
     let client_pruning_handle = tokio::spawn(run_client_pruning(client_pruning_db, client_pruning_shutdown));
 
+    let hostname_shutdown = shutdown.child_token();
+    let hostname_handle = tokio::spawn(run_client_hostname_resolution(
+        global.core_database.clone(),
+        global.config.subscribe(),
+        hostname_shutdown,
+    ));
+
     let web_handle = tokio::spawn(serve_web(
         config.http_server_address,
         global.clone(),
@@ -177,6 +185,7 @@ async fn run() -> anyhow::Result<()> {
         let _ = truncate_handle.await;
         let _ = compression_handle.await;
         let _ = client_pruning_handle.await;
+        let _ = hostname_handle.await;
     };
 
     match tokio::time::timeout(Duration::from_secs(10), drain).await {

@@ -2,6 +2,7 @@ import { Chart, useChart } from '@chakra-ui/charts';
 import { Box, Text } from '@chakra-ui/react';
 import { Pie, PieChart, Sector, Tooltip } from 'recharts';
 import type { TopEntry } from '@/lib/api/stats';
+import { formatClient } from '@/lib/clients';
 
 const COLORS = [
 	'pink.solid',
@@ -25,6 +26,7 @@ interface Props {
 export function TopDonutChart({ title, data, loading }: Props) {
 	const chartData = data.map((entry, i) => ({
 		...entry,
+		tooltip: entry.label ? formatClient(entry.name, entry.label) : entry.name,
 		color: COLORS[i % COLORS.length],
 	}));
 
@@ -97,7 +99,7 @@ export function TopDonutChart({ title, data, loading }: Props) {
 							isAnimationActive={false}
 							data={chart.data}
 							dataKey={chart.key('count')}
-							nameKey='name'
+							nameKey='tooltip'
 							shape={(props) => (
 								<Sector {...props} fill={chart.color(props.payload.color)} />
 							)}
@@ -120,8 +122,14 @@ export function TopDonutChart({ title, data, loading }: Props) {
 								bg={chart.color(entry.color)}
 								flexShrink={0}
 							/>
-							<Text fontSize='xs' color='fg.muted' truncate flex='1'>
-								{entry.name}
+							<Text
+								fontSize='xs'
+								color='fg.muted'
+								truncate
+								flex='1'
+								title={entry.label ? entry.name : undefined}
+							>
+								{entry.label ?? entry.name}
 							</Text>
 							<Text fontSize='xs' color='fg' fontWeight='500' flexShrink={0}>
 								{entry.count}

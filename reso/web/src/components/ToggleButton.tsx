@@ -12,7 +12,7 @@ export function ToggleButton({ enabled, label, onToggle }: Props) {
 		<IconButton
 			aria-label={enabled ? `Disable ${label}` : `Enable ${label}`}
 			variant='plain'
-			size='xs'
+			size='2xs'
 			color={enabled ? 'status.success' : 'fg.subtle'}
 			_hover={{ opacity: 0.8, bg: 'transparent' }}
 			transition='all 0.15s'

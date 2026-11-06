@@ -3,6 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { RotateCcw, Save } from 'lucide-react';
 import { useForm } from 'react-hook-form';
+import { ClientNamesSection } from '@/components/config/sections/ClientNamesSection';
 import { LogRetentionSection } from '@/components/config/sections/LogRetentionSection';
 import { RateLimitSection } from '@/components/config/sections/RateLimitSection';
 import { SecuritySection } from '@/components/config/sections/SecuritySection';
@@ -21,8 +22,11 @@ export default function ConfigPage() {
 
 	const form = useForm({
 		resolver: zodResolver(configSchema),
+		mode: 'onChange',
 		defaultValues: {
 			upstreams: config.data.dns.forwarder.upstreams,
+			ptr_servers_auto: config.data.clients.ptr_servers === null,
+			ptr_servers: config.data.clients.ptr_servers ?? [],
 			timeout: config.data.dns.timeout,
 			rate_limit: config.data.dns.rate_limit,
 			security: config.data.dns.security,
@@ -41,12 +45,20 @@ export default function ConfigPage() {
 				security: data.security,
 			},
 			logs: data.logs,
+			clients: {
+				...config.data.clients,
+				ptr_servers: data.ptr_servers_auto
+					? null
+					: data.ptr_servers.map((s) => s.trim()),
+			},
 		};
 
 		updateConfig.mutate(updatedConfig, {
 			onSuccess: (updated) => {
 				form.reset({
 					upstreams: updated.dns.forwarder.upstreams,
+					ptr_servers_auto: updated.clients.ptr_servers === null,
+					ptr_servers: updated.clients.ptr_servers ?? [],
 					timeout: updated.dns.timeout,
 					rate_limit: updated.dns.rate_limit,
 					security: updated.dns.security,
@@ -99,6 +111,7 @@ export default function ConfigPage() {
 			<SecuritySection control={control} />
 			<RateLimitSection control={control} />
 			<LogRetentionSection control={control} />
+			<ClientNamesSection control={control} />
 		</Box>
 	);
 }

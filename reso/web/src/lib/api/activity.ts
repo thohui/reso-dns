@@ -63,6 +63,7 @@ export interface ActivityBase {
 	timestamp: number;
 	transport: DnsProtocol;
 	client: string | null;
+	client_name: string | null;
 	duration: number;
 	qname: string | null;
 	qtype: number | null;

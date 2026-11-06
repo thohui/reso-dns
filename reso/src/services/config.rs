@@ -1,9 +1,10 @@
 use std::collections::HashMap;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
 use arc_swap::ArcSwap;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
     database::{CoreDatabasePool, models::config as db_config},
@@ -17,6 +18,7 @@ use super::ServiceError;
 pub struct Config {
     pub dns: DnsConfig,
     pub logs: LogsConfig,
+    pub clients: ClientsConfig,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -43,6 +45,65 @@ pub struct DnsConfig {
     pub rate_limit: RateLimitConfigModel,
     /// Security related config.
     pub security: SecurityConfig,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ClientsConfig {
+    /// If the ptr_servers are None, then we are falling back to the default gateway.
+    /// If the ptr_servers are an empty vec, then we don't do anything.
+    #[serde(default, deserialize_with = "deserialize_dns_endpoints")]
+    pub ptr_servers: Option<Vec<SocketAddr>>,
+}
+
+impl ClientsConfig {
+    pub fn resolved_ptr_servers(&self) -> Vec<SocketAddr> {
+        match &self.ptr_servers {
+            Some(servers) => servers.clone(),
+            None => crate::reverse::default_gateway()
+                .map(|gateway| SocketAddr::new(gateway, 53))
+                .into_iter()
+                .collect(),
+        }
+    }
+
+    pub fn naming_disabled(&self) -> bool {
+        self.ptr_servers.as_ref().is_some_and(|s| s.is_empty())
+    }
+
+    fn validate(&self) -> Result<(), ServiceError> {
+        for server in self.ptr_servers.iter().flatten() {
+            let ip = server.ip().to_canonical();
+            let broadcast = matches!(ip, IpAddr::V4(v4) if v4.is_broadcast());
+            if ip.is_unspecified() || ip.is_multicast() || broadcast || server.port() == 0 {
+                return Err(ServiceError::BadRequest(format!(
+                    "invalid PTR server {server}, expected a unicast address and port"
+                )));
+            }
+        }
+        Ok(())
+    }
+}
+
+fn parse_dns_endpoint(s: &str) -> Option<SocketAddr> {
+    let bare = s.strip_prefix('[').and_then(|s| s.strip_suffix(']')).unwrap_or(s);
+    s.parse::<SocketAddr>()
+        .ok()
+        .or_else(|| bare.parse::<IpAddr>().ok().map(|ip| SocketAddr::new(ip, 53)))
+}
+
+fn deserialize_dns_endpoints<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Vec<SocketAddr>>, D::Error> {
+    let Some(endpoints) = Option::<Vec<String>>::deserialize(deserializer)? else {
+        return Ok(None);
+    };
+    let mut servers: Vec<SocketAddr> = Vec::with_capacity(endpoints.len());
+    for s in &endpoints {
+        let server = parse_dns_endpoint(s.trim())
+            .ok_or_else(|| serde::de::Error::custom(format!("invalid endpoint {s:?}: expected `IP` or `IP:port`")))?;
+        if !servers.contains(&server) {
+            servers.push(server);
+        }
+    }
+    Ok(Some(servers))
 }
 
 #[derive(Serialize, Deserialize)]
@@ -142,6 +203,15 @@ impl Config {
             .and_then(|v| v.parse::<bool>().ok())
             .unwrap_or(defaults.dns.security.block_firefox_canary);
 
+        let ptr_servers = map
+            .get("clients.ptr_servers")
+            .and_then(|v| {
+                serde_json::from_str::<Option<Vec<SocketAddr>>>(v)
+                    .inspect_err(|e| tracing::error!("failed to parse stored ptr servers {}: {}", v, e))
+                    .ok()
+            })
+            .unwrap_or(defaults.clients.ptr_servers);
+
         let logs_enabled = map
             .get("logs.enabled")
             .and_then(|v| v.parse::<bool>().ok())
@@ -184,6 +254,7 @@ impl Config {
                 retention_secs,
                 truncate_interval_secs,
             },
+            clients: ClientsConfig { ptr_servers },
         }
     }
 
@@ -194,6 +265,8 @@ impl Config {
 
         let upstreams_json = serde_json::to_string(&self.dns.forwarder.upstreams.iter().collect::<Vec<_>>())
             .unwrap_or_else(|_| "[]".to_string());
+
+        let ptr_servers_json = serde_json::to_string(&self.clients.ptr_servers).unwrap_or_else(|_| "[]".to_string());
 
         vec![
             ("dns.timeout".to_string(), self.dns.timeout.to_string()),
@@ -233,6 +306,7 @@ impl Config {
                 "dns.security.block_firefox_canary".to_string(),
                 self.dns.security.block_firefox_canary.to_string(),
             ),
+            ("clients.ptr_servers".to_string(), ptr_servers_json),
         ]
     }
 }
@@ -261,6 +335,7 @@ impl Default for Config {
                 retention_secs: 7 * 24 * 3600,
                 truncate_interval_secs: 3600,
             },
+            clients: ClientsConfig::default(),
         }
     }
 }
@@ -313,6 +388,7 @@ impl ConfigService {
         for upstream in &config.dns.forwarder.upstreams {
             upstream.validate().map_err(ServiceError::BadRequest)?;
         }
+        config.clients.validate()?;
 
         db_config::batch_set(&self.db, config.to_kv()).await?;
         let arc_config = Arc::new(config);

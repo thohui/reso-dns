@@ -19,6 +19,7 @@ import {
 	LogOut,
 	type LucideIcon,
 	Menu,
+	Monitor,
 	Settings,
 } from 'lucide-react';
 import { Suspense, useState } from 'react';
@@ -41,6 +42,7 @@ const menuItems: MenuItem[] = [
 	{ path: '/domain-rules', label: 'Domain Rules', icon: Ban },
 	{ path: '/local-records', label: 'Local Records', icon: Globe },
 	{ path: '/logs', label: 'Logs', icon: FileText },
+	{ path: '/clients', label: 'Clients', icon: Monitor },
 	{ path: '/api-keys', label: 'API keys', icon: Key },
 	{ path: '/config', label: 'Config', icon: Settings },
 ];

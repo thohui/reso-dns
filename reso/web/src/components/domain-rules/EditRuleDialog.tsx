@@ -31,6 +31,11 @@ export function EditRuleDialog({
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
+	const selectAction = (next: ListAction) => {
+		setAction(next);
+		setError(null);
+	};
+
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setIsSubmitting(true);
@@ -133,12 +138,12 @@ export function EditRuleDialog({
 								<HStack gap='2'>
 									<ActionBadge
 										action='block'
-										onClick={() => setAction('block')}
+										onClick={() => selectAction('block')}
 										selected={action === 'block'}
 									/>
 									<ActionBadge
 										action='allow'
-										onClick={() => setAction('allow')}
+										onClick={() => selectAction('allow')}
 										selected={action === 'allow'}
 									/>
 								</HStack>

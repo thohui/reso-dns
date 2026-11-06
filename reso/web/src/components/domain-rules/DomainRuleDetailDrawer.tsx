@@ -10,6 +10,7 @@ import {
 	VStack,
 } from '@chakra-ui/react';
 import { Ban, ShieldCheck } from 'lucide-react';
+import { ClientLabel } from '@/components/ClientLabel';
 import { useDomainRuleDetails } from '@/hooks/domain-rules/useDomainRuleDetails';
 import type { Activity } from '@/lib/api/activity';
 import type { DomainRule, ListAction, MatchType } from '@/lib/api/domain-rules';
@@ -134,7 +135,7 @@ function ActivityRow({ activity }: { activity: Activity }) {
 						{activity.qname || '-'}
 					</Text>
 					<Text fontSize='xs' color='fg.faint'>
-						{activity.client || 'unknown'}
+						<ClientLabel ip={activity.client} name={activity.client_name} />
 					</Text>
 				</VStack>
 			</HStack>

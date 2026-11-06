@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     database::models::{
+        client,
         client_metrics::{self, TimelineBucket},
         domain_metrics,
     },
@@ -138,6 +139,8 @@ enum TopRange {
 pub struct TopEntry {
     pub name: String,
     pub count: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -172,12 +175,34 @@ pub async fn top(global: State<SharedGlobal>, query: ApiQuery<TopQuery>) -> Resu
         (Ok(clients), Ok(domains), Ok(blocked_domains)) => (clients, domains, blocked_domains),
     };
 
+    // names are only for display, so a failed lookup still returns the ips
+    let ips = clients.iter().map(|(ip, _)| ip.clone()).collect();
+    let mut names = client::names_for(&global.core_database, ips)
+        .await
+        .inspect_err(|e| tracing::error!("failed to get client names: {}", e))
+        .unwrap_or_default();
+
     let to_entries = |rows: Vec<(String, i64)>| -> Vec<TopEntry> {
-        rows.into_iter().map(|(name, count)| TopEntry { name, count }).collect()
+        rows.into_iter()
+            .map(|(name, count)| TopEntry {
+                name,
+                count,
+                label: None,
+            })
+            .collect()
     };
 
+    let clients = clients
+        .into_iter()
+        .map(|(ip, count)| TopEntry {
+            label: names.remove(&ip),
+            name: ip,
+            count,
+        })
+        .collect();
+
     Ok(Json(TopResponse {
-        clients: to_entries(clients),
+        clients,
         domains: to_entries(domains),
         blocked_domains: to_entries(blocked_domains),
     }))

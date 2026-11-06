@@ -4,9 +4,13 @@ use reso_context::DnsProtocol;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    database::models::{
-        activity_log::{self, ActivityLog, ListFilter, SortColumn, SortDir},
-        domain_rule::DomainRule,
+    database::{
+        CoreDatabasePool,
+        models::{
+            activity_log::{self, ActivityLog, ListFilter, SortColumn, SortDir},
+            client,
+            domain_rule::DomainRule,
+        },
     },
     global::SharedGlobal,
     uuid::EntityId,
@@ -122,7 +126,7 @@ pub async fn activity(
         ApiError::server_error()
     })?;
 
-    let activities: Vec<Activity> = match page
+    let mut activities: Vec<Activity> = match page
         .items
         .into_iter()
         .map(Activity::try_from)
@@ -135,7 +139,20 @@ pub async fn activity(
         }
     };
 
+    add_client_names_to_activities(&global.core_database, &mut activities).await;
+
     Ok(Json(PagedResponse::new(activities, total, top, skip)))
+}
+
+pub async fn add_client_names_to_activities(db: &CoreDatabasePool, activities: &mut [Activity]) {
+    let ips = activities.iter().filter_map(|a| a.client.clone()).collect();
+    let names = client::names_for(db, ips)
+        .await
+        .inspect_err(|e| tracing::error!("failed to get client names: {}", e))
+        .unwrap_or_default();
+    for activity in activities {
+        activity.client_name = activity.client.as_ref().and_then(|ip| names.get(ip).cloned());
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -143,6 +160,7 @@ pub struct Activity {
     pub timestamp: i64,
     pub transport: DnsProtocol,
     pub client: Option<String>,
+    pub client_name: Option<String>,
     pub duration: u64,
     pub qname: Option<String>,
     pub qtype: Option<i64>,
@@ -188,6 +206,7 @@ impl TryFrom<ActivityLog> for Activity {
             timestamp: r.ts_ms,
             transport: r.transport.try_into()?,
             client: Some(r.client),
+            client_name: None,
             upstream_protocol: r.upstream_protocol.map(DnsProtocol::try_from).transpose()?,
             kind,
             duration: r

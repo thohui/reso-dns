@@ -1,5 +1,6 @@
-use std::{sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
+use futures::StreamExt;
 use tokio::time::{self, MissedTickBehavior};
 
 use crate::{
@@ -7,6 +8,7 @@ use crate::{
         CoreDatabasePool, MetricsDatabasePool,
         models::{activity_log, client, client_metrics, domain_metrics},
     },
+    reverse::{self, HostnameCheck},
     services::config::ConfigReceiver,
 };
 
@@ -19,6 +21,11 @@ pub const COMPRESS_TO_HOUR_AFTER_MS: i64 = 24 * HOUR_MS;
 /// Buckets older than this are rolled up from 1 hour to 1 day buckets.
 pub const COMPRESS_TO_DAY_AFTER_MS: i64 = 31 * DAY_MS;
 pub const CLIENT_RETENTION_MS: i64 = 30 * DAY_MS;
+
+const HOSTNAME_RECHECK_AFTER_MS: i64 = 6 * HOUR_MS;
+const HOSTNAME_RETRY_NOT_FOUND_AFTER_MS: i64 = 30 * MINUTE_MS;
+const HOSTNAME_RETRY_FAILED_AFTER_MS: i64 = 10 * MINUTE_MS;
+const HOSTNAME_LOOKUP_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// Task that periodically truncates old activity logs to save space.
 pub async fn run_metrics_truncation(
@@ -176,5 +183,98 @@ pub async fn run_client_pruning(db: Arc<CoreDatabasePool>, shutdown: tokio_util:
                 break;
             }
         }
+    }
+}
+
+pub async fn run_client_hostname_resolution(
+    db: Arc<CoreDatabasePool>,
+    config_rx: ConfigReceiver,
+    shutdown: tokio_util::sync::CancellationToken,
+) {
+    let mut tick = time::interval(Duration::from_mins(2));
+    tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    let mut last_servers: Option<Vec<SocketAddr>> = None;
+
+    loop {
+        tokio::select! {
+            _ = async {
+                tick.tick().await;
+                let clients = config_rx.borrow().clients.clone();
+                let servers = clients.resolved_ptr_servers();
+                let disabled = clients.naming_disabled();
+                if servers.is_empty() && !disabled {
+                    tracing::debug!("no default gateway to ask for client hostnames yet, skipping");
+                    return;
+                }
+                // naming may have been disabled before a restart, without this tick ever seeing the change
+                let changed = match &last_servers {
+                    Some(last) => *last != servers,
+                    None => disabled,
+                };
+
+                if changed {
+                    match client::reset_hostname_checks(&db, disabled).await {
+                        Ok(_) => tracing::info!("ptr servers changed, looking up all client hostnames again"),
+                        Err(e) => {
+                            tracing::error!("failed to reset client hostname checks: {}", e);
+                            return;
+                        }
+                    }
+                }
+                last_servers = Some(servers.clone());
+                resolve_due_hostnames(&db, &servers).await;
+            } => {}
+            _ = shutdown.cancelled() => {
+                tracing::info!("shutting down client hostname resolution task");
+                break;
+            }
+        }
+    }
+}
+
+async fn resolve_due_hostnames(db: &CoreDatabasePool, servers: &[SocketAddr]) {
+    if servers.is_empty() {
+        return;
+    }
+
+    let now = crate::time::now_millis();
+    let due = match client::due_for_hostname_check(db, now - HOSTNAME_RECHECK_AFTER_MS, 128).await {
+        Ok(due) => due,
+        Err(e) => {
+            tracing::error!("failed to load clients for hostname lookup: {}", e);
+            return;
+        }
+    };
+
+    if due.is_empty() {
+        tracing::debug!("no hostnames are due for lookup, skipping");
+        return;
+    }
+
+    let checks: Vec<(String, HostnameCheck)> = futures::stream::iter(due)
+        .map(|ip| async move {
+            let check = match ip.parse() {
+                Ok(addr) if reverse::is_private_ip(addr) => {
+                    reverse::lookup_ptr(servers, addr, HOSTNAME_LOOKUP_TIMEOUT).await
+                }
+                _ => HostnameCheck::Skipped,
+            };
+            (ip, check)
+        })
+        .buffer_unordered(8) // run at most 8 lookups at the same time
+        .collect()
+        .await;
+
+    let found = checks
+        .iter()
+        .filter(|(_, c)| matches!(c, HostnameCheck::Found(_)))
+        .count();
+    let total = checks.len();
+
+    let not_found_checked_at = now - HOSTNAME_RECHECK_AFTER_MS + HOSTNAME_RETRY_NOT_FOUND_AFTER_MS;
+    let failed_checked_at = now - HOSTNAME_RECHECK_AFTER_MS + HOSTNAME_RETRY_FAILED_AFTER_MS;
+    match client::batch_set_hostnames(db, checks, now, not_found_checked_at, failed_checked_at).await {
+        Ok(()) => tracing::debug!("resolved {found}/{total} client hostnames"),
+        Err(e) => tracing::error!("failed to store client hostnames: {}", e),
     }
 }

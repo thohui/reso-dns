@@ -1,5 +1,5 @@
 use crate::{
-    api::activity::Activity,
+    api::activity::{Activity, add_client_names_to_activities},
     database::models::{
         ListAction, MatchType, activity_log,
         domain_rule::{self, DomainRule},
@@ -184,7 +184,7 @@ pub async fn details(
         }
     };
 
-    let activities: Vec<Activity> = recent
+    let mut activities: Vec<Activity> = recent
         .into_iter()
         .map(Activity::try_from)
         .collect::<Result<Vec<_>, _>>()
@@ -192,6 +192,7 @@ pub async fn details(
             tracing::error!("failed to convert activity: {:?}", e);
             ApiError::server_error()
         })?;
+    add_client_names_to_activities(&global.core_database, &mut activities).await;
 
     Ok(Json(DetailsResponse {
         rule,

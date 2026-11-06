@@ -24,6 +24,7 @@ import {
 	Search,
 } from 'lucide-react';
 import React, { useCallback, useMemo, useState } from 'react';
+import { ClientLabel } from '@/components/ClientLabel';
 import { GridPage } from '@/components/GridPage';
 import { ProtocolBadge } from '@/components/ProtocolBadge';
 import { RecordTypeBadge } from '@/components/RecordTypeBadge';
@@ -106,7 +107,10 @@ function buildColumns() {
 					fontSize='sm'
 					color='fg.muted'
 				>
-					{info.getValue() || 'unknown'}
+					<ClientLabel
+						ip={info.getValue()}
+						name={info.row.original.client_name}
+					/>
 				</Table.Cell>
 			),
 		}),
