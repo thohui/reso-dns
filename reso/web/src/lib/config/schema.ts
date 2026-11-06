@@ -146,7 +146,10 @@ export const configSchema = z
 		rate_limit: z.object({
 			enabled: z.boolean(),
 			window_duration: z.number().int().min(1),
-			max_queries_per_window: z.number().int().min(1),
+			max_queries_per_window: z
+				.number({ error: 'Enter a whole number of 1 or more' })
+				.int()
+				.min(1),
 		}),
 		security: z.object({
 			block_icloud_private_relay: z.boolean(),

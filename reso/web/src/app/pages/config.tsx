@@ -22,6 +22,7 @@ export default function ConfigPage() {
 
 	const form = useForm({
 		resolver: zodResolver(configSchema),
+		mode: 'onChange',
 		defaultValues: {
 			upstreams: config.data.dns.forwarder.upstreams,
 			ptr_servers_auto: config.data.clients.ptr_servers === null,
