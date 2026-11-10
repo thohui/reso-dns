@@ -1,8 +1,5 @@
-import { Box, Grid, useMediaQuery } from '@chakra-ui/react';
 import { useRef, useState } from 'react';
-import { StatCard } from '@/components/dashboard/StatCard';
 import { LogsGrid, type SearchField } from '@/components/logs/LogsGrid';
-import { useLiveStats } from '@/hooks/dashboard/useLiveStats';
 import {
 	ACTIVITIES_PAGE_SIZE,
 	useActivities,
@@ -45,9 +42,6 @@ export default function LogsPage() {
 		cachedTotal.current = data.total;
 	}
 
-	const { data: liveData } = useLiveStats();
-	const [isShortScreen] = useMediaQuery(['(max-height: 760px)']);
-
 	const total = data?.total ?? cachedTotal.current;
 	const totalPages =
 		total != null ? Math.max(1, Math.ceil(total / ACTIVITIES_PAGE_SIZE)) : null;
@@ -74,57 +68,22 @@ export default function LogsPage() {
 	}
 
 	return (
-		<Box display='flex' flexDir='column' flex='1' minH='0'>
-			<Grid
-				templateColumns='repeat(4, 1fr)'
-				gap='4'
-				mb={isShortScreen ? '4' : '6'}
-				flexShrink='0'
-			>
-				<StatCard
-					label='Total Queries'
-					value={liveData?.total ?? '—'}
-					compact={isShortScreen}
-					accentColor='accent'
-				/>
-				<StatCard
-					label='Blocked'
-					value={liveData?.blocked ?? '—'}
-					compact={isShortScreen}
-					accentColor='status.blocked'
-				/>
-				<StatCard
-					label='Cached'
-					value={liveData?.cached ?? '—'}
-					compact={isShortScreen}
-					accentColor='status.cached'
-				/>
-				<StatCard
-					label='Errors'
-					value={liveData?.errors ?? '—'}
-					compact={isShortScreen}
-					accentColor='status.error'
-				/>
-			</Grid>
-			<Box flex='1' minH='0' display='flex' flexDir='column'>
-				<LogsGrid
-					isLoading={isLoading}
-					activities={data?.items ?? []}
-					page={page}
-					totalPages={totalPages}
-					total={total}
-					onPageChange={setPage}
-					presetFilter={presetFilter}
-					onPresetChange={handlePresetChange}
-					sort={sort}
-					dir={dir}
-					onSortChange={handleSortChange}
-					searchField={searchField}
-					searchValue={searchValue}
-					onSearchFieldChange={handleSearchFieldChange}
-					onSearchChange={handleSearchChange}
-				/>
-			</Box>
-		</Box>
+		<LogsGrid
+			isLoading={isLoading}
+			activities={data?.items ?? []}
+			page={page}
+			totalPages={totalPages}
+			total={total}
+			onPageChange={setPage}
+			presetFilter={presetFilter}
+			onPresetChange={handlePresetChange}
+			sort={sort}
+			dir={dir}
+			onSortChange={handleSortChange}
+			searchField={searchField}
+			searchValue={searchValue}
+			onSearchFieldChange={handleSearchFieldChange}
+			onSearchChange={handleSearchChange}
+		/>
 	);
 }
