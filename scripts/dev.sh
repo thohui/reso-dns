@@ -7,9 +7,7 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 web="$root/reso/web"
 
-if [[ ! -d "$web/node_modules" ]]; then
-  pnpm --dir "$web" install
-fi
+pnpm --dir "$web" install
 
 cleanup() {
   trap - EXIT INT TERM
