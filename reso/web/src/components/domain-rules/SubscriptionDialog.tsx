@@ -7,13 +7,13 @@ import {
 	Icon,
 	IconButton,
 	Input,
-	Switch,
 	Text,
 } from '@chakra-ui/react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import z from 'zod';
+import { AccentSwitch } from '@/components/AccentSwitch';
 import { FormError } from '@/components/FormError';
 import type { ListAction } from '@/lib/api/domain-rules';
 import { getErrorMessage } from '@/lib/api/error';
@@ -140,23 +140,12 @@ export function SubscriptionDialog({
 									<Field.Label color='fg.muted' fontSize='sm' mb='0'>
 										Sync periodically
 									</Field.Label>
-									<Switch.Root
+									<AccentSwitch
 										checked={syncEnabled}
-										onCheckedChange={({ checked }) =>
+										onCheckedChange={(checked) =>
 											form.setValue('sync_enabled', checked)
 										}
-									>
-										<Switch.HiddenInput />
-										<Switch.Control
-											bg={syncEnabled ? 'accent' : 'bg.elevated'}
-											borderWidth='1px'
-											borderColor={syncEnabled ? 'accent' : 'border.input'}
-											_hover={{ borderColor: 'accent' }}
-											transition='all 0.2s ease'
-										>
-											<Switch.Thumb bg='fg' />
-										</Switch.Control>
-									</Switch.Root>
+									/>
 								</HStack>
 							</Field.Root>
 						</Dialog.Body>

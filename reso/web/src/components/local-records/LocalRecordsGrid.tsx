@@ -19,7 +19,7 @@ import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
 import { GridPage } from '@/components/GridPage';
 import { MatchTypeBadge } from '@/components/MatchTypeBadge';
 import { RecordTypeBadge } from '@/components/RecordTypeBadge';
-import { ToggleButton } from '@/components/ToggleButton';
+import { AccentSwitch } from '@/components/AccentSwitch';
 import type { LocalRecord } from '@/lib/api/local-records';
 import { formatTimeAgo } from '@/lib/time';
 
@@ -119,10 +119,11 @@ export function LocalRecordsGrid({
 				header: 'Status',
 				cell: ({ row }) => (
 					<Table.Cell py='3' px='4' textAlign='center'>
-						<ToggleButton
-							enabled={row.original.enabled}
-							label='record'
-							onToggle={() => onToggle(row.original.id)}
+						<AccentSwitch
+							size='sm'
+							aria-label='Toggle record'
+							checked={row.original.enabled}
+							onCheckedChange={() => onToggle(row.original.id)}
 						/>
 					</Table.Cell>
 				),

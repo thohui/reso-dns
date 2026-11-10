@@ -9,7 +9,7 @@ import { Globe } from 'lucide-react';
 import React, { useMemo } from 'react';
 import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
 import { GridPage } from '@/components/GridPage';
-import { ToggleButton } from '@/components/ToggleButton';
+import { AccentSwitch } from '@/components/AccentSwitch';
 import type { ListSubscription } from '@/lib/api/list-subscriptions';
 import { formatTimeAgo } from '@/lib/time';
 
@@ -74,10 +74,11 @@ export function SubscriptionsGrid({
 				header: 'Status',
 				cell: ({ row }) => (
 					<Table.Cell py='3' px='4' textAlign='center'>
-						<ToggleButton
-							enabled={row.original.enabled}
-							label='subscription'
-							onToggle={() => onToggle(row.original.id)}
+						<AccentSwitch
+							size='sm'
+							aria-label='Toggle subscription'
+							checked={row.original.enabled}
+							onCheckedChange={() => onToggle(row.original.id)}
 						/>
 					</Table.Cell>
 				),
@@ -88,10 +89,11 @@ export function SubscriptionsGrid({
 				cell: ({ row }) => {
 					return (
 						<Table.Cell py='3' px='4' textAlign='center'>
-							<ToggleButton
-								enabled={row.original.sync_enabled}
-								label='subscription'
-								onToggle={() => onToggleSync(row.original.id)}
+							<AccentSwitch
+								size='sm'
+								aria-label='Toggle sync'
+								checked={row.original.sync_enabled}
+								onCheckedChange={() => onToggleSync(row.original.id)}
 							/>
 						</Table.Cell>
 					);

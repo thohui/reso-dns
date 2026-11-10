@@ -11,7 +11,7 @@ import { ActionBadge } from '@/components/ActionBadge';
 import { ConfirmDeleteButton } from '@/components/ConfirmDeleteButton';
 import { GridPage } from '@/components/GridPage';
 import { MatchTypeBadge } from '@/components/MatchTypeBadge';
-import { ToggleButton } from '@/components/ToggleButton';
+import { AccentSwitch } from '@/components/AccentSwitch';
 import type { DomainRule } from '@/lib/api/domain-rules';
 import { formatTimeAgo } from '@/lib/time';
 import { DomainRuleDetailDrawer } from './DomainRuleDetailDrawer';
@@ -102,10 +102,12 @@ export function DomainRulesGrid({
 				header: 'Status',
 				cell: ({ row }) => (
 					<Table.Cell py='3' px='4' textAlign='center'>
-						<ToggleButton
-							enabled={row.original.enabled}
-							label='rule'
-							onToggle={() => onToggle(row.original.domain)}
+						<AccentSwitch
+							size='sm'
+							aria-label='Toggle rule'
+							checked={row.original.enabled}
+							onCheckedChange={() => onToggle(row.original.domain)}
+							onClick={(e) => e.stopPropagation()}
 						/>
 					</Table.Cell>
 				),
