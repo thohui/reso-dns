@@ -68,7 +68,7 @@ export function ClientsGrid({
 									<Text
 										as='span'
 										ml='2'
-										fontFamily='mono'
+										fontFamily='data'
 										fontSize='xs'
 										fontWeight='400'
 										color='fg.subtle'
@@ -85,7 +85,7 @@ export function ClientsGrid({
 				header: 'IP Address',
 				cell: ({ getValue }) => (
 					<Table.Cell py='3' px='4'>
-						<Text fontFamily='mono' fontSize='sm' color='fg.muted'>
+						<Text fontFamily='data' fontSize='sm' color='fg.muted'>
 							{getValue()}
 						</Text>
 					</Table.Cell>

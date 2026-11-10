@@ -58,12 +58,7 @@ function ActivityRow({ activity }: { activity: Activity }) {
 		>
 			<HStack gap='3' align='center'>
 				<Icon as={status.icon} boxSize='4' color={status.color} />
-				<Text
-					fontFamily="'Mozilla Text', sans-serif"
-					fontSize='sm'
-					fontWeight='500'
-					lineHeight='1'
-				>
+				<Text fontFamily='data' fontSize='sm' fontWeight='500' lineHeight='1'>
 					{activity.qname || '-'}
 				</Text>
 			</HStack>
@@ -74,18 +69,13 @@ function ActivityRow({ activity }: { activity: Activity }) {
 					borderRadius='md'
 					fontSize='sm'
 					fontWeight='500'
-					fontFamily="'Mozilla Text', sans-serif"
+					fontFamily='data'
 					bg='accent.muted'
 					color='accent.fg'
 				>
 					{activity.transport}
 				</Box>
-				<Text
-					color='fg.faint'
-					fontSize='sm'
-					fontFamily="'Mozilla Text', sans-serif"
-					lineHeight='1'
-				>
+				<Text color='fg.faint' fontSize='sm' fontFamily='data' lineHeight='1'>
 					{time}
 				</Text>
 			</HStack>

@@ -9,6 +9,13 @@ const config = defineConfig({
 		},
 	},
 	theme: {
+		tokens: {
+			fonts: {
+				body: { value: 'Inter, system-ui, sans-serif' },
+				heading: { value: 'Inter, system-ui, sans-serif' },
+				data: { value: "'Mozilla Text', Inter, system-ui, sans-serif" },
+			},
+		},
 		semanticTokens: {
 			colors: {
 				bg: {

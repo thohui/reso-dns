@@ -52,7 +52,7 @@ const matchTypeOptions: { value: LocalRecordMatchType; label: string }[] = [
 
 function D({ children }: { children: ReactNode }) {
 	return (
-		<chakra.span fontFamily='monospace' color='fg' fontWeight='500'>
+		<chakra.span fontFamily='data' color='fg' fontWeight='500'>
 			{children}
 		</chakra.span>
 	);

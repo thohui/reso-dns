@@ -86,7 +86,7 @@ export function EditClientDialog({
 									IP Address
 								</Field.Label>
 								<Text
-									fontFamily='mono'
+									fontFamily='data'
 									fontSize='sm'
 									fontWeight='500'
 									color='fg'

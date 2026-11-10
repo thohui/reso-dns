@@ -60,7 +60,7 @@ export function LocalRecordsGrid({
 				header: 'Name',
 				cell: ({ getValue }) => (
 					<Table.Cell py='3' px='4'>
-						<Text fontFamily='mono' fontSize='sm' fontWeight='500'>
+						<Text fontFamily='data' fontSize='sm' fontWeight='500'>
 							{getValue()}
 						</Text>
 					</Table.Cell>
@@ -88,7 +88,7 @@ export function LocalRecordsGrid({
 				header: 'Value',
 				cell: ({ getValue }) => (
 					<Table.Cell py='3' px='4'>
-						<Text fontFamily='mono' fontSize='sm' color='fg.muted'>
+						<Text fontFamily='data' fontSize='sm' color='fg.muted'>
 							{getValue()}
 						</Text>
 					</Table.Cell>

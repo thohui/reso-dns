@@ -62,7 +62,7 @@ export function ClientNamesSection({
 											aria-label={`PTR server ${i + 1}`}
 											value={server}
 											placeholder='192.168.1.1'
-											fontFamily='mono'
+											fontFamily='data'
 											fontSize='sm'
 											onChange={(e) => update(i, e.target.value)}
 											borderColor='border.input'

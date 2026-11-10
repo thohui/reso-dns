@@ -12,7 +12,7 @@ const sharedStyles = {
 	px: '2.5',
 	py: '1',
 	size: 'md',
-	fontFamily: "'Mozilla Text', sans-serif",
+	fontFamily: 'data',
 	fontSize: 'xs',
 	fontWeight: '500',
 	textTransform: 'capitalize' as const,

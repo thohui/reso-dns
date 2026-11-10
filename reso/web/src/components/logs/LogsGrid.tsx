@@ -50,7 +50,7 @@ function buildColumns() {
 				<Table.Cell
 					py='3'
 					px='4'
-					fontFamily="'Mozilla Text', sans-serif"
+					fontFamily='data'
 					fontSize='sm'
 					color='fg.muted'
 				>
@@ -80,7 +80,7 @@ function buildColumns() {
 					<Table.Cell py='3' px='4'>
 						<HStack gap='2'>
 							<Text
-								fontFamily="'Mozilla Text', sans-serif"
+								fontFamily='data'
 								fontSize='sm'
 								whiteSpace='nowrap'
 								overflow='hidden'
@@ -103,7 +103,7 @@ function buildColumns() {
 				<Table.Cell
 					py='3'
 					px='4'
-					fontFamily="'Mozilla Text', sans-serif"
+					fontFamily='data'
 					fontSize='sm'
 					color='fg.muted'
 				>
@@ -167,11 +167,7 @@ function buildColumns() {
 					<Table.Cell py='3' px='4' textAlign='right'>
 						<HStack gap='1' justify='flex-end'>
 							<Icon as={Clock} boxSize='3' color='fg.subtle' />
-							<Text
-								fontFamily="'Mozilla Text', sans-serif"
-								fontSize='sm'
-								color={color}
-							>
+							<Text fontFamily='data' fontSize='sm' color={color}>
 								{formatDuration(ms)}
 							</Text>
 						</HStack>

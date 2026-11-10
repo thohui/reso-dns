@@ -87,7 +87,7 @@ export function UpstreamsSection({
 										<Text
 											fontSize='xs'
 											color='fg.muted'
-											fontFamily='mono'
+											fontFamily='data'
 											mt='0.5'
 											wordBreak='break-all'
 										>

@@ -296,7 +296,7 @@ function ProviderGroupView({
 									</Text>
 								</Box>
 							</HStack>
-							<Text fontSize='xs' color='fg.muted' fontFamily='mono'>
+							<Text fontSize='xs' color='fg.muted' fontFamily='data'>
 								{server.address}
 								{server.hostname && (
 									<Text as='span' ml='2' color='fg.subtle'>
@@ -429,7 +429,7 @@ function CustomView({
 								_focus={{
 									borderColor: error ? 'status.error' : 'accent.subtle',
 								}}
-								fontFamily='mono'
+								fontFamily='data'
 								fontSize='sm'
 								flex='1'
 								{...form.register('address')}
@@ -462,7 +462,7 @@ function CustomView({
 								_focus={{
 									borderColor: hostnameError ? 'status.error' : 'accent.subtle',
 								}}
-								fontFamily='mono'
+								fontFamily='data'
 								fontSize='sm'
 								{...form.register('hostname')}
 							/>

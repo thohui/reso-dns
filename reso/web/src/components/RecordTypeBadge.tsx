@@ -18,7 +18,7 @@ export function RecordTypeBadge({ recordType, size }: Props) {
 			bg='accent.muted'
 			color='accent.fg'
 			variant='subtle'
-			fontFamily="'Mozilla Text', sans-serif"
+			fontFamily='data'
 			fontSize='xs'
 			fontWeight='500'
 		>

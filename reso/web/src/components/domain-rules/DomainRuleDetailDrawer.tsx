@@ -43,7 +43,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 			</Text>
 			<Text
 				fontSize='sm'
-				fontFamily="'Mozilla Text', sans-serif"
+				fontFamily='data'
 				whiteSpace='nowrap'
 				overflow='hidden'
 				textOverflow='ellipsis'
@@ -100,7 +100,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 				fontSize='lg'
 				fontWeight='600'
 				color='fg'
-				fontFamily="'Mozilla Text', sans-serif"
+				fontFamily='data'
 				whiteSpace='nowrap'
 				overflow='hidden'
 				textOverflow='ellipsis'
@@ -126,7 +126,7 @@ function ActivityRow({ activity }: { activity: Activity }) {
 				<VStack align='start' gap='0' minW='0'>
 					<Text
 						fontSize='sm'
-						fontFamily="'Mozilla Text', sans-serif"
+						fontFamily='data'
 						color='fg'
 						whiteSpace='nowrap'
 						overflow='hidden'

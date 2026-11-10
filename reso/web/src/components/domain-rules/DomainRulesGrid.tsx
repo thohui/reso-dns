@@ -55,7 +55,7 @@ export function DomainRulesGrid({
 					<Table.Cell py='3' px='4'>
 						<Text
 							as='button'
-							fontFamily="'Mozilla Text', sans-serif"
+							fontFamily='data'
 							fontSize='sm'
 							fontWeight='500'
 							whiteSpace='nowrap'

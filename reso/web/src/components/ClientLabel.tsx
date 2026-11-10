@@ -10,7 +10,7 @@ export function ClientLabel({ ip, name }: Props) {
 	return (
 		<>
 			{name}{' '}
-			<Text as='span' fontFamily='mono' fontSize='xs' color='fg.subtle'>
+			<Text as='span' fontFamily='data' fontSize='xs' color='fg.subtle'>
 				({ip})
 			</Text>
 		</>

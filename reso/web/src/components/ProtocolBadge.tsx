@@ -14,7 +14,7 @@ export function ProtocolBadge({ protocol, size }: Props) {
 			color='accent.fg'
 			size={size}
 			variant='subtle'
-			fontFamily="'Mozilla Text', sans-serif"
+			fontFamily='data'
 			fontSize='xs'
 			fontWeight='500'
 			textTransform='capitalize'

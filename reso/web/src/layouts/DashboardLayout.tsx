@@ -68,7 +68,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 							fontWeight='600'
 							fontSize='sm'
 							letterSpacing='-0.02em'
-							fontFamily="'Mozilla Text', sans-serif"
+							fontFamily='data'
 						>
 							[ResoDNS]
 						</Text>
@@ -184,7 +184,7 @@ export function DashboardLayout() {
 						fontWeight='600'
 						fontSize='sm'
 						letterSpacing='-0.02em'
-						fontFamily="'Mozilla Text', sans-serif"
+						fontFamily='data'
 					>
 						[ResoDNS]
 					</Text>

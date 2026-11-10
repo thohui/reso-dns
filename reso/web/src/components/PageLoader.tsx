@@ -8,7 +8,7 @@ export function PageLoader() {
 			<Text
 				fontSize='sm'
 				color='fg.faint'
-				fontFamily="'Mozilla Text', sans-serif"
+				fontFamily='data'
 				letterSpacing='0.05em'
 			>
 				Loading...

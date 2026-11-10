@@ -109,7 +109,7 @@ export function EditRuleDialog({
 									Domain
 								</Field.Label>
 								<Text
-									fontFamily="'Mozilla Text', sans-serif"
+									fontFamily='data'
 									fontSize='sm'
 									fontWeight='500'
 									color='fg'

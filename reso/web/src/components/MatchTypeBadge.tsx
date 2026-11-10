@@ -28,7 +28,7 @@ export function MatchTypeBadge({ matchType }: { matchType: MatchType }) {
 					size='md'
 					fontSize='xs'
 					fontWeight='500'
-					fontFamily="'Mozilla Text', sans-serif"
+					fontFamily='data'
 					borderWidth='1px'
 					color='accent.fg'
 					bg='accent.muted'

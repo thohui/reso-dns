@@ -45,7 +45,7 @@ function DetailRow({
 			</Text>
 			<Text
 				fontSize='sm'
-				fontFamily="'Mozilla Text', sans-serif"
+				fontFamily='data'
 				whiteSpace='nowrap'
 				overflow='hidden'
 				textOverflow='ellipsis'
