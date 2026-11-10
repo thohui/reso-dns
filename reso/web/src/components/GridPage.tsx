@@ -61,7 +61,7 @@ export function GridPage({
 				flex='1'
 				display='flex'
 				flexDir='column'
-				minH='0'
+				minH='72'
 			>
 				{isEmpty && !isLoading ? (
 					<Box py='14' textAlign='center'>

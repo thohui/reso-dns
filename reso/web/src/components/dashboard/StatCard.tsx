@@ -5,16 +5,24 @@ interface Props {
 	value: string | number;
 	accentColor: string;
 	isLoading?: boolean;
+	compact?: boolean;
 }
 
-export function StatCard({ label, value, accentColor, isLoading }: Props) {
+export function StatCard({
+	label,
+	value,
+	accentColor,
+	isLoading,
+	compact,
+}: Props) {
 	return (
 		<Box
 			bg='bg.panel'
 			borderRadius='xl'
 			borderWidth='1px'
 			borderColor='border'
-			p='5'
+			py={compact ? '3' : '5'}
+			px={compact ? '4' : '5'}
 			position='relative'
 			overflow='hidden'
 			transition='border-color 0.2s ease'
@@ -36,13 +44,13 @@ export function StatCard({ label, value, accentColor, isLoading }: Props) {
 				fontWeight='500'
 				textTransform='uppercase'
 				letterSpacing='0.05em'
-				mb='3'
+				mb={compact ? '1' : '3'}
 				truncate
 			>
 				{label}
 			</Text>
 			<Text
-				fontSize='2xl'
+				fontSize={compact ? 'lg' : '2xl'}
 				fontWeight='600'
 				letterSpacing='-0.02em'
 				opacity={isLoading ? 0.3 : 1}

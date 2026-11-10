@@ -1,4 +1,4 @@
-import { Box, Grid } from '@chakra-ui/react';
+import { Box, Grid, useMediaQuery } from '@chakra-ui/react';
 import { useRef, useState } from 'react';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { LogsGrid, type SearchField } from '@/components/logs/LogsGrid';
@@ -46,6 +46,7 @@ export default function LogsPage() {
 	}
 
 	const { data: liveData } = useLiveStats();
+	const [isShortScreen] = useMediaQuery(['(max-height: 760px)']);
 
 	const total = data?.total ?? cachedTotal.current;
 	const totalPages =
@@ -74,25 +75,34 @@ export default function LogsPage() {
 
 	return (
 		<Box display='flex' flexDir='column' flex='1' minH='0'>
-			<Grid templateColumns='repeat(4, 1fr)' gap='4' mb='6' flexShrink='0'>
+			<Grid
+				templateColumns='repeat(4, 1fr)'
+				gap='4'
+				mb={isShortScreen ? '4' : '6'}
+				flexShrink='0'
+			>
 				<StatCard
 					label='Total Queries'
 					value={liveData?.total ?? '—'}
+					compact={isShortScreen}
 					accentColor='accent'
 				/>
 				<StatCard
 					label='Blocked'
 					value={liveData?.blocked ?? '—'}
+					compact={isShortScreen}
 					accentColor='status.blocked'
 				/>
 				<StatCard
 					label='Cached'
 					value={liveData?.cached ?? '—'}
+					compact={isShortScreen}
 					accentColor='status.cached'
 				/>
 				<StatCard
 					label='Errors'
 					value={liveData?.errors ?? '—'}
+					compact={isShortScreen}
 					accentColor='status.error'
 				/>
 			</Grid>
