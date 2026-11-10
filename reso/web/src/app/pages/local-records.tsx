@@ -1,6 +1,6 @@
 import { Box } from '@chakra-ui/react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { LocalRecordDialog } from '@/components/local-records/LocalRecordDialog';
 import { LocalRecordsGrid } from '@/components/local-records/LocalRecordsGrid';
 import { toastError } from '@/components/Toaster';
@@ -22,13 +22,15 @@ export default function LocalRecordsPage() {
 	const queryClient = useQueryClient();
 
 	const createMutation = useCreateLocalRecord();
-	const removeMutation = useRemoveLocalRecord();
-	const toggleMutation = useToggleLocalRecord();
+	const { mutateAsync: removeRecord } = useRemoveLocalRecord();
+	const { mutateAsync: toggleRecord } = useToggleLocalRecord();
 
 	const [showDialog, setShowDialog] = useState(false);
 
-	const invalidate = () =>
-		queryClient.invalidateQueries({ queryKey: localRecordsQueryKey });
+	const invalidate = useCallback(
+		() => queryClient.invalidateQueries({ queryKey: localRecordsQueryKey }),
+		[queryClient],
+	);
 
 	const handleSubmit = async (record: {
 		name: string;
@@ -42,41 +44,47 @@ export default function LocalRecordsPage() {
 		setShowDialog(false);
 	};
 
-	const handleRemove = async (id: number) => {
-		try {
-			await removeMutation.mutateAsync(id);
-			invalidate();
-		} catch (e) {
-			toastError(e);
-		}
-	};
+	const handleRemove = useCallback(
+		async (id: number) => {
+			try {
+				await removeRecord(id);
+				invalidate();
+			} catch (e) {
+				toastError(e);
+			}
+		},
+		[removeRecord, invalidate],
+	);
 
-	const handleToggle = async (id: number) => {
-		const previous =
-			queryClient.getQueryData<PagedResponse<LocalRecord>>(
+	const handleToggle = useCallback(
+		async (id: number) => {
+			const previous =
+				queryClient.getQueryData<PagedResponse<LocalRecord>>(
+					localRecordsQueryKey,
+				);
+
+			queryClient.setQueryData<PagedResponse<LocalRecord>>(
 				localRecordsQueryKey,
+				(old) => {
+					if (!old) return old;
+					return {
+						...old,
+						items: old.items.map((r) =>
+							r.id === id ? { ...r, enabled: !r.enabled } : r,
+						),
+					};
+				},
 			);
 
-		queryClient.setQueryData<PagedResponse<LocalRecord>>(
-			localRecordsQueryKey,
-			(old) => {
-				if (!old) return old;
-				return {
-					...old,
-					items: old.items.map((r) =>
-						r.id === id ? { ...r, enabled: !r.enabled } : r,
-					),
-				};
-			},
-		);
-
-		try {
-			await toggleMutation.mutateAsync(id);
-		} catch (e) {
-			queryClient.setQueryData(localRecordsQueryKey, previous);
-			toastError(e);
-		}
-	};
+			try {
+				await toggleRecord(id);
+			} catch (e) {
+				queryClient.setQueryData(localRecordsQueryKey, previous);
+				toastError(e);
+			}
+		},
+		[queryClient, toggleRecord],
+	);
 
 	const items = data?.items ?? [];
 

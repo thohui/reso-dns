@@ -28,7 +28,7 @@ import type { PagedResponse } from '@/lib/api/pagination';
 import { Box, Button, Icon, Tabs, Text } from '@chakra-ui/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Ban, List, Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 export default function DomainRulesPage() {
 	const queryClient = useQueryClient();
@@ -44,23 +44,28 @@ export default function DomainRulesPage() {
 	);
 	const { data: subscriptions } = useListSubscriptions();
 
-	const invalidateRules = () =>
-		queryClient.invalidateQueries({ queryKey: ['domain-rules'] });
-	const invalidateSubs = () =>
-		queryClient.invalidateQueries({ queryKey: listSubscriptionsQueryKey });
+	const invalidateRules = useCallback(
+		() => queryClient.invalidateQueries({ queryKey: ['domain-rules'] }),
+		[queryClient],
+	);
+	const invalidateSubs = useCallback(
+		() =>
+			queryClient.invalidateQueries({ queryKey: listSubscriptionsQueryKey }),
+		[queryClient],
+	);
 
 	const [showRuleDialog, setShowRuleDialog] = useState(false);
 	const [showSubscriptionDialog, setShowSubscriptionDialog] = useState(false);
 	const [editingRule, setEditingRule] = useState<DomainRule | null>(null);
 
 	const addRule = useAddDomainRule();
-	const removeRule = useRemoveDomainRule();
-	const toggleRule = useToggleDomainRule();
+	const { mutateAsync: removeRule } = useRemoveDomainRule();
+	const { mutateAsync: toggleRule } = useToggleDomainRule();
 	const updateRule = useUpdateDomainRule();
 	const addSubscription = useAddSubscription();
-	const removeSubscription = useRemoveSubscription();
-	const toggleSubscription = useToggleSubscription();
-	const toggleSubscriptionSync = useToggleSubscriptionSync();
+	const { mutateAsync: removeSubscription } = useRemoveSubscription();
+	const { mutateAsync: toggleSubscription } = useToggleSubscription();
+	const { mutateAsync: toggleSubscriptionSync } = useToggleSubscriptionSync();
 
 	const total = rulesData?.total;
 	const totalPages =
@@ -83,44 +88,52 @@ export default function DomainRulesPage() {
 		setShowRuleDialog(false);
 	};
 
-	const handleRemoveRule = async (domain: string) => {
-		try {
-			await removeRule.mutateAsync(domain);
-		} catch (e) {
-			toastError(e);
-			return;
-		}
-		invalidateRules();
-		if (editingRule?.domain === domain) setEditingRule(null);
-	};
-
-	const handleToggleRule = async (domain: string) => {
-		const previous = queryClient.getQueryData<PagedResponse<DomainRule>>(
-			domainRulesQueryKey(page, debouncedSearch),
-		);
-		queryClient.setQueryData<PagedResponse<DomainRule>>(
-			domainRulesQueryKey(page, debouncedSearch),
-			(old) => {
-				if (!old) return old;
-				return {
-					...old,
-					items: old.items.map((d) =>
-						d.domain === domain ? { ...d, enabled: !d.enabled } : d,
-					),
-				};
-			},
-		);
-
-		try {
-			await toggleRule.mutateAsync(domain);
-		} catch (e) {
-			queryClient.setQueryData(
-				domainRulesQueryKey(page, debouncedSearch),
-				previous,
+	const handleRemoveRule = useCallback(
+		async (domain: string) => {
+			try {
+				await removeRule(domain);
+			} catch (e) {
+				toastError(e);
+				return;
+			}
+			invalidateRules();
+			setEditingRule((current) =>
+				current?.domain === domain ? null : current,
 			);
-			toastError(e);
-		}
-	};
+		},
+		[removeRule, invalidateRules],
+	);
+
+	const handleToggleRule = useCallback(
+		async (domain: string) => {
+			const previous = queryClient.getQueryData<PagedResponse<DomainRule>>(
+				domainRulesQueryKey(page, debouncedSearch),
+			);
+			queryClient.setQueryData<PagedResponse<DomainRule>>(
+				domainRulesQueryKey(page, debouncedSearch),
+				(old) => {
+					if (!old) return old;
+					return {
+						...old,
+						items: old.items.map((d) =>
+							d.domain === domain ? { ...d, enabled: !d.enabled } : d,
+						),
+					};
+				},
+			);
+
+			try {
+				await toggleRule(domain);
+			} catch (e) {
+				queryClient.setQueryData(
+					domainRulesQueryKey(page, debouncedSearch),
+					previous,
+				);
+				toastError(e);
+			}
+		},
+		[queryClient, toggleRule, page, debouncedSearch],
+	);
 
 	const handleEditRule = async (domain: string, action: ListAction) => {
 		await updateRule.mutateAsync({ domain, action });
@@ -140,52 +153,61 @@ export default function DomainRulesPage() {
 		setShowSubscriptionDialog(false);
 	};
 
-	const handleRemoveSubscription = async (id: string) => {
-		try {
-			await removeSubscription.mutateAsync(id);
-		} catch (e) {
-			toastError(e);
-			return;
-		}
-		invalidateRules();
-		invalidateSubs();
-	};
+	const handleRemoveSubscription = useCallback(
+		async (id: string) => {
+			try {
+				await removeSubscription(id);
+			} catch (e) {
+				toastError(e);
+				return;
+			}
+			invalidateRules();
+			invalidateSubs();
+		},
+		[removeSubscription, invalidateRules, invalidateSubs],
+	);
 
-	const handleToggleSubscription = async (id: string) => {
-		const previous = queryClient.getQueryData<ListSubscription[]>([
-			'list-subscriptions',
-		]);
-		queryClient.setQueryData<ListSubscription[]>(
-			['list-subscriptions'],
-			(old) =>
-				old?.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s)),
-		);
-		try {
-			await toggleSubscription.mutateAsync(id);
-		} catch (e) {
-			queryClient.setQueryData(['list-subscriptions'], previous);
-			toastError(e);
-		}
-	};
+	const handleToggleSubscription = useCallback(
+		async (id: string) => {
+			const previous = queryClient.getQueryData<ListSubscription[]>([
+				'list-subscriptions',
+			]);
+			queryClient.setQueryData<ListSubscription[]>(
+				['list-subscriptions'],
+				(old) =>
+					old?.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s)),
+			);
+			try {
+				await toggleSubscription(id);
+			} catch (e) {
+				queryClient.setQueryData(['list-subscriptions'], previous);
+				toastError(e);
+			}
+		},
+		[queryClient, toggleSubscription],
+	);
 
-	const handleToggleSubscriptionSync = async (id: string) => {
-		const previous = queryClient.getQueryData<ListSubscription[]>([
-			'list-subscriptions',
-		]);
-		queryClient.setQueryData<ListSubscription[]>(
-			['list-subscriptions'],
-			(old) =>
-				old?.map((s) =>
-					s.id === id ? { ...s, sync_enabled: !s.sync_enabled } : s,
-				),
-		);
-		try {
-			await toggleSubscriptionSync.mutateAsync(id);
-		} catch (e) {
-			queryClient.setQueryData(['list-subscriptions'], previous);
-			toastError(e);
-		}
-	};
+	const handleToggleSubscriptionSync = useCallback(
+		async (id: string) => {
+			const previous = queryClient.getQueryData<ListSubscription[]>([
+				'list-subscriptions',
+			]);
+			queryClient.setQueryData<ListSubscription[]>(
+				['list-subscriptions'],
+				(old) =>
+					old?.map((s) =>
+						s.id === id ? { ...s, sync_enabled: !s.sync_enabled } : s,
+					),
+			);
+			try {
+				await toggleSubscriptionSync(id);
+			} catch (e) {
+				queryClient.setQueryData(['list-subscriptions'], previous);
+				toastError(e);
+			}
+		},
+		[queryClient, toggleSubscriptionSync],
+	);
 
 	const rules = rulesData?.items ?? [];
 
