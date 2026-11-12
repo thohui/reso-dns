@@ -40,6 +40,7 @@ Supports both `amd64` and `arm64` architectures.
    services:
      reso:
        image: ghcr.io/thohui/reso-dns:latest
+       restart: unless-stopped
        network_mode: host
        cap_drop:
          - ALL
