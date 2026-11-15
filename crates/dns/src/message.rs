@@ -193,8 +193,8 @@ impl DnsMessage {
         self.edns = edns
     }
 
-    pub fn edns(&self) -> &Option<Edns> {
-        &self.edns
+    pub fn edns(&self) -> Option<&Edns> {
+        self.edns.as_ref()
     }
 
     pub fn set_response_code(&mut self, response_code: DnsResponseCode) {
@@ -2054,7 +2054,7 @@ mod tests {
         let encoded = message.encode().unwrap();
         let decoded = DnsMessage::decode(&encoded).unwrap();
 
-        let edns = decoded.edns().as_ref().unwrap();
+        let edns = decoded.edns().unwrap();
         assert_eq!(edns.options.len(), 1);
 
         match &edns.options[0].data {
@@ -2092,7 +2092,7 @@ mod tests {
         let encoded = message.encode().unwrap();
         let decoded = DnsMessage::decode(&encoded).unwrap();
 
-        let edns = decoded.edns().as_ref().unwrap();
+        let edns = decoded.edns().unwrap();
         match &edns.options[0].data {
             Some(EdnsOptionData::ClientSubnet(ClientSubnet {
                 family,
@@ -2342,7 +2342,7 @@ mod tests {
         let encoded = message.encode().unwrap();
         let decoded = DnsMessage::decode(&encoded).unwrap();
 
-        let edns = decoded.edns().as_ref().unwrap();
+        let edns = decoded.edns().unwrap();
         assert_eq!(edns.udp_payload_size, 1232);
         assert_eq!(edns.options.len(), 2);
         assert_eq!(edns.options[0].code, EdnsOptionCode::Cookie);
@@ -2526,7 +2526,7 @@ mod tests {
         let encoded = message.encode().unwrap();
         let decoded = DnsMessage::decode(&encoded).unwrap();
 
-        let edns = decoded.edns().as_ref().unwrap();
+        let edns = decoded.edns().unwrap();
         match &edns.options[0].data {
             Some(EdnsOptionData::ExtendedError { info_code, extra_text }) => {
                 assert_eq!(*info_code, ExtendedDnsErrorInfoCode::StaleAnswer);
